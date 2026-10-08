@@ -1,0 +1,3907 @@
+{
+  "Mouse": [
+    {
+      "Name": "Amongus",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_H",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_6",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "APEXLEGENDS",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_Z",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Arc Raiders",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_H",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "BF",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_5",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "crabgame",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "cyberpunk",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Z",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_Z",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_X",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Call of Duty",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_L",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "CS2",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "deadrising",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_P",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "dealer",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_N",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_J",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_UP_ARROW",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Deceit",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "DEADLOCK",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "embr",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "fortnite",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Fallout76",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_SLASH",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_P",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "gta",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_N",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_X",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_UP_ARROW",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "h1z1",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        800,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_O",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Halo",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_Z",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_H",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Harrypotter",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "lastofus",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_J",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_X",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "lethalcompany",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Z",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "LeagueOfLegends",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_D",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_F",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "metro",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_N",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_OPEN_SQUARE_BRACKET",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_L",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "minecraft",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Marathon",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_H",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "MarvelRivals",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "new world",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_5",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "overcooked",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_ALT",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Overwatch",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_LEFT_ALT",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "paintgame",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "phas",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "PC-Default",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {}
+    },
+    {
+      "Name": "PC-Default 1",
+      "PollingRate": 1000,
+      "Dpi": 1600,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 3,
+      "Buttons": {}
+    },
+    {
+      "Name": "PEAK",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "PUBG",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_T",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "raft",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "roblox",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "rogue",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_X",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "rust",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_J",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_LEFT_ALT",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_H",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "REPO",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "splitgate",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_K",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_Z",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_X",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Schedule1",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "SeaOfthieves",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_X",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "SIEGE",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_H",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_U",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_6",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "SPECTRE",
+      "PollingRate": 1000,
+      "Dpi": 400,
+      "DpiStages": [
+        400,
+        800
+      ],
+      "DpiActive": 1,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_4",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Tarky",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_CAPS_LOCK",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_T",
+          "Mods": [
+            "KEY_LEFT_ALT"
+          ]
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "Valorant",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_LEFT_CTRL",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_3",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_2",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_F",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "WorldofWarcraft",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_M",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_EQUAL",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_L",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    },
+    {
+      "Name": "zomb",
+      "PollingRate": 1000,
+      "Dpi": 800,
+      "DpiStages": [
+        400,
+        800,
+        1600,
+        3200,
+        6400
+      ],
+      "DpiActive": 2,
+      "Buttons": {
+        "Scroll": {
+          "Key": "KEY_SPACEBAR",
+          "Mods": []
+        },
+        "M1": {
+          "Key": "KEY_LEFT_SHIFT",
+          "Mods": []
+        },
+        "M2": {
+          "Key": "KEY_C",
+          "Mods": []
+        },
+        "TiltR": {
+          "Key": "KEY_R",
+          "Mods": []
+        },
+        "TiltL": {
+          "Key": "KEY_L",
+          "Mods": []
+        },
+        "Side1": {
+          "Key": "KEY_Q",
+          "Mods": []
+        },
+        "Side2": {
+          "Key": "KEY_G",
+          "Mods": []
+        },
+        "Side3": {
+          "Key": "KEY_TAB",
+          "Mods": []
+        },
+        "Side4": {
+          "Key": "KEY_1",
+          "Mods": []
+        },
+        "Side5": {
+          "Key": "KEY_V",
+          "Mods": []
+        },
+        "Side6": {
+          "Key": "KEY_B",
+          "Mods": []
+        },
+        "Side7": {
+          "Key": "KEY_I",
+          "Mods": []
+        },
+        "Side8": {
+          "Key": "KEY_W",
+          "Mods": []
+        },
+        "Side9": {
+          "Key": "KEY_E",
+          "Mods": []
+        },
+        "Side10": {
+          "Key": "KEY_A",
+          "Mods": []
+        },
+        "Side11": {
+          "Key": "KEY_S",
+          "Mods": []
+        },
+        "Side12": {
+          "Key": "KEY_D",
+          "Mods": []
+        }
+      }
+    }
+  ],
+  "Keyboard": [
+    {
+      "Name": "gamer - S3",
+      "Brightness": 7,
+      "SnapTap": true,
+      "MacroKeys": {
+        "KEY_UP_ARROW": "W Jumpthrow",
+        "KEY_RIGHT_ARROW": "Jumpthrow"
+      }
+    },
+    {
+      "Name": "PC-Default",
+      "Brightness": 100,
+      "SnapTap": true,
+      "MacroKeys": {}
+    }
+  ],
+  "Macros": [
+    {
+      "Name": "Jumpthrow",
+      "Steps": [
+        {
+          "Vk": 109,
+          "Ext": false,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 13,
+          "Ext": true,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 107,
+          "Ext": false,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 107,
+          "Ext": false,
+          "Down": false,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 13,
+          "Ext": true,
+          "Down": false,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 109,
+          "Ext": false,
+          "Down": false,
+          "DelayMs": 0
+        }
+      ]
+    },
+    {
+      "Name": "W Jumpthrow",
+      "Steps": [
+        {
+          "Vk": 106,
+          "Ext": false,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 109,
+          "Ext": false,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 13,
+          "Ext": true,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 107,
+          "Ext": false,
+          "Down": true,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 107,
+          "Ext": false,
+          "Down": false,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 13,
+          "Ext": true,
+          "Down": false,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 109,
+          "Ext": false,
+          "Down": false,
+          "DelayMs": 0
+        },
+        {
+          "Vk": 0,
+          "Ext": false,
+          "Down": false,
+          "DelayMs": 200
+        },
+        {
+          "Vk": 106,
+          "Ext": false,
+          "Down": false,
+          "DelayMs": 0
+        }
+      ]
+    }
+  ]
+}

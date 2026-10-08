@@ -1,0 +1,331 @@
+[
+  {
+    "Profile": "Amongus",
+    "Exes": [
+      "Among Us.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "APEXLEGENDS",
+    "Exes": [
+      "r5apex.exe",
+      "r5apex_dx12.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Arc Raiders",
+    "Exes": [
+      "PioneerGame.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "BF",
+    "Exes": [
+      "bf6.exe",
+      "BF2042.exe",
+      "bfv.exe",
+      "bf1.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "crabgame",
+    "Exes": [
+      "Crab Game.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "cyberpunk",
+    "Exes": [
+      "Cyberpunk2077.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Call of Duty",
+    "Exes": [
+      "cod.exe",
+      "BlackOps6.exe",
+      "BlackOpsColdWar.exe",
+      "ModernWarfare.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "CS2",
+    "Exes": [
+      "cs2.exe"
+    ],
+    "KeyboardProfile": "gamer - S3"
+  },
+  {
+    "Profile": "deadrising",
+    "Exes": [],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "dealer",
+    "Exes": [],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Deceit",
+    "Exes": [
+      "Deceit.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "DEADLOCK",
+    "Exes": [
+      "project8.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "embr",
+    "Exes": [
+      "Embr.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "fortnite",
+    "Exes": [
+      "FortniteClient-Win64-Shipping.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Fallout76",
+    "Exes": [
+      "Fallout76.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "gta",
+    "Exes": [
+      "GTA5.exe",
+      "GTA5_Enhanced.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "h1z1",
+    "Exes": [
+      "H1Z1.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Halo",
+    "Exes": [
+      "haloinfinite.exe",
+      "MCC-Win64-Shipping.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Harrypotter",
+    "Exes": [
+      "HogwartsLegacy.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "lastofus",
+    "Exes": [
+      "tlou-i.exe",
+      "tlou-ii.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "lethalcompany",
+    "Exes": [
+      "Lethal Company.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "LeagueOfLegends",
+    "Exes": [
+      "League of Legends.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "metro",
+    "Exes": [
+      "MetroExodus.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "minecraft",
+    "Exes": [
+      "Minecraft.Windows.exe",
+      "javaw.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Marathon",
+    "Exes": [],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "MarvelRivals",
+    "Exes": [
+      "Marvel-Win64-Shipping.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "new world",
+    "Exes": [
+      "NewWorld.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "overcooked",
+    "Exes": [
+      "Overcooked2.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Overwatch",
+    "Exes": [
+      "Overwatch.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "paintgame",
+    "Exes": [],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "phas",
+    "Exes": [
+      "Phasmophobia.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "PEAK",
+    "Exes": [
+      "PEAK.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "PUBG",
+    "Exes": [
+      "TslGame.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "raft",
+    "Exes": [
+      "Raft.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "roblox",
+    "Exes": [
+      "RobloxPlayerBeta.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "rogue",
+    "Exes": [
+      "RogueCompany.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "rust",
+    "Exes": [
+      "RustClient.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "REPO",
+    "Exes": [
+      "REPO.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "splitgate",
+    "Exes": [
+      "PortalWars-Win64-Shipping.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Schedule1",
+    "Exes": [
+      "Schedule I.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "SeaOfthieves",
+    "Exes": [
+      "SoTGame.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "SIEGE",
+    "Exes": [
+      "RainbowSix.exe",
+      "RainbowSix_Vulkan.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "SPECTRE",
+    "Exes": [],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Tarky",
+    "Exes": [
+      "EscapeFromTarkov.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "Valorant",
+    "Exes": [
+      "VALORANT-Win64-Shipping.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "WorldofWarcraft",
+    "Exes": [
+      "Wow.exe"
+    ],
+    "KeyboardProfile": "PC-Default"
+  },
+  {
+    "Profile": "zomb",
+    "Exes": [],
+    "KeyboardProfile": "PC-Default"
+  }
+]

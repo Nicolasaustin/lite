@@ -1,0 +1,179 @@
+19:29:36 profile -> PC-Default / PC-Default
+19:29:36 mouse dpi 800:True poll 1000:True
+19:29:36 kb brightness 100:True
+19:29:41 profile -> CS2 / PC-Default
+19:29:41 mouse dpi 800:True poll 1000:True
+19:29:41 kb brightness 100:True
+19:29:51 onboard slot 3 <- CS2: ok
+19:35:16 profile -> Valorant / PC-Default
+19:35:17 live: "Valorant" is running on the mouse (slot 1, White)
+19:35:17 kb brightness 100:True
+19:35:21 profile -> CS2 / PC-Default
+19:35:22 live: "CS2" is running on the mouse (slot 2, Red)
+19:35:22 kb brightness 100:True
+19:37:05 onboard slot 3 <- CS2: ok
+19:37:50 profile -> PC-Default / PC-Default
+19:37:50 live: desktop
+19:37:50 kb brightness 100:True
+19:38:05 profile -> CS2 / PC-Default
+19:38:06 live: "CS2" is running on the mouse (slot 1, White)
+19:38:06 kb brightness 100:True
+19:38:18 profile -> BF / PC-Default
+19:38:19 live: "BF" is running on the mouse (slot 2, Red)
+19:38:19 kb brightness 100:True
+19:38:23 profile -> CS2 / PC-Default
+19:38:24 live: "CS2" is running on the mouse (slot 1, White)
+19:38:24 kb brightness 100:True
+19:54:10 profile -> PC-Default / PC-Default
+19:54:10 live: desktop
+19:54:11 kb brightness 100:True
+19:55:50 profile -> PC-Default / PC-Default
+19:55:51 live: desktop
+19:55:51 kb brightness 100:True
+19:57:41 profile -> PC-Default / PC-Default
+19:57:41 live: desktop
+19:57:41 kb brightness 100:True
+20:01:08 profile -> PC-Default / PC-Default
+20:01:08 live: desktop
+20:01:08 kb brightness 100:True
+20:32:43 FATAL: System.InvalidOperationException: crash test
+   at LiteSynapse.TrayApp.<>c.<.ctor>b__27_9() in C:\Users\admin\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\scratch-workspaces\e16bafa8-5668-4851-81f1-78c32f16eaa0\85229f14-313d-4260-a8b2-adf0da0f9c7a\scratch-2026-10-07-e29597\LiteSynapse\Program.cs:line 128
+   at System.Threading.Thread.StartCallback()
+20:32:51 profile -> PC-Default / PC-Default
+20:32:52 live: desktop
+20:32:52 kb brightness 100:True
+20:33:07 profile -> Valorant / PC-Default
+20:33:08 live: "Valorant" is running on the mouse (slot 1, White)
+20:33:08 kb brightness 100:True
+20:33:11 profile -> PC-Default / PC-Default
+20:33:11 live: back on slot 3 (Green)
+20:33:11 kb brightness 100:True
+20:33:28 profile -> PC-Default / PC-Default
+20:33:28 live: desktop
+20:33:28 kb brightness 100:True
+20:51:34 profile -> CS2 / PC-Default
+20:51:36 live: "CS2" is running on the mouse (slot 1, White)
+20:51:36 kb brightness 100:True
+20:52:36 watching for Razer device changes (no polling)
+20:52:36 profile -> PC-Default / PC-Default
+20:52:36 live: desktop
+20:52:36 kb brightness 100:True
+21:00:12 watching for Razer device changes (no polling)
+21:00:12 profile -> PC-Default / PC-Default
+21:00:12 live: desktop
+21:00:12 kb brightness 100:True
+21:04:05 watching for Razer device changes (no polling)
+21:04:05 profile -> PC-Default / PC-Default
+21:04:05 live: desktop
+21:04:05 kb brightness 100:True
+21:17:48 profile -> PC-Default / gamer - S3
+21:17:48 live: desktop
+21:17:48 kb brightness 7:True
+21:17:51 profile -> PC-Default / PC-Default
+21:17:51 live: desktop
+21:17:51 kb brightness 100:True
+21:36:02 watching for Razer device changes (no polling)
+21:36:02 profile -> CS2 / gamer - S3
+21:36:02 live: desktop
+21:36:02 kb brightness 7:True
+21:37:41 watching for Razer device changes (no polling)
+21:37:41 profile -> CS2 / gamer - S3
+21:37:42 live: desktop
+21:37:42 kb brightness 7:True
+21:39:47 watching for Razer device changes (no polling)
+21:39:47 profile -> CS2 / gamer - S3
+21:39:47 live: desktop
+21:39:47 kb brightness 7:True
+21:40:43 watching for Razer device changes (no polling)
+21:40:43 profile -> CS2 / gamer - S3
+21:40:43 live: desktop
+21:40:43 kb brightness 7:True
+21:48:01 flyout: mouse profile picked: Amongus
+21:48:01 profile -> Amongus / gamer - S3
+21:48:02 live: "Amongus" is running on the mouse (slot 2, Red)
+21:48:02 kb brightness 7:True
+21:48:02 flyout: mouse profile picked: CS2
+21:48:02 profile -> CS2 / gamer - S3
+21:48:04 live: "CS2" is running on the mouse (slot 1, White)
+21:48:04 kb brightness 7:True
+21:48:15 profile -> CS2 / gamer - S3
+21:48:15 live: desktop
+21:48:15 kb brightness 7:True
+21:55:44 watching for Razer device changes (no polling)
+21:55:44 profile -> CS2 / gamer - S3
+21:55:44 live: desktop
+21:55:44 kb brightness 7:True
+22:55:31 watching for Razer device changes (no polling)
+22:55:31 profile -> CS2 / gamer - S3
+22:55:31 live: desktop
+22:55:31 kb brightness 7:True
+23:04:34 profile -> CS2 / gamer - S3
+23:04:35 live: "CS2" is running on the mouse (slot 1, White)
+23:04:35 kb brightness 7:True
+23:04:52 profile -> CS2 / gamer - S3
+23:04:52 live: back on slot 3 (Green)
+23:04:52 kb brightness 7:True
+23:04:53 profile -> CS2 / gamer - S3
+23:04:53 profile -> CS2 / gamer - S3
+23:04:53 live: "CS2" is running on the mouse (slot 1, White)
+23:04:54 kb brightness 7:True
+23:04:54 live: back on slot 3 (Green)
+23:04:54 kb brightness 7:True
+23:05:04 profile -> CS2 / gamer - S3
+23:05:04 live: "CS2" is running on the mouse (slot 1, White)
+23:05:04 kb brightness 7:True
+23:05:07 profile -> CS2 / gamer - S3
+23:05:07 live: back on slot 3 (Green)
+23:05:07 kb brightness 7:True
+23:05:22 profile -> CS2 / gamer - S3
+23:05:22 live: "CS2" is running on the mouse (slot 1, White)
+23:05:22 kb brightness 7:True
+23:05:35 profile -> CS2 / gamer - S3
+23:05:36 live: back on slot 3 (Green)
+23:05:36 kb brightness 7:True
+23:09:53 profile -> CS2 / gamer - S3
+23:09:53 live: "CS2" is running on the mouse (slot 1, White)
+23:09:53 kb brightness 7:True
+23:10:09 profile -> CS2 / gamer - S3
+23:10:09 live: back on slot 3 (Green)
+23:10:09 kb brightness 7:True
+23:10:13 profile -> CS2 / gamer - S3
+23:10:13 live: "CS2" is running on the mouse (slot 1, White)
+23:10:13 kb brightness 7:True
+23:10:19 profile -> CS2 / gamer - S3
+23:10:19 live: back on slot 3 (Green)
+23:10:19 kb brightness 7:True
+23:10:35 profile -> CS2 / gamer - S3
+23:10:35 live: "CS2" is running on the mouse (slot 1, White)
+23:10:35 kb brightness 7:True
+23:10:36 profile -> CS2 / gamer - S3
+23:10:36 live: back on slot 3 (Green)
+23:10:36 kb brightness 7:True
+23:10:37 profile -> CS2 / gamer - S3
+23:10:37 live: "CS2" is running on the mouse (slot 1, White)
+23:10:37 kb brightness 7:True
+23:10:41 profile -> CS2 / gamer - S3
+23:10:41 live: back on slot 3 (Green)
+23:10:41 kb brightness 7:True
+23:10:46 profile -> CS2 / gamer - S3
+23:10:46 live: "CS2" is running on the mouse (slot 1, White)
+23:10:46 kb brightness 7:True
+23:10:48 profile -> CS2 / gamer - S3
+23:10:48 live: back on slot 3 (Green)
+23:10:48 kb brightness 7:True
+23:10:59 profile -> CS2 / gamer - S3
+23:10:59 live: "CS2" is running on the mouse (slot 1, White)
+23:10:59 kb brightness 7:True
+23:11:50 profile -> CS2 / gamer - S3
+23:11:50 live: back on slot 3 (Green)
+23:11:50 kb brightness 7:True
+23:12:06 profile -> CS2 / gamer - S3
+23:12:07 live: "CS2" is running on the mouse (slot 1, White)
+23:12:07 kb brightness 7:True
+23:12:22 profile -> CS2 / gamer - S3
+23:12:23 live: back on slot 3 (Green)
+23:12:23 kb brightness 7:True
+02:57:32 watching for Razer device changes (no polling)
+02:57:32 profile -> CS2 / gamer - S3
+02:57:32 live: back on slot 3 (Green)
+02:57:33 kb brightness 7:True
