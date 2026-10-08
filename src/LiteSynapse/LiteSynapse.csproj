@@ -16,6 +16,10 @@
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>false</TieredPGO>
+    <!-- Precompiled native code: no JIT pause the first time a key or profile switch is handled. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Do not copy package API docs (.xml) next to the exe. -->
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
     <NoWarn>$(NoWarn);CS8632;CA1416;WFO1000</NoWarn>
   </PropertyGroup>
   <ItemGroup>

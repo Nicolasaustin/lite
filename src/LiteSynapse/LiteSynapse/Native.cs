@@ -103,6 +103,9 @@ internal static class Native
 	[DllImport("user32")]
 	public static extern nint GetForegroundWindow();
 
+	[DllImport("user32")]
+	public static extern short GetAsyncKeyState(int vk);
+
 	[DllImport("winmm")]
 	public static extern uint timeBeginPeriod(uint ms);
 
@@ -118,11 +121,11 @@ internal static class Native
 	[DllImport("kernel32")]
 	public static extern bool SetProcessWorkingSetSize(nint h, nint min, nint max);
 
+	// Used to force a full GC and page the working set out when a window closed. That blocked for a moment
+	// and caused page faults right as the user clicked back into a game, so it now only hints the GC.
 	public static void TrimMemory()
 	{
-		GC.Collect();
-		GC.WaitForPendingFinalizers();
-		SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, -1, -1);
+		GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
 	}
 
 	[DllImport("user32")]
@@ -178,12 +181,60 @@ internal static class Native
 	private static extern nint GetCurrentProcess();
 
 	[DllImport("kernel32")]
-	private static extern bool SetPriorityClass(nint h, uint cls);
+	private static extern nint GetCurrentThread();
 
-	// Above-normal only while the keyboard hook is live, so the hook answers quickly even when a game saturates the CPU.
-	public static void SetInputPriority(bool high)
+	[DllImport("kernel32")]
+	private static extern bool SetThreadPriority(nint h, int priority);
+
+	[DllImport("kernel32")]
+	private static extern bool SetProcessInformation(nint h, int cls, ref PowerThrottling info, int size);
+
+	[DllImport("kernel32")]
+	private static extern bool SetThreadInformation(nint h, int cls, ref PowerThrottling info, int size);
+
+	private struct PowerThrottling
 	{
-		SetPriorityClass(GetCurrentProcess(), high ? 0x8000u : 0x20u);
+		public uint Version;
+
+		public uint ControlMask;
+
+		public uint StateMask;
+	}
+
+	// The keyboard hook thread runs at time-critical priority so it answers instantly even when a game
+	// saturates every core; it only wakes for a keystroke and returns in microseconds.
+	public static void SetCurrentThreadTimeCritical()
+	{
+		SetThreadPriority(GetCurrentThread(), 15);
+	}
+
+	// Opt out of Windows power throttling (EcoQoS): never run LiteSynapse on efficiency cores or with
+	// coalesced timers. Process-wide (execution speed + timer resolution) and for the calling thread.
+	public static void OptOutOfPowerThrottling(bool process)
+	{
+		try
+		{
+			PowerThrottling t = new PowerThrottling
+			{
+				Version = 1u,
+				ControlMask = 1u,
+				StateMask = 0u
+			};
+			SetThreadInformation(GetCurrentThread(), 3, ref t, Marshal.SizeOf<PowerThrottling>());
+			if (process)
+			{
+				PowerThrottling p = new PowerThrottling
+				{
+					Version = 1u,
+					ControlMask = 5u,
+					StateMask = 0u
+				};
+				SetProcessInformation(GetCurrentProcess(), 4, ref p, Marshal.SizeOf<PowerThrottling>());
+			}
+		}
+		catch (EntryPointNotFoundException)
+		{
+		}
 	}
 
 	[DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]

@@ -67,7 +67,14 @@ internal sealed class SnapTap
 			injected.Remove(vk);
 			return false;
 		}
-		phys.Remove(vk);
+		if (!phys.Remove(vk))
+		{
+			// Released a key we never saw go down (held before Snap Tap turned on, or across a reset):
+			// let the real release through so the game can never be left with it stuck.
+			seen.Remove(vk);
+			injected.Remove(vk);
+			return false;
+		}
 		bool wasSeen = seen.Remove(vk);
 		injected.Remove(vk);
 		if (phys.Contains(other) && seen.Add(other))

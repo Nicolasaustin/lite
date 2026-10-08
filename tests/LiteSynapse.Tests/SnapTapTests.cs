@@ -183,4 +183,46 @@ public class SnapTapTests
 			}
 		}
 	}
+
+	// Regression: A held before Snap Tap was switched on (e.g. alt-tabbing into the game while strafing).
+	// Its release must reach the game, or A stays stuck.
+	[Fact]
+	public void ReleaseOfKeyHeldBeforeSnapTapStartedPassesThrough()
+	{
+		SnapTap s = new SnapTap(A, D);
+		Game g = new Game();
+		g.Apply(A, down: true);
+		Assert.False(s.OnReal(A, up: true, g.Sender));
+		g.Apply(A, down: false);
+		Assert.Empty(g.Held);
+		Assert.Empty(g.Injected);
+	}
+
+	// Regression: profile switch (Reset) while A is held, then A released.
+	[Fact]
+	public void ReleaseAfterResetPassesThrough()
+	{
+		SnapTap s = new SnapTap(A, D);
+		Game g = new Game();
+		Real(s, g, A, down: true);
+		s.Reset(g.Sender);
+		Real(s, g, A, down: false);
+		Assert.Empty(g.Held);
+	}
+
+	// Snap Tap switched on mid-strafe: A held already, then D pressed and released, then A released.
+	[Fact]
+	public void KeyHeldBeforeStart_ThenOppositePressed_EndsClean()
+	{
+		SnapTap s = new SnapTap(A, D);
+		Game g = new Game();
+		g.Apply(A, down: true);
+		Real(s, g, A, down: true);
+		Real(s, g, D, down: true);
+		Assert.Equal(new[] { D }, g.Held);
+		Real(s, g, D, down: false);
+		Assert.Equal(new[] { A }, g.Held);
+		Real(s, g, A, down: false);
+		Assert.Empty(g.Held);
+	}
 }

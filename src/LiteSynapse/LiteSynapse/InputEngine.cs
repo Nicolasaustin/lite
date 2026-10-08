@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -127,6 +129,12 @@ internal class InputEngine : IDisposable
 
 	private readonly HashSet<int> macroKeysDown = new HashSet<int>();
 
+	// Arrow keys already held when the hook was installed: their auto-repeat must not fire a macro and
+	// their release must reach the game.
+	private readonly HashSet<int> heldAtInstall = new HashSet<int>();
+
+	private GCLatencyMode savedGcMode;
+
 	private Action<int, bool> calibrating;
 
 	public Dictionary<string, BaseKey> Base = new Dictionary<string, BaseKey>();
@@ -184,10 +192,13 @@ internal class InputEngine : IDisposable
 		thread = new Thread(() =>
 		{
 			threadId = Environment.CurrentManagedThreadId;
+			Native.SetCurrentThreadTimeCritical();
+			Native.OptOutOfPowerThrottling(process: true);
 			(nint, W32.WndProc) tuple = W32.CreateWindow(messageOnly: true, OnMessage);
 			hwnd = tuple.Item1;
 			keepAlive = tuple.Item2;
 			hookProc = Hook;
+			WarmUp();
 			ready.Set();
 			W32.RunLoop();
 		})
@@ -202,7 +213,7 @@ internal class InputEngine : IDisposable
 		{
 			IsBackground = true,
 			Name = "LiteSynapse macro",
-			Priority = ThreadPriority.AboveNormal
+			Priority = ThreadPriority.Highest
 		};
 		macroThread.Start();
 	}
@@ -275,8 +286,30 @@ internal class InputEngine : IDisposable
 		done.Wait(2000);
 	}
 
+	// Compile the keystroke path up front so the first key press in a game never waits for the JIT.
+	private void WarmUp()
+	{
+		try
+		{
+			RuntimeHelpers.PrepareMethod(typeof(InputEngine).GetMethod("Hook", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).MethodHandle);
+			RuntimeHelpers.PrepareMethod(typeof(InputEngine).GetMethod("Output", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).MethodHandle);
+			RuntimeHelpers.PrepareMethod(typeof(SnapTap).GetMethod("OnReal").MethodHandle);
+			RuntimeHelpers.PrepareMethod(typeof(SnapTap).GetMethod("OnOutput").MethodHandle);
+			RuntimeHelpers.PrepareMethod(typeof(Native).GetMethod("SendKey").MethodHandle);
+			RuntimeHelpers.PrepareMethod(typeof(Native).GetMethod("SendKeys").MethodHandle);
+			Native.SendKeys(new Native.INPUT[1], 0);
+			Native.KeyInput(65, ext: false, down: false);
+		}
+		catch (Exception ex)
+		{
+			Cfg.Log("warm-up: " + ex.Message);
+		}
+	}
+
 	// Installs or removes the hook and the raw-input sink to match what the active profile needs.
-	private void UpdateRegistration()
+	// reinstall: put the hook back at the top of the chain even if it exists (Windows silently drops a
+	// hook that ever times out, so it is refreshed every time a game profile is applied).
+	private void UpdateRegistration(bool reinstall = false)
 	{
 		bool needRaw = enabled && (calibrating != null || map.Count > 0);
 		bool needHook = enabled && (map.Count > 0 || snapTapActive || anyArrowMacro);
@@ -298,8 +331,21 @@ internal class InputEngine : IDisposable
 				recentRaw.Clear();
 			}
 		}
+		if (needHook && hook != IntPtr.Zero && reinstall)
+		{
+			Native.UnhookWindowsHookEx(hook);
+			hook = IntPtr.Zero;
+		}
 		if (needHook && hook == IntPtr.Zero)
 		{
+			heldAtInstall.Clear();
+			for (int vk = 37; vk <= 40; vk++)
+			{
+				if ((Native.GetAsyncKeyState(vk) & 0x8000) != 0)
+				{
+					heldAtInstall.Add(vk);
+				}
+			}
 			hook = Native.SetWindowsHookEx(13, hookProc, Native.GetModuleHandle(null), 0u);
 			if (hook == IntPtr.Zero)
 			{
@@ -307,15 +353,21 @@ internal class InputEngine : IDisposable
 			}
 			else
 			{
-				Native.SetInputPriority(high: true);
-				Cfg.Log("keyboard hook on");
+				// No gen-2 garbage collections while the hook is live (the hook path does not allocate,
+				// so memory stays flat); restored as soon as the hook is removed.
+				if (GCSettings.LatencyMode != GCLatencyMode.LowLatency)
+				{
+					savedGcMode = GCSettings.LatencyMode;
+					GCSettings.LatencyMode = GCLatencyMode.LowLatency;
+				}
 			}
 		}
 		else if (!needHook && hook != IntPtr.Zero)
 		{
 			Native.UnhookWindowsHookEx(hook);
 			hook = IntPtr.Zero;
-			Native.SetInputPriority(high: false);
+			heldAtInstall.Clear();
+			GCSettings.LatencyMode = savedGcMode;
 			Cfg.Log("keyboard hook off");
 		}
 	}
@@ -353,38 +405,41 @@ internal class InputEngine : IDisposable
 
 	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame)
 	{
-		OnEngine(() =>
-		{
-			SetProfileCore(mp, kp, allMacros, inGame);
-		});
-	}
-
-	private void SetProfileCore(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame)
-	{
-		ReleaseAll();
+		// Build everything on the caller's thread; the input thread only swaps references, so it is never
+		// busy with LINQ or allocation while a game is in front.
 		Dictionary<(int, bool), KeyTarget> m = new Dictionary<(int, bool), KeyTarget>();
+		Dictionary<string, BaseKey> baseKeys = Base;
 		if (mp != null && inGame)
 		{
 			foreach (var (id, t) in mp.Buttons)
 			{
-				if (Base.TryGetValue(id, out var b) && !IsIdentity(b, t))
+				if (baseKeys.TryGetValue(id, out var b) && !IsIdentity(b, t))
 				{
 					m[(b.Sc, b.Ext)] = t;
 				}
 			}
 		}
-		map = m;
-		macros = allMacros.GroupBy((Macro x) => x.Name).ToDictionary((IGrouping<string, Macro> g) => g.Key, (IGrouping<string, Macro> g) => g.First());
+		Dictionary<string, Macro> byName = allMacros.GroupBy((Macro x) => x.Name).ToDictionary((IGrouping<string, Macro> g) => g.Key, (IGrouping<string, Macro> g) => g.First());
 		KbProfile kb = (inGame ? kp : null);
-		anyArrowMacro = false;
+		PreparedMacro[] arrows = new PreparedMacro[4];
+		bool anyArrow = false;
 		string[] arrowNames = new string[4] { "KEY_LEFT_ARROW", "KEY_UP_ARROW", "KEY_RIGHT_ARROW", "KEY_DOWN_ARROW" };
 		for (int i = 0; i < 4; i++)
 		{
-			arrowMacros[i] = ((kb != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && macros.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? new PreparedMacro(macro) : null);
-			anyArrowMacro |= arrowMacros[i] != null;
+			arrows[i] = ((kb != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && byName.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? new PreparedMacro(macro) : null);
+			anyArrow |= arrows[i] != null;
 		}
-		snapTapActive = (kp?.SnapTap ?? false) && inGame;
-		UpdateRegistration();
+		bool snapOn = (kp?.SnapTap ?? false) && inGame;
+		OnEngine(() =>
+		{
+			ReleaseAll();
+			map = m;
+			macros = byName;
+			Array.Copy(arrows, arrowMacros, 4);
+			anyArrowMacro = anyArrow;
+			snapTapActive = snapOn;
+			UpdateRegistration(reinstall: true);
+		});
 	}
 
 	private static bool IsIdentity(BaseKey b, KeyTarget t)
@@ -463,9 +518,20 @@ internal class InputEngine : IDisposable
 				PreparedMacro macro = arrowMacros[vk - 37];
 				if (macro != null)
 				{
+					if (heldAtInstall.Contains(vk))
+					{
+						if (up)
+						{
+							heldAtInstall.Remove(vk);
+						}
+						return Native.CallNextHookEx(hook, n, w, l);
+					}
 					if (up)
 					{
-						macroKeysDown.Remove(vk);
+						if (!macroKeysDown.Remove(vk))
+						{
+							return Native.CallNextHookEx(hook, n, w, l);
+						}
 					}
 					else if (macroKeysDown.Add(vk))
 					{
@@ -701,6 +767,7 @@ internal class InputEngine : IDisposable
 
 	private void MacroLoop()
 	{
+		Native.OptOutOfPowerThrottling(process: false);
 		using Native.PreciseTimer timer = new Native.PreciseTimer();
 		while (true)
 		{
@@ -761,7 +828,6 @@ internal class InputEngine : IDisposable
 				{
 					Native.UnhookWindowsHookEx(hook);
 					hook = IntPtr.Zero;
-					Native.SetInputPriority(high: false);
 				}
 				if (rawOn)
 				{
