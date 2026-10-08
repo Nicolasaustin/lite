@@ -1,4 +1,4 @@
-# LiteSynapse window ↔ app bridge (v1.1)
+# LiteSynapse window ↔ app bridge (v1.2)
 
 The new main window is a single HTML page (`src/LiteSynapse/ui/index.html`) hosted in WebView2.
 It talks to the C# app only through this message bridge. Both sides MUST follow this file exactly.
@@ -35,7 +35,10 @@ All JSON property names are camelCase.
   "defaultKeyboard": "gamer - S3",
   "mouseProfiles": [
     { "name": "CS2", "pollingRate": 1000, "dpi": 800, "dpiStages": [400, 800], "dpiActive": 2,
-      "buttons": { "Side8": { "key": "KEY_W", "mods": [] } } }
+      "buttons": { "Side8": { "key": "KEY_W", "mods": [] }, "Side3": { "key": "DISABLED", "mods": [] } },
+      "lighting": { "effect": "static", "color": "#00FF00", "brightness": 100 },   // per profile; null = leave mouse as is
+      "clickSwap": true,          // left-handed click swap written to onboard memory
+      "antiCheat": true }         // game is flagged as anti-cheat protected
   ],
   "keyboardProfiles": [
     { "name": "gamer - S3", "brightness": 7, "snapTap": true,
@@ -48,11 +51,20 @@ All JSON property names are camelCase.
   "buttonIds": ["Side1", "...", "Side12", "Scroll", "M1", "M2", "TiltL", "TiltR"],
   "onboard": { "3": "CS2" },        // slot number (string) -> profile name last written there
   "liveSlots": [1, 2],              // slots LiteSynapse uses for live profiles ([] when liveWrite is off)
-  "mouseLighting": { "effect": "static", "color": "#00FF66", "brightness": 100, "zones": [0] },
-  "accent": "mint"                  // UI accent: mint | green | blue | violet | amber
+  "accent": "mint",                 // UI accent: mint | green | blue | violet | amber
+  "competitiveSafe": false,         // when on: no Snap Tap, macros or software remaps in anti-cheat games
+  "gameKeyboardDefault": "",        // keyboard profile used for games whose rule has none ("" = none)
+  "lastGameExe": "cs2.exe",         // last foreground program that is not LiteSynapse/Explorer (for "link running game")
+  "elevatedGame": false,            // the foreground game runs as admin and LiteSynapse does not (Snap Tap/macros can't reach it)
+  "razer": {                        // leftovers of Razer software that cost performance
+    "checked": true, "synapseInstalled": false,
+    "gmsService": "absent",         // absent | running | stopped | disabled
+    "filterDrivers": ["RzDev_008d (Naga)", "RzDev_0235 (BlackWidow Lite)"], "rzCommon": false
+  }
 }
 ```
 
+Button targets: any `KEY_*` name, or `DISABLED` (button does nothing) or `MOUSE_MIDDLE` (middle click).
 Key names use the existing `KEY_*` form (`KEY_W`, `KEY_SPACEBAR`, `KEY_LEFT_SHIFT`, `KEY_F13`, ...) — see `Keys2.cs` / `OnboardMemory.Usage`.
 Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk: 0` = pure delay step.
 
@@ -91,7 +103,13 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `onboardWrite` | `{ slot: 2..5, profile }` | `{ ok: bool, message }` (sends `progress` pushes while writing) |
 | `calibrate` | `{}` | `null` — opens the native calibration window |
 | `probeMouseLighting` | `{}` | `{ zones: [ { id: 0, name: "All zones" }, ... ] }` (read-only probe) |
-| `setMouseLighting` | `{ effect: "off"\|"static"\|"breathing"\|"spectrum", color: "#RRGGBB", brightness: 0..100, zones: int[] }` | State |
+| `setMouseLighting` | `{ profile?: name (default: active), effect: "off"\|"static"\|"breathing"\|"spectrum", color: "#RRGGBB", brightness: 0..100 }` | State — saved on that mouse profile, applied now if it is active |
+| `setCompetitiveSafe` | `{ on }` | State |
+| `setGameKeyboardDefault` | `{ keyboardProfile }` (`""` = none) | State |
+| `linkRunningGame` | `{ profile }` | `{ exe: string\|null }` — adds `state.lastGameExe` to that profile's game rule (creates the rule if missing) |
+| `razerCheck` | `{}` | State (refreshes `state.razer`) |
+| `razerCleanup` | `{ action: "disableGameManager"\|"driverGuide" }` | `{ message }` — runs the elevated step with a UAC prompt |
+| `runSelfTest` | `{}` | `null` — opens a console window running `LiteSynapse.exe testall` |
 | `openConfigFolder` | `{}` | `null` |
 | `reloadConfig` | `{}` | State |
 | `openMouseProperties` | `{}` | `null` |
@@ -101,7 +119,30 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 
 Unknown commands reply `ok: false`.
 
-## C# helpers the bridge calls (owned by the protocol work)
+## C# APIs the bridge calls
+
+Owned by the data/protocol work:
+```csharp
+public class MouseLightingSettings { string Effect = "static"; string Color = "#00FF00"; int Brightness = 100; }
+// MouseProfile gains: MouseLightingSettings Lighting (null = leave as is); bool ClickSwap = true
+// KeyTarget.Key may be "DISABLED" or "MOUSE_MIDDLE"
+internal static class AntiCheat { public static bool IsProtected(string profileName); public static readonly string[] Profiles; }
+internal static class DataMigrations { public static bool Apply(ProfileStore store, List<GameRule> games); } // add-only, idempotent
+```
+Owned by the device/service work (Service.cs):
+```csharp
+public bool CompetitiveSafe { get; }            public void SetCompetitiveSafe(bool on);
+public string GameKeyboardDefault { get; }      public void SetGameKeyboardDefault(string name);
+public string LastGameExe { get; }              public string LinkRunningGame(string profile); // returns exe or null
+public bool ElevatedGame { get; }
+public RazerLeftovers Razer { get; }            public void RefreshRazer(); public string RazerCleanup(string action);
+public string ApplyMouseLighting(MouseProfile p);   // null = ok; no-op if the mouse is disconnected
+public bool ApplyKbLighting(KbProfile p);
+public void OnSuspend(); public void OnResume(); public void OnSessionLock(); public void OnSessionUnlock();
+public class RazerLeftovers { bool Checked; bool SynapseInstalled; string GmsService; List<string> FilterDrivers; bool RzCommon; }
+```
+
+## Older helper signatures (still valid)
 
 ```csharp
 internal static class KbLighting {
