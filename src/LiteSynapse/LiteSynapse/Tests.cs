@@ -94,14 +94,15 @@ internal static class Tests
 		Check("CS2: left tilt V, right tilt R", cs2?.Buttons["TiltL"].Key == "KEY_V" && cs2?.Buttons["TiltR"].Key == "KEY_R");
 		Check("CS2: scroll=Space M1=Shift M2=Ctrl", cs2?.Buttons["Scroll"].Key == "KEY_SPACEBAR" && cs2?.Buttons["M1"].Key == "KEY_LEFT_SHIFT" && cs2?.Buttons["M2"].Key == "KEY_LEFT_CTRL");
 		Check("CS2: all 12 side buttons mapped", Enumerable.Range(1, 12).All((int num2) => cs2?.Buttons.ContainsKey("Side" + num2) ?? false));
-		Check("every game profile has valid keys", store.Mouse.All((MouseProfile p) => p.Buttons.Values.All((KeyTarget keyTarget) => Keys2.Vk(keyTarget.Key) != 0 || keyTarget.Key == "DISABLED")), string.Join(",", (from keyTarget in store.Mouse.SelectMany((MouseProfile p) => p.Buttons.Values)
+		// Button targets: a key, or DISABLED / MOUSE_MIDDLE (no virtual-key code, written as mouse actions).
+		Func<string, bool> validTarget = (string k) => Keys2.Vk(k) != 0 || k == KeyTarget.Disabled || k == KeyTarget.MouseMiddle;
+		Check("every game profile has valid keys", store.Mouse.All((MouseProfile p) => p.Buttons.Values.All((KeyTarget keyTarget) => validTarget(keyTarget.Key))), string.Join(",", (from keyTarget in store.Mouse.SelectMany((MouseProfile p) => p.Buttons.Values)
 			select keyTarget.Key into k
-			where Keys2.Vk(k) == 0
+			where !validTarget(k)
 			select k).Distinct()));
-		Check("every game profile has onboard-writable keys", store.Mouse.All((MouseProfile p) => p.Buttons.Values.All((KeyTarget keyTarget) => OnboardMemory.Usage(keyTarget.Key) != 0)), string.Join(",", (from keyTarget in store.Mouse.SelectMany((MouseProfile p) => p.Buttons.Values)
-			select keyTarget.Key into k
-			where OnboardMemory.Usage(k) == 0
-			select k).Distinct()));
+		Check("every game profile has onboard-writable keys", store.Mouse.All((MouseProfile p) => p.Buttons.Values.All(OnboardMemory.CanWrite)), string.Join(",", (from keyTarget in store.Mouse.SelectMany((MouseProfile p) => p.Buttons.Values)
+			where !OnboardMemory.CanWrite(keyTarget)
+			select keyTarget.Key).Distinct()));
 		InputEngine engine = new InputEngine();
 		engine.SetProfile(null, null, store.Macros, inGame: false);
 		string[] array = new string[2] { "Jumpthrow", "W Jumpthrow" };

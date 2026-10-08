@@ -1,0 +1,70 @@
+{
+  "Side1": {
+    "Sc": 4,
+    "Ext": false
+  },
+  "Side2": {
+    "Sc": 34,
+    "Ext": false
+  },
+  "Side3": {
+    "Sc": 15,
+    "Ext": false
+  },
+  "Side4": {
+    "Sc": 3,
+    "Ext": false
+  },
+  "Side5": {
+    "Sc": 33,
+    "Ext": false
+  },
+  "Side6": {
+    "Sc": 5,
+    "Ext": false
+  },
+  "Side7": {
+    "Sc": 2,
+    "Ext": false
+  },
+  "Side8": {
+    "Sc": 17,
+    "Ext": false
+  },
+  "Side9": {
+    "Sc": 18,
+    "Ext": false
+  },
+  "Side10": {
+    "Sc": 30,
+    "Ext": false
+  },
+  "Side11": {
+    "Sc": 31,
+    "Ext": false
+  },
+  "Side12": {
+    "Sc": 32,
+    "Ext": false
+  },
+  "Scroll": {
+    "Sc": 57,
+    "Ext": false
+  },
+  "M1": {
+    "Sc": 42,
+    "Ext": false
+  },
+  "M2": {
+    "Sc": 29,
+    "Ext": false
+  },
+  "TiltL": {
+    "Sc": 47,
+    "Ext": false
+  },
+  "TiltR": {
+    "Sc": 19,
+    "Ext": false
+  }
+}

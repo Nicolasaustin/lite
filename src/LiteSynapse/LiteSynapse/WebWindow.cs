@@ -106,7 +106,8 @@ internal sealed class WebWindow : Form
 		BackColor = Background;
 		ForeColor = Color.White;
 		StartPosition = FormStartPosition.CenterScreen;
-		MinimumSize = Scaled(UiPrefs.MinWidth, UiPrefs.MinHeight);
+		// Never larger than the screen (a small screen at a high scale factor).
+		MinimumSize = FitToScreen(Scaled(UiPrefs.MinWidth, UiPrefs.MinHeight));
 		Size = FitToScreen(Scaled(prefs.Width, prefs.Height));
 		if (prefs.Maximized)
 		{

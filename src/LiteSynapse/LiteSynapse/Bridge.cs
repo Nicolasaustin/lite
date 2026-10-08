@@ -703,15 +703,15 @@ internal sealed class Bridge
 	{
 		return await Task.Run(() =>
 		{
-			int self = Environment.ProcessId;
-			SortedSet<string> names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+			HashSet<int> withWindow = WebNative.ProcessesWithWindows();
+			List<(int, string)> processes = new List<(int, string)>();
 			foreach (Process p in Process.GetProcesses())
 			{
 				try
 				{
-					if (p.Id != self && p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrEmpty(p.MainWindowTitle))
+					if (withWindow.Contains(p.Id))
 					{
-						names.Add(p.ProcessName + ".exe");
+						processes.Add((p.Id, p.ProcessName));
 					}
 				}
 				catch
@@ -723,7 +723,8 @@ internal sealed class Bridge
 					p.Dispose();
 				}
 			}
-			return (object)names.ToList();
+			string selfExe = Path.GetFileName(Environment.ProcessPath ?? "LiteSynapse.exe");
+			return (object)WebOps.RunningAppNames(processes, withWindow, Environment.ProcessId, selfExe);
 		});
 	}
 
@@ -814,7 +815,8 @@ internal sealed class Bridge
 		{
 			throw new BridgeException("The Naga is not connected.");
 		}
-		List<(int Id, string Name)> zones = await svc.RunOnDevices("uiLightingProbe", () => MouseLighting.Probe(svc.Mouse));
+		// The mouse may be unplugged by the time the worker gets to it.
+		List<(int Id, string Name)> zones = await svc.RunOnDevices("uiLightingProbe", () => (svc.Mouse is RazerDevice m) ? MouseLighting.Probe(m) : null);
 		return new ZonesResult((zones ?? new List<(int, string)>()).Select(z => new ZoneDto(z.Id, z.Name)).ToList());
 	}
 
@@ -823,8 +825,10 @@ internal sealed class Bridge
 	{
 		string name = a.Str("profile", optional: true);
 		MouseProfile p = string.IsNullOrEmpty(name) ? ActiveMouseProfile() : WebOps.FindMouse(Store, name);
+		// Color and brightness keep the profile's values when left out (e.g. switching the effect to "off").
 		string color = a.Str("color", optional: true) ?? p.Lighting?.Color ?? "#00FF00";
-		p.Lighting = WebOps.MouseLight(a.Str("effect"), color, a.Int("brightness", 0, 100));
+		int brightness = a.Int("brightness", 0, 100, Math.Clamp(p.Lighting?.Brightness ?? 100, 0, 100));
+		p.Lighting = WebOps.MouseLight(a.Str("effect"), color, brightness);
 		svc.SaveProfiles();
 		string err = svc.ApplyMouseLighting(p);
 		if (err != null)

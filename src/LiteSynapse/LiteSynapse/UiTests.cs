@@ -197,7 +197,8 @@ internal static class UiTests
 			m.TestPick(m.Items.IndexOf("Valorant"));
 			Pump(150);
 		}
-		Check("picking a mouse profile selects it and turns automatic switching off", svc.ActiveMouse == "Valorant" && !svc.Auto && svc.InGame, $"{svc.ActiveMouse}, auto {svc.Auto}");
+		// InGame means "a linked game is in front", so a manual pick on the desktop leaves it off.
+		Check("picking a mouse profile selects it and turns automatic switching off", svc.ActiveMouse == "Valorant" && !svc.Auto, $"{svc.ActiveMouse}, auto {svc.Auto}");
 		Check("the list closes and the panel stays open after a pick", !m.IsOpen && ((Control)fly).Visible && !((Control)fly).IsDisposed);
 		Check("the mouse box shows the pick", (string)m.SelectedItem == "Valorant");
 		Snap((Form)(object)fly, picture, "_picked");

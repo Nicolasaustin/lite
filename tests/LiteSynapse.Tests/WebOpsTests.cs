@@ -428,6 +428,43 @@ public class WebOpsTests
 	}
 
 	[Fact]
+	public void RunningAppsAreSortedUniqueAndSkipTheShell()
+	{
+		(int, string)[] processes =
+		{
+			(10, "cs2"), (11, "explorer"), (12, "Discord"), (13, "discord"), (14, "svchost"), (15, "LiteSynapse"),
+			(16, "steam"), (17, ""), (18, "TextInputHost")
+		};
+		HashSet<int> withWindow = new HashSet<int> { 10, 11, 12, 13, 15, 16, 17, 18 };
+		List<string> apps = WebOps.RunningAppNames(processes, withWindow, selfPid: 15, selfExe: "LiteSynapse.exe");
+		// svchost has no window; explorer and TextInputHost are the shell; LiteSynapse is this process.
+		Assert.Equal(new[] { "cs2.exe", "Discord.exe", "steam.exe" }, apps);
+		Assert.Empty(WebOps.RunningAppNames(processes, new HashSet<int>(), 15, "LiteSynapse.exe"));
+	}
+
+	[Theory]
+	[InlineData(-1, 0, false, null, null)]
+	[InlineData(0, 0, false, "overview", null)]
+	[InlineData(1, 0, false, "macros", null)]
+	[InlineData(2, 0, false, "games", null)]
+	[InlineData(3, 0, false, "mouse", "buttons")]
+	[InlineData(3, 1, false, "mouse", "performance")]
+	[InlineData(3, 3, false, "mouse", "calibration")]
+	[InlineData(3, 9, false, "mouse", null)]
+	[InlineData(4, 0, false, "keyboard", "macrokeys")]
+	[InlineData(4, 1, false, "keyboard", "snaptap")]
+	[InlineData(4, 2, false, "keyboard", "lighting")]
+	[InlineData(5, 0, false, "settings", null)]
+	[InlineData(-1, 0, true, "mouse", "onboard")]
+	[InlineData(3, 2, true, "mouse", "onboard")]
+	public void ClassicPageNumbersOpenTheMatchingPage(int page, int tab, bool mem, string expectedPage, string expectedTab)
+	{
+		(string p, string t) = WebProtocol.PageFor(page, tab, mem);
+		Assert.Equal(expectedPage, p);
+		Assert.Equal(expectedTab, t);
+	}
+
+	[Fact]
 	public void PrefsRepairBadValues()
 	{
 		UiPrefs p = new UiPrefs { Accent = "pink", Width = 50, Height = 99999 };

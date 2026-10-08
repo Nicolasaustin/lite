@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Builds the LiteSynapse installer: unit tests, publish, then installer/LiteSynapse.nsi.
+#
+#   bash tools/build-release.sh
+#
+# Output: dist/LiteSynapse-Setup-<version>.exe (version = AssemblyInformationalVersion in
+# src/LiteSynapse/Properties/AssemblyInfo.cs). Needs the .NET 10 SDK and NSIS 3 (makensis).
+# dotnet runs under flock when it is available; set LITESYNAPSE_BUILD_LOCK to share the lock file
+# with other builds of the same tree (default: ${TMPDIR:-/tmp}/litesynapse-build.lock).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+PUBLISH=build/publish
+FILE_LIST=build/installer-files.nsh
+SCRIPT=installer/LiteSynapse.nsi
+SEED=installer/seed-data
+DRIVER_SCRIPT=remove-razer-filter-drivers.ps1
+LOCK="${LITESYNAPSE_BUILD_LOCK:-${TMPDIR:-/tmp}/litesynapse-build.lock}"
+
+fail() { echo "build-release: $*" >&2; exit 1; }
+step() { echo; echo "== $*"; }
+
+locked() {
+  if command -v flock >/dev/null 2>&1; then
+    flock "$LOCK" "$@"
+  else
+    "$@"
+  fi
+}
+
+command -v dotnet >/dev/null 2>&1 || fail "dotnet (.NET 10 SDK) not found"
+MAKENSIS="$(command -v makensis || true)"
+if [ -z "$MAKENSIS" ]; then
+  # Git Bash on Windows: NSIS does not add itself to PATH.
+  for m in "/c/Program Files (x86)/NSIS/makensis.exe" "/c/Program Files/NSIS/makensis.exe"; do
+    if [ -x "$m" ]; then MAKENSIS="$m"; break; fi
+  done
+fi
+[ -n "$MAKENSIS" ] || fail "makensis (NSIS 3) not found"
+
+# ---- Version ----------------------------------------------------------------------------------------------
+INFO=src/LiteSynapse/Properties/AssemblyInfo.cs
+VERSION="$(sed -n 's/.*AssemblyInformationalVersion("\([^"]*\)").*/\1/p' "$INFO" | head -n 1)"
+[ -n "$VERSION" ] || fail "AssemblyInformationalVersion not found in $INFO"
+[[ "$VERSION" =~ ^[0-9A-Za-z.+-]+$ ]] || fail "unexpected version '$VERSION' in $INFO"
+# The file properties need four numbers: 1.1.0 -> 1.1.0.0, 1.2.0-beta -> 1.2.0.0.
+IFS=. read -r v1 v2 v3 v4 _ <<<"${VERSION%%[-+]*}"
+VERSION4="${v1:-0}.${v2:-0}.${v3:-0}.${v4:-0}"
+[[ "$VERSION4" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "cannot turn version '$VERSION' into a.b.c.d"
+OUT="dist/LiteSynapse-Setup-$VERSION.exe"
+echo "LiteSynapse $VERSION ($VERSION4)"
+
+# ---- Tests ------------------------------------------------------------------------------------------------
+step "Unit tests"
+locked dotnet test tests/LiteSynapse.Tests -c Release -p:UseSharedCompilation=false --nologo -v q -clp:ErrorsOnly \
+  || fail "unit tests failed: no installer built"
+
+# ---- Publish ----------------------------------------------------------------------------------------------
+step "Publish (win-x64, framework-dependent, single file)"
+rm -rf "$PUBLISH"
+locked dotnet publish src/LiteSynapse/LiteSynapse.csproj -c Release -r win-x64 \
+  -p:SelfContained=false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:DebugType=none -p:UseSharedCompilation=false -o "$PUBLISH" --nologo -v q -clp:ErrorsOnly \
+  || fail "dotnet publish failed"
+[ -f "$PUBLISH/LiteSynapse.exe" ] || fail "publish did not produce $PUBLISH/LiteSynapse.exe"
+
+# The Razer clean-up script (Settings > Performance) is run from tools\ next to the exe. The project
+# normally publishes it already; otherwise take it from the repository.
+if [ ! -f "$PUBLISH/tools/$DRIVER_SCRIPT" ]; then
+  for src in "tools/$DRIVER_SCRIPT" "src/LiteSynapse/tools/$DRIVER_SCRIPT"; do
+    if [ -f "$src" ]; then
+      mkdir -p "$PUBLISH/tools"
+      cp -f "$src" "$PUBLISH/tools/"
+      break
+    fi
+  done
+fi
+[ -f "$PUBLISH/tools/$DRIVER_SCRIPT" ] || echo "warning: $DRIVER_SCRIPT not found; the installer will not include it" >&2
+
+echo "Published files:"
+(cd "$PUBLISH" && find . -type f -printf '  %P (%s bytes)\n' | sort)
+
+# ---- Seed data (fresh installs without any profiles) -----------------------------------------------------
+step "Seed data"
+if [ -d LiteSynapse/data ]; then
+  mkdir -p "$SEED"
+  for f in LiteSynapse/data/*.json; do
+    [ -f "$f" ] || continue
+    if ! cmp -s "$f" "$SEED/${f##*/}"; then
+      cp -f "$f" "$SEED/"
+      echo "  updated $SEED/${f##*/} from $f"
+    fi
+  done
+fi
+[ -f "$SEED/profiles.json" ] || fail "$SEED/profiles.json is missing"
+if command -v python3 >/dev/null 2>&1; then
+  for f in "$SEED"/*.json; do
+    python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8-sig"))' "$f" \
+      || fail "$f is not valid JSON"
+  done
+fi
+echo "  $(ls "$SEED"/*.json | wc -l) files in $SEED"
+
+# ---- File list for the installer and the uninstaller -----------------------------------------------------
+# NSIS has no directory listing at compile time, so the exact list is written here. The uninstaller deletes
+# exactly these files and nothing else.
+if (cd "$PUBLISH" && find . | grep -q '[$"`]'); then
+  fail "a published file name contains \$, \" or \`, which the installer script cannot quote"
+fi
+nsis_path() { printf '%s' "${1//\//\\}"; }
+{
+  echo "; Generated by tools/build-release.sh from $PUBLISH. Do not edit."
+  echo "!macro LS_INSTALL_FILES"
+  while IFS= read -r dir; do
+    rel="${dir#.}"; rel="${rel#/}"
+    if [ -z "$rel" ]; then echo "  SetOutPath \"\$INSTDIR\""; else echo "  SetOutPath \"\$INSTDIR\\$(nsis_path "$rel")\""; fi
+    while IFS= read -r file; do
+      echo "  File \"\${PUBLISH_DIR}\\$(nsis_path "${file#./}")\""
+    done < <(cd "$PUBLISH" && find "$dir" -mindepth 1 -maxdepth 1 -type f | LC_ALL=C sort)
+  done < <(cd "$PUBLISH" && find . -type d | LC_ALL=C sort)
+  echo "!macroend"
+  echo "!macro LS_UNINSTALL_FILES"
+  while IFS= read -r file; do
+    echo "  Delete \"\$INSTDIR\\$(nsis_path "${file#./}")\""
+  done < <(cd "$PUBLISH" && find . -type f | LC_ALL=C sort)
+  while IFS= read -r dir; do
+    echo "  RMDir \"\$INSTDIR\\$(nsis_path "${dir#./}")\""
+  done < <(cd "$PUBLISH" && find . -mindepth 1 -type d | LC_ALL=C sort -r)
+  echo "!macroend"
+} > "$FILE_LIST"
+
+# ---- Installer --------------------------------------------------------------------------------------------
+step "Installer"
+mkdir -p dist
+rm -f "$OUT"
+"$MAKENSIS" -V2 -DVERSION="$VERSION" -DVERSION4="$VERSION4" "$SCRIPT" || fail "makensis failed"
+[ -f "$OUT" ] || fail "makensis did not produce $OUT"
+
+size="$(wc -c < "$OUT" | tr -d ' ')"
+echo
+echo "Installer: $ROOT/$OUT"
+echo "Size:      $size bytes ($(awk -v s="$size" 'BEGIN { printf "%.1f", s / 1048576 }') MB)"

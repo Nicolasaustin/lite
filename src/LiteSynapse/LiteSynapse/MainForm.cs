@@ -344,8 +344,6 @@ internal class MainForm : Form
 
 	private KbProfile KP => app.Store.Keyboard.FirstOrDefault((KbProfile p) => p.Name == app.ActiveKeyboard);
 
-	private static string MemFile => Path.Combine(Cfg.Dir, "onboard.json");
-
 	private string StartingProfile
 	{
 		get
@@ -2088,8 +2086,8 @@ internal class MainForm : Form
 		//IL_0027: Expected Obj, but got Unknown
 		//IL_0034: Unknown result type (might be due to invalid IL or missing references)
 		//IL_003e: Expected Obj, but got Unknown
-		memSlots = Cfg.Load<Dictionary<string, string>>(MemFile);
-		((Control)memPanel).Paint += (object? _, PaintEventArgs pe) =>
+		memSlots = SafeOnboardNames();
+		((Control)memPanel).Paint +=(object? _, PaintEventArgs pe) =>
 		{
 			//IL_0018: Unknown result type (might be due to invalid IL or missing references)
 			//IL_001e: Expected Obj, but got Unknown
@@ -2180,6 +2178,7 @@ internal class MainForm : Form
 			return;
 		}
 		loading = true;
+		memSlots = SafeOnboardNames();
 		try
 		{
 			for (int s = 1; s <= 5; s++)
@@ -2231,6 +2230,11 @@ internal class MainForm : Form
 		{
 			((Control)memStatus).Text = "Naga not found.";
 		}
+		else if (app.LiveSlots.Contains(slot))
+		{
+			((Control)memStatus).ForeColor = Color.FromArgb(230, 120, 80);
+			((Control)memStatus).Text = $"Slot {slot} holds the live profiles while \"Run selected profiles on the mouse itself\" is on. Pick slot 3, 4 or 5, or turn that setting off.";
+		}
 		else
 		{
 			if ((int)MessageBox.Show((IWin32Window)(object)this, $"Write \"{name}\" into slot {slot} ({OnboardMemory.SlotNames[slot]})?\n\nThis replaces what is stored in that slot on the mouse.", "On-Board Memory", (MessageBoxButtons)1) != 1)
@@ -2240,31 +2244,23 @@ internal class MainForm : Form
 			memBusy = true;
 			((Control)memStatus).ForeColor = Theme.Dim;
 			((Control)memStatus).Text = "Writing...";
-			Task.Run(() =>
+			// The service writes on its device worker (never alongside a profile switch) and records the slot's
+			// content in data/onboard.json; it also logs the result.
+			app.WriteOnboardSlot(slot, name, (string s) =>
 			{
-				string err;
-				try
+				SafeBeginInvoke(() =>
 				{
-					err = OnboardMemory.Write(app.Mouse, slot, p, (string s) =>
-					{
-						base.BeginInvoke((Action)(() =>
-						{
-							((Control)memStatus).Text = s + "...";
-						}));
-					});
-				}
-				catch (Exception ex)
-				{
-					err = ex.Message;
-				}
-				Cfg.Log($"onboard slot {slot} <- {name}: {err ?? "ok"}");
-				base.BeginInvoke((Action)(() =>
+					((Control)memStatus).Text = s + "...";
+				});
+			}).ContinueWith((Task<string> t) =>
+			{
+				string err = t.IsFaulted ? t.Exception.GetBaseException().Message : t.Result;
+				SafeBeginInvoke(() =>
 				{
 					memBusy = false;
 					if (err == null)
 					{
-						memSlots[slot.ToString()] = name;
-						Cfg.Save(MemFile, memSlots);
+						memSlots = SafeOnboardNames();
 						((Control)memStatus).ForeColor = Theme.Green;
 						((Control)memStatus).Text = $"Wrote \"{name}\" to slot {slot} ({OnboardMemory.SlotNames[slot]}). Press Cycle Up Profile on the mouse to use it.";
 					}
@@ -2273,8 +2269,37 @@ internal class MainForm : Form
 						((Control)memStatus).ForeColor = Color.FromArgb(230, 120, 80);
 						((Control)memStatus).Text = "Failed: " + err;
 					}
-				}));
-			});
+				});
+			}, TaskScheduler.Default);
+		}
+	}
+
+	// What data/onboard.json records for each slot (slot number -> profile name).
+	private Dictionary<string, string> SafeOnboardNames()
+	{
+		try
+		{
+			return app.OnboardNames ?? new Dictionary<string, string>();
+		}
+		catch (Exception ex)
+		{
+			Cfg.Log("onboard slots: " + ex.Message);
+			return new Dictionary<string, string>();
+		}
+	}
+
+	// For callbacks from the device worker: the window may have closed in the meantime.
+	private void SafeBeginInvoke(Action action)
+	{
+		try
+		{
+			if (base.IsHandleCreated && !base.IsDisposed)
+			{
+				base.BeginInvoke(action);
+			}
+		}
+		catch (InvalidOperationException)
+		{
 		}
 	}
 

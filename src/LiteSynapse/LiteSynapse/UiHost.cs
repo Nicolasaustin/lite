@@ -84,13 +84,18 @@ internal static class UiHost
 		if (!inited)
 		{
 			ApplicationConfiguration.Initialize();
-			Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
-			Application.ThreadException += (object _, ThreadExceptionEventArgs e) =>
-			{
-				Cfg.Log("UI error: " + e.Exception);
-			};
 			inited = true;
 		}
+		// Per thread (this thread is started again after the last window closed): an error in a window is
+		// logged instead of showing the WinForms error dialog.
+		try
+		{
+			Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+		}
+		catch (InvalidOperationException)
+		{
+		}
+		Application.ThreadException += OnThreadException;
 		Control inv = new Control();
 		inv.CreateControl();
 		_ = inv.Handle;
@@ -109,6 +114,11 @@ internal static class UiHost
 		}
 		inv.Dispose();
 		// No forced garbage collection here: it blocked for a moment right as the user clicked into a game.
+	}
+
+	private static void OnThreadException(object sender, ThreadExceptionEventArgs e)
+	{
+		Cfg.Log("UI error: " + e.Exception);
 	}
 
 	private static void AfterClose()
@@ -137,8 +147,8 @@ internal static class UiHost
 	}
 
 	// Opens (or brings back) the main window: the HTML window, or the classic one when WebView2 cannot run.
-	// page/tab/mem are the classic window's page numbers (see PageName); the HTML window gets them as a
-	// { type: "navigate" } message.
+	// page/tab/mem are the classic window's page numbers (see WebProtocol.PageFor); the HTML window gets them as
+	// a { type: "navigate" } message.
 	public static void ShowWindow(Service svc, int page = -1, int tab = 0, bool mem = false)
 	{
 		Post(() =>
@@ -151,9 +161,14 @@ internal static class UiHost
 			if (web == null || web.IsDisposed)
 			{
 				WebWindow w = new WebWindow(svc);
-				w.InitFailed += (Exception _) =>
+				w.InitFailed += (Exception ex) =>
 				{
-					webAvailable = false;
+					// A missing runtime stays missing this session; anything else (e.g. the previous window's
+					// WebView2 processes still shutting down) is tried again the next time the window opens.
+					if (ex is WebView2RuntimeNotFoundException || ex is DllNotFoundException || ex is BadImageFormatException)
+					{
+						webAvailable = false;
+					}
 					OpenClassic(svc, page, tab, mem);
 				};
 				w.FormClosed += (object _1, FormClosedEventArgs _2) =>
@@ -166,11 +181,8 @@ internal static class UiHost
 				};
 				web = w;
 			}
-			if (mem && page < 0)
-			{
-				page = 3;
-			}
-			web.NavigateTo(PageName(page), TabName(page, tab, mem));
+			(string pageName, string tabName) = WebProtocol.PageFor(page, tab, mem);
+			web.NavigateTo(pageName, tabName);
 			web.ShowAndActivate();
 		});
 	}
@@ -230,38 +242,6 @@ internal static class UiHost
 			Cfg.Log("WebView2 is not available, using the classic window: " + ex.GetType().Name + ": " + ex.Message);
 		}
 		return webAvailable.Value;
-	}
-
-	// Classic page numbers: 0 Synapse, 1 Macro, 2 Linked Games, 3 Naga, 4 BlackWidow Lite, 5 Settings.
-	internal static string PageName(int page)
-	{
-		return page switch
-		{
-			0 => "home",
-			1 => "macros",
-			2 => "games",
-			3 => "mouse",
-			4 => "keyboard",
-			5 => "settings",
-			_ => null,
-		};
-	}
-
-	// Classic device tabs: Naga 0 customize, 1 performance, 2 lighting, 3 calibration; keyboard the first three.
-	// mem = the mouse's on-board memory.
-	internal static string TabName(int page, int tab, bool mem)
-	{
-		if (mem)
-		{
-			return "onboard";
-		}
-		string[] tabs = page switch
-		{
-			3 => new string[4] { "customize", "performance", "lighting", "calibration" },
-			4 => new string[3] { "customize", "performance", "lighting" },
-			_ => Array.Empty<string>(),
-		};
-		return (tab >= 0 && tab < tabs.Length) ? tabs[tab] : null;
 	}
 
 	public static void ToggleFlyout(Service svc, int x, int y)

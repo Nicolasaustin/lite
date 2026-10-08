@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Offline preview + screenshot harness for src/LiteSynapse/ui/index.html (mock bridge, Playwright).",
   "scripts": {
+    "mock-data": "node make-mock-data.mjs",
     "shoot": "node shoot.mjs"
   },
   "devDependencies": {

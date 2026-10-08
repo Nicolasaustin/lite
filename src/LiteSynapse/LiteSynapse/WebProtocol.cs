@@ -139,6 +139,35 @@ internal static class WebProtocol
 		});
 	}
 
+	// The HTML window's page and tab for the classic window's numbers (command line --page/--tab/--mem, the tray's
+	// "Settings"). Classic pages: 0 Synapse, 1 Macro, 2 Linked Games, 3 Naga, 4 BlackWidow Lite, 5 Settings.
+	// Naga tabs: 0 customize, 1 performance, 2 lighting, 3 calibration; keyboard tabs: 0 customize,
+	// 1 performance (Snap Tap), 2 lighting. mem = the Naga's on-board memory. Page is null for "no change" (-1).
+	public static (string Page, string Tab) PageFor(int page, int tab, bool mem)
+	{
+		if (mem)
+		{
+			return ("mouse", "onboard");
+		}
+		string[] tabs = page switch
+		{
+			3 => new string[4] { "buttons", "performance", "lighting", "calibration" },
+			4 => new string[3] { "macrokeys", "snaptap", "lighting" },
+			_ => Array.Empty<string>(),
+		};
+		string name = page switch
+		{
+			0 => "overview",
+			1 => "macros",
+			2 => "games",
+			3 => "mouse",
+			4 => "keyboard",
+			5 => "settings",
+			_ => null,
+		};
+		return (name, (tab >= 0 && tab < tabs.Length) ? tabs[tab] : null);
+	}
+
 	private static void WriteValue(Utf8JsonWriter w, object value)
 	{
 		if (value == null)

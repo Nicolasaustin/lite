@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace LiteSynapse.Tests;
@@ -290,6 +292,46 @@ public class BridgeProtocolTests
 		JsonObject game = state["games"][0].AsObject();
 		Assert.Equal(new[] { "exes", "keyboardProfile", "profile" }, Keys(game));
 		Assert.Equal("", (string)game["keyboardProfile"]);
+	}
+
+	// ---- Contract conformance (source level: Bridge.cs needs Windows, so its command table is read as text) ----
+
+	private static string RepoFile(params string[] parts)
+	{
+		for (DirectoryInfo dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+		{
+			if (File.Exists(Path.Combine(dir.FullName, "docs", "bridge-api.md")))
+			{
+				return Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
+			}
+		}
+		throw new InvalidOperationException("docs/bridge-api.md not found above " + AppContext.BaseDirectory);
+	}
+
+	private static SortedSet<string> Matches(string text, string pattern)
+	{
+		return new SortedSet<string>(Regex.Matches(text, pattern, RegexOptions.Multiline).Select(m => m.Groups[1].Value), StringComparer.Ordinal);
+	}
+
+	[Fact]
+	public void BridgeHandlesEveryContractCommand()
+	{
+		SortedSet<string> contract = Matches(File.ReadAllText(RepoFile("docs", "bridge-api.md")), @"^\| `([a-zA-Z]+)` \|");
+		string bridge = File.ReadAllText(RepoFile("src", "LiteSynapse", "LiteSynapse", "Bridge.cs"));
+		SortedSet<string> handled = Matches(bridge, @"^\s*\[""([a-zA-Z]+)""\] = ");
+		Assert.True(contract.Count >= 40, "command table not found in docs/bridge-api.md");
+		Assert.Empty(contract.Except(handled));
+		// The only command beyond the contract: the "close this window when a game starts" setting.
+		Assert.Equal(new[] { "setCloseOnGame" }, handled.Except(contract).ToArray());
+		// Commands that skip the state push afterwards must exist and must not change anything.
+		Match readOnly = Regex.Match(bridge, @"ReadOnlyCommands = [^{]*\{([^}]*)\}");
+		Assert.True(readOnly.Success);
+		SortedSet<string> skipPush = Matches(readOnly.Groups[1].Value, @"""([a-zA-Z]+)""");
+		Assert.Empty(skipPush.Except(handled));
+		foreach (string mutating in new[] { "selectProfile", "setDpiStages", "setButton", "saveMacro", "onboardWrite", "importProfiles", "duplicateProfile", "linkRunningGame", "razerCleanup" })
+		{
+			Assert.DoesNotContain(mutating, skipPush);
+		}
 	}
 
 	[Fact]

@@ -457,6 +457,26 @@ internal static class WebOps
 		return list;
 	}
 
+	// The runningApps list: "name.exe" of each process that has a window, sorted and each once (any case),
+	// without LiteSynapse itself and the Windows shell (Explorer, Start, Settings, ...), which are never games.
+	public static List<string> RunningAppNames(IEnumerable<(int Pid, string Name)> processes, ICollection<int> withWindow, int selfPid, string selfExe)
+	{
+		SortedSet<string> names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach ((int pid, string name) in processes ?? Enumerable.Empty<(int, string)>())
+		{
+			if (pid == selfPid || string.IsNullOrWhiteSpace(name) || withWindow == null || !withWindow.Contains(pid))
+			{
+				continue;
+			}
+			string exe = name.Trim() + ".exe";
+			if (!ServicePlan.IsShellOrSelf(exe, selfExe))
+			{
+				names.Add(exe);
+			}
+		}
+		return names.ToList();
+	}
+
 	public static GameRule FindGame(List<GameRule> games, string profile)
 	{
 		return games.FirstOrDefault(g => g != null && g.Profile == profile);

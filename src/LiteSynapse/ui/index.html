@@ -71,7 +71,7 @@ p { margin: 0; }
 ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .09); border-radius: 12px; border: 4px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, .17); }
 ::-webkit-scrollbar-corner { background: transparent; }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation-duration: 1ms !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; } }
 
 /* ---- App frame ------------------------------------------------------------------------------- */
 #app { display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); height: 100vh; }
@@ -250,7 +250,7 @@ button.chip:hover { background: var(--surface-3); border-color: var(--line-3); }
 .input:focus { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
 .input::placeholder { color: var(--faint); }
 .input[type="number"] { font-variant-numeric: tabular-nums; }
-.input[type="number"]::-webkit-inner-spin-button { opacity: .35; }
+.input[type="number"]::-webkit-inner-spin-button, .input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .input[type="search"]::-webkit-search-cancel-button { filter: grayscale(1) brightness(1.4); cursor: pointer; }
 .input.lg { height: 40px; font-size: 15px; font-weight: 600; }
 .search { position: relative; display: flex; }
@@ -267,6 +267,10 @@ button.chip:hover { background: var(--surface-3); border-color: var(--line-3); }
 .select > .ico { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 .select.sm > select { height: 30px; font-size: 12.5px; border-radius: 8px; }
 select option { background: #1B1E24; color: var(--text); }
+.select.quiet > select { background: transparent; border-color: transparent; color: var(--muted); }
+.select.quiet.set > select { color: var(--text); background: var(--surface-2); border-color: var(--line-2); }
+.select.quiet > select:hover, .select.quiet > select:focus-visible { background: var(--field); border-color: var(--line-3); color: var(--text); }
+.select.quiet > .ico { color: var(--faint); }
 
 input[type="range"] {
   -webkit-appearance: none; appearance: none; width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer;
@@ -437,6 +441,7 @@ input[type="range"][disabled] { opacity: .4; pointer-events: none; }
 .toast.in { opacity: 1; transform: none; }
 .toast > .ico { color: var(--accent); }
 .toast.error > .ico { color: var(--danger); }
+.toast.error { border-color: color-mix(in srgb, var(--danger) 38%, transparent); background: color-mix(in srgb, var(--danger) 8%, #24272E); }
 .toast.info > .ico { color: var(--muted); }
 
 /* ---- Boot / no-host -------------------------------------------------------------------------- */
@@ -474,7 +479,11 @@ input[type="range"][disabled] { opacity: .4; pointer-events: none; }
 button.stat:hover { background: var(--surface-2); border-color: var(--line-3); }
 .stat-v { font-size: 24px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 4px; }
 .stat-v small { font-size: 14px; color: var(--faint); font-weight: 600; }
-.stat-l { color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+.stat-l { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; min-height: 22px; }
+.stat-ico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); }
+button.stat:hover .stat-ico { color: var(--accent); }
+.stat-note { font-size: 11.5px; font-weight: 600; color: var(--warn); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---- Profile switcher ------------------------------------------------------------------------ */
 .switcher {
@@ -510,6 +519,7 @@ button.stat:hover { background: var(--surface-2); border-color: var(--line-3); }
 .ktile .k { font-size: 15.5px; font-weight: 650; letter-spacing: -.01em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ktile .m { font-size: 10px; font-weight: 600; color: var(--accent-text); opacity: .8; line-height: 1; margin-bottom: 1px; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .ktile.default .k { color: var(--muted); font-weight: 550; }
+.ktile.set .k { color: var(--text); }
 .ktile.remap { border-color: var(--accent-line); background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 15%, #23262D), color-mix(in srgb, var(--accent) 7%, #1C1F25)); }
 .ktile.remap .k { color: var(--accent-text); }
 .ktile.off { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .025) 0 6px, transparent 6px 12px), #17191E; border-style: dashed; border-color: var(--line-3); box-shadow: none; }
@@ -558,12 +568,14 @@ button.stat:hover { background: var(--surface-2); border-color: var(--line-3); }
 }
 .pkey:hover { background: var(--surface-3); border-color: var(--line-3); }
 .pkey.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.pkey.off { background: transparent; border-style: dashed; border-color: var(--line-3); color: var(--muted); }
+.pkey.off.on { background: var(--surface-3); color: var(--text); border-style: solid; }
 .pkey.wide { padding: 0 12px; }
 .assign-f { display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 
 /* ---- Mouse: performance, lighting, onboard, calibration -------------------------------------- */
 .dpi-row {
-  display: grid; grid-template-columns: 30px 64px minmax(0, 1fr) 96px 30px; gap: 14px; align-items: center;
+  display: grid; grid-template-columns: 30px 64px minmax(0, 1fr) 112px 30px; gap: 14px; align-items: center;
   padding: 10px 12px; border-radius: 12px; border: 1px solid transparent; transition: background var(--t), border-color var(--t);
 }
 .dpi-row + .dpi-row { margin-top: 4px; }
@@ -578,7 +590,7 @@ button.stat:hover { background: var(--surface-2); border-color: var(--line-3); }
 .dpi-l { font-size: 12.5px; color: var(--muted); font-weight: 600; }
 .dpi-row.on .dpi-l { color: var(--text); }
 .unit { position: relative; display: flex; }
-.unit .input { width: 100%; padding-right: 38px; text-align: right; }
+.unit .input { width: 100%; padding-right: 42px; text-align: right; font-weight: 600; }
 .unit span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11.5px; color: var(--faint); pointer-events: none; }
 .big-val { font-size: 30px; font-weight: 650; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
 .big-val small { font-size: 14px; color: var(--faint); font-weight: 600; margin-left: 4px; }
@@ -608,16 +620,27 @@ details.adv[open] summary .ico { transform: rotate(90deg); }
 details.adv summary:hover { color: var(--text); }
 .adv-body { padding: 14px 0 2px 24px; display: flex; flex-direction: column; gap: 12px; }
 
-.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 12px; }
-.slot { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line-2); min-height: 178px; }
-.slot.live { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, var(--surface-2)), var(--surface-2)); border-color: color-mix(in srgb, var(--accent) 26%, transparent); }
-.slot-h { display: flex; align-items: center; gap: 10px; }
+.slot-list { display: flex; flex-direction: column; }
+.slot-row {
+  display: grid; grid-template-columns: 132px minmax(0, 1fr) 200px 128px; gap: 16px; align-items: center;
+  padding: 14px 6px; border-top: 1px solid var(--line);
+}
+.slot-row:first-child { border-top: 0; padding-top: 4px; }
+.slot-row:last-child { padding-bottom: 2px; }
+.slot-row .who { display: flex; align-items: center; gap: 12px; }
+.slot-row .what { min-width: 0; }
+.slot-row .what .t { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+.slot-row .what .t.faint { color: var(--faint); font-weight: 550; }
+.slot-row .what .d { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.slot-row .side { grid-column: 3 / span 2; font-size: 12px; color: var(--faint); }
+.slot-row .prog { grid-column: 3 / span 2; display: flex; flex-direction: column; gap: 7px; }
+.slot-row .btn { width: 100%; }
+.slot-row.writing { background: var(--accent-soft); border-radius: 12px; border-top-color: transparent; }
+.slot-row.writing + .slot-row { border-top-color: transparent; }
 .slot-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, .05), 0 0 12px -2px currentColor; }
 .slot-n { font-weight: 650; font-size: 13.5px; }
 .slot-c { font-size: 12px; color: var(--muted); }
-.slot-name { font-size: 13px; font-weight: 600; min-height: 20px; }
-.slot-sub { font-size: 12px; color: var(--muted); }
-.slot .foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 1100px) { .slot-row { grid-template-columns: 112px minmax(0, 1fr) 168px 124px; gap: 12px; } }
 
 .cal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .cal-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--line-2); min-width: 0; }
@@ -643,6 +666,13 @@ details.adv summary:hover { color: var(--text); }
 .howto-step p { font-size: 12.5px; color: var(--muted); }
 .kc.held { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 24%, #2B2F37), color-mix(in srgb, var(--accent) 14%, #23262D)); border-color: var(--accent-line); color: var(--accent-text); box-shadow: 0 1px 0 rgba(0, 0, 0, .45); transform: translateY(1px); }
 .kc.ghosted { opacity: .45; }
+.kbp { display: flex; flex-direction: column; gap: 5px; width: 100%; max-width: 236px; padding: 12px; border-radius: 12px; background: #0A0B0D; border: 1px solid var(--line-2); --g: .5; }
+.kbp-row { display: flex; gap: 5px; }
+.kbp i { flex: 1; height: 15px; border-radius: 4px; background: #1C1F25; box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .55); }
+.kbp i.lit {
+  background: color-mix(in srgb, #FFFFFF calc(var(--g) * 62%), #1C1F25);
+  box-shadow: 0 0 calc(var(--g) * 9px) rgba(255, 255, 255, calc(var(--g) * .32)), inset 0 -1px 0 rgba(0, 0, 0, .3);
+}
 
 /* ---- Macros ---------------------------------------------------------------------------------- */
 .mac { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -668,9 +698,12 @@ details.adv summary:hover { color: var(--text); }
 .step-i { font-size: 11px; color: var(--faint); font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
 .step-ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); }
 .step-ico.down { background: var(--accent-soft); color: var(--accent); }
-.step-txt { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; }
+.step-txt { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 13px; overflow: hidden; }
+.step-txt .kc { display: inline-block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 24px; }
+.step-txt .muted { flex: none; }
 .step-delay { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--faint); }
 .step-delay .input { width: 78px; height: 30px; text-align: right; padding: 0 8px; border-radius: 8px; }
+.step-delay .input.zero { color: var(--faint); }
 .step-a { display: flex; gap: 2px; }
 .step-a .btn { color: var(--faint); }
 .step-a .btn:hover { color: var(--text); }
@@ -683,6 +716,9 @@ details.adv summary:hover { color: var(--text); }
 .running-t { font-size: 14.5px; font-weight: 600; margin-top: 2px; }
 .running .act { display: flex; gap: 8px; align-items: center; flex: none; }
 .running .select { width: 190px; }
+.running.done { background: var(--surface); border-color: var(--line-2); padding: 12px 16px; }
+.running.done .running-t { font-size: 13.5px; }
+.chip.exe { font-family: var(--mono); font-size: 11.5px; }
 .gtools { display: flex; align-items: center; gap: 10px; }
 .gtools .search { width: 300px; }
 .glist { overflow: hidden; }
@@ -731,6 +767,8 @@ details.adv summary:hover { color: var(--text); }
 .ac-list { display: flex; flex-wrap: wrap; gap: 6px; }
 
 @media (max-width: 1100px) {
+  .mac { grid-template-columns: 200px minmax(0, 1fr); }
+  .step-delay .tw, .lbl-wide { display: none; }
   .light-grid { grid-template-columns: 190px minmax(0, 1fr); }
   .mk-grid { grid-template-columns: 1fr; }
   .gtools .search { width: 240px; }
@@ -791,6 +829,11 @@ function append(el, kids) {
     else el.append(c instanceof Node ? c : String(c));
   }
   return el;
+}
+// Like el.replaceChildren(...kids), but skips null/false children (replaceChildren would print "null").
+function setKids(el, ...kids) {
+  el.replaceChildren();
+  return append(el, kids);
 }
 const cx = (...parts) => parts.filter(Boolean).join(' ');
 const eqi = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -918,7 +961,7 @@ for (let f = 1; f <= 24; f++) key('KEY_F' + f, 'F' + f, 111 + f, false, 'F' + f,
   ['KEY_SCROLL_LOCK', 'Scroll Lock', 145, false, 'ScrollLock', 'ScrLk'],
   ['KEY_PAUSE', 'Pause', 19, false, 'Pause', null, 'break'],
   ['KEY_MENU', 'Menu', 93, true, 'ContextMenu', null, 'apps application context']
-].forEach(k => key(k[0], k[1], k[2], k[3], k[4], 'Navigation & editing', k[5], k[6]));
+].forEach(k => key(k[0], k[1], k[2], k[3], k[4], 'Navigation', k[5], k[6]));
 for (let n = 0; n <= 9; n++) key('KEY_NUMPAD_' + n, 'Numpad ' + n, 96 + n, false, 'Numpad' + n, 'Numpad', 'Num ' + n);
 [
   ['KEY_NUMPAD_PLUS', 'Numpad +', 107, false, 'NumpadAdd', 'Num +', 'add plus'],
@@ -954,7 +997,7 @@ for (let n = 0; n <= 9; n++) key('KEY_NUMPAD_' + n, 'Numpad ' + n, 96 + n, false
   ['KEY_SLASH', '/', 191, 'Slash', 'slash question']
 ].forEach(k => key(k[0], k[1], k[2], false, k[3], 'Symbols', null, k[4]));
 
-const KEY_GROUPS = ['Letters', 'Numbers', 'Function', 'Navigation & editing', 'Numpad', 'Modifiers', 'Symbols'];
+const KEY_GROUPS = ['Letters', 'Numbers', 'Function', 'Navigation', 'Numpad', 'Modifiers', 'Symbols'];
 const KEY_BY_NAME = new Map(KEYS.filter(k => k.name).map(k => [k.name, k]));
 KEY_BY_NAME.set('KEY_HYPEN', KEY_BY_NAME.get('KEY_HYPHEN'));          // legacy spelling, read only
 const KEY_BY_CODE = new Map(KEYS.map(k => [k.code, k]));
@@ -1157,6 +1200,7 @@ function reconcileDrafts() {
    ============================================================================================= */
 let raf = 0;
 let rangeDrag = false;
+let pointerDown = false;   // a click is in progress: the page is not replaced under it (the click would be lost)
 function requestRender() {
   if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); });
 }
@@ -1168,7 +1212,7 @@ function render() {
   renderPage();
 }
 function isEditing() {
-  if (rangeDrag) return true;
+  if (rangeDrag || pointerDown) return true;
   const a = document.activeElement;
   if (!a || !$('#page').contains(a)) return false;
   return a.matches('textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"])');
@@ -1195,9 +1239,21 @@ function keepFocus(fn) {
     if (n) n.focus({ preventScroll: true });
   }
 }
-document.addEventListener('focusout', () => { if (ui.renderPending) requestRender(); });
-document.addEventListener('pointerdown', e => { if (e.target && e.target.type === 'range') rangeDrag = true; }, true);
-document.addEventListener('pointerup', () => { if (rangeDrag) { rangeDrag = false; if (ui.renderPending) requestRender(); } }, true);
+document.addEventListener('focusout', () => { if (ui.renderPending && !pointerDown) requestRender(); });
+document.addEventListener('pointerdown', e => {
+  pointerDown = true;
+  if (e.target && e.target.type === 'range') rangeDrag = true;
+}, true);
+// The click event follows pointerup in the same task, so a render requested here runs after the click.
+function pointerReleased() {
+  if (!pointerDown && !rangeDrag) return;
+  pointerDown = false;
+  rangeDrag = false;
+  if (ui.renderPending) requestRender();
+}
+document.addEventListener('pointerup', pointerReleased, true);
+document.addEventListener('pointercancel', pointerReleased, true);
+window.addEventListener('blur', pointerReleased);
 
 function showApp() {
   $('#boot').hidden = true;
@@ -1236,7 +1292,7 @@ function go(page, tab) {
 const NAV = [['overview', 'Overview'], ['mouse', 'Mouse'], ['keyboard', 'Keyboard'], ['macros', 'Macros'], ['games', 'Games'], ['settings', 'Settings']];
 function renderSidebar() {
   const autoSub = S.auto ? (S.inGame ? 'In game · ' + (S.activeMouse || 'profile active') : 'Watching for games') : 'Off · manual profile';
-  $('#sidebar').replaceChildren(
+  setKids($('#sidebar'),
     h('div', { class: 'brand' }, appMark(false), h('div', null, h('div', { class: 'brand-name' }, 'LiteSynapse'), h('div', { class: 'brand-sub' }, 'Naga · BlackWidow'))),
     h('nav', { class: 'nav', 'aria-label': 'Sections' }, NAV.map(([id, label]) =>
       h('button', { class: 'nav-item', 'data-fk': 'nav:' + id, 'aria-current': ui.page === id ? 'page' : null, onclick: () => go(id) },
@@ -1277,7 +1333,7 @@ function deviceLine(dev) {
 function renderHeader() {
   const [title, sub] = PAGE_META[ui.page];
   const kind = ui.page === 'mouse' ? 'mouse' : ui.page === 'keyboard' ? 'keyboard' : '';
-  $('#header').replaceChildren(
+  setKids($('#header'),
     h('div', { class: 'header-row' },
       h('div', { class: 'header-text' }, h('h1', { class: 'title' }, title), h('div', { class: 'subtitle' }, sub())),
       kind ? h('div', { class: 'header-actions' }, profileSwitcher(kind), moreButton(kind)) : null),
@@ -1344,9 +1400,16 @@ function openPopover(anchor, id, build, opts) {
   el.style.width = width + 'px';
   const left = o.align === 'start' ? r.left : r.right - width;
   el.style.left = clamp(left, 12, window.innerWidth - width - 12) + 'px';
-  el.style.top = (r.bottom + 8) + 'px';
-  el.style.maxHeight = Math.max(200, window.innerHeight - r.bottom - 20) + 'px';
-  if (o.align === 'start') el.style.transformOrigin = 'top left';
+  const below = window.innerHeight - r.bottom - 20, above = r.top - 20;
+  const up = below < 280 && above > below;          // not enough room below the anchor: open upwards
+  if (up) {
+    el.style.bottom = (window.innerHeight - r.top + 8) + 'px';
+    el.style.maxHeight = above + 'px';
+  } else {
+    el.style.top = (r.bottom + 8) + 'px';
+    el.style.maxHeight = Math.max(200, below) + 'px';
+  }
+  el.style.transformOrigin = (up ? 'bottom ' : 'top ') + (o.align === 'start' ? 'left' : 'right');
   pop.refresh = build(el) || null;
   requestAnimationFrame(() => el.classList.add('in'));
   refreshExpanded();
@@ -1436,7 +1499,7 @@ function modal(spec) {
       const head = content.title ? h('div', { class: 'modal-head' },
         content.icon ? h('div', { class: cx('tile-ico', content.tone === 'danger' ? '' : 'accent'), style: content.tone === 'danger' ? 'color:var(--danger);background:color-mix(in srgb,var(--danger) 13%,transparent);border-color:transparent' : content.tone === 'warn' ? 'color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,transparent)' : null }, icon(content.icon, 20)) : null,
         h('div', { class: 'modal-t', id: titleId }, content.title)) : null;
-      box.replaceChildren(head, h('div', { class: 'modal-body' }, content.body), content.actions ? h('div', { class: 'modal-f' }, content.actions) : null);
+      setKids(box, head, h('div', { class: 'modal-body' }, content.body), content.actions ? h('div', { class: 'modal-f' }, content.actions) : null);
     }
   };
   back.addEventListener('pointerdown', e => { if (e.target === back && m.dismissable) m.close(null); });
@@ -1518,9 +1581,9 @@ function toggle(on, onChange, label, fk, disabled) {
 }
 function selectBox(options, value, onChange, attrs) {
   const a = attrs || {};
-  const sel = h('select', { 'aria-label': a.label || null, 'data-fk': a.fk || null, disabled: !!a.disabled, onchange: e => onChange(e.target.value) },
+  const sel = h('select', { 'aria-label': a.label || null, 'data-fk': a.fk || null, disabled: !!a.disabled, onchange: e => onChange(e.target.value, e.target) },
     options.map(o => h('option', { value: o[0], selected: o[0] === value }, o[1])));
-  return h('span', { class: cx('select', a.small && 'sm'), style: a.style || null }, sel, icon('chevronDown', 14));
+  return h('span', { class: cx('select', a.small && 'sm', a.quiet && 'quiet', a.quiet && value && 'set'), style: a.style || null }, sel, icon('chevronDown', 14));
 }
 function cardHead(title, sub, end, ic) {
   return h('div', { class: 'card-h' },
@@ -1571,17 +1634,1710 @@ function luminance(hex) {
   const ch = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
   return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255);
 }
+// Profile avatar: its initial on a tile tinted with the profile's lighting color (muted, so neon colors stay calm).
 function avatar(name, p, large) {
-  const fill = lightingFill(p);
-  let style, color = '#0A0C0F';
-  if (fill.startsWith('conic')) style = `background:${fill}`;
-  else if (fill) { style = `background:${fill}`; if (luminance(fill) < 0.18) color = '#F3F4F6'; }
-  else { style = 'background:var(--surface-4)'; color = 'var(--muted)'; }
+  const c = lightColor(p);
+  let style;
+  if (c === 'spectrum') {
+    style = `background:linear-gradient(rgba(21,23,28,.58),rgba(21,23,28,.58)),${lightingFill(p)};color:#F3F4F6;box-shadow:inset 0 0 0 1px rgba(255,255,255,.2)`;
+  } else if (c) {
+    const text = luminance(c) < 0.04 ? `color-mix(in srgb, ${c} 45%, #E9EBEF)` : `color-mix(in srgb, ${c} 72%, #FFFFFF)`;
+    style = `background:color-mix(in srgb, ${c} 18%, #1B1E24);color:${text};box-shadow:inset 0 0 0 1px color-mix(in srgb, ${c} 48%, transparent)`;
+  } else {
+    style = 'background:var(--surface-3);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-3)';
+  }
   const initial = (String(name).trim()[0] || '?').toUpperCase();
-  return h('div', { class: cx('avatar', large && 'lg'), style: `${style};color:${color}`, 'aria-hidden': 'true' }, initial);
+  return h('div', { class: cx('avatar', large && 'lg'), style, 'aria-hidden': 'true' }, initial);
 }
 
-/*__PART2__*/
+/* =============================================================================================
+   Mouse buttons: names, calibrated defaults and what each button sends
+   ============================================================================================= */
+const SIDE_IDS = Array.from({ length: 12 }, (_, i) => 'Side' + (i + 1));
+const TOP_IDS = ['Scroll', 'M1', 'M2', 'TiltL', 'TiltR'];
+const TOP_NAMES = { Scroll: 'Scroll click', M1: 'M1', M2: 'M2', TiltL: 'Tilt left', TiltR: 'Tilt right' };
+const LOCKED_BUTTONS = ['Left click', 'Right click', 'Scroll up', 'Scroll down', 'Cycle profile'];
+const buttonName = id => TOP_NAMES[id] || (/^Side\d+$/.test(id) ? 'Side ' + id.slice(4) : id);
+const MOUSE_TARGETS = [
+  { name: 'MOUSE_MIDDLE', label: 'Middle click', short: 'Middle', group: 'Mouse', words: 'mouse middle click wheel button 3' },
+  { name: 'DISABLED', label: 'Off', short: 'Off', group: 'Mouse', words: 'off disabled disable none nothing' }
+];
+
+// Calibration labels are Windows key names (GetKeyNameText): "Shift", "Num 7", "Prnt Scrn". -> KEY_* name.
+const CAL_ALIASES = {
+  shift: 'KEY_LEFT_SHIFT', ctrl: 'KEY_LEFT_CTRL', alt: 'KEY_LEFT_ALT', 'right shift': 'KEY_RIGHT_SHIFT',
+  'right ctrl': 'KEY_RIGHT_CTRL', 'right alt': 'KEY_RIGHT_ALT', 'left windows': 'KEY_LEFT_WIN', 'right windows': 'KEY_RIGHT_WIN',
+  application: 'KEY_MENU', esc: 'KEY_ESCAPE', space: 'KEY_SPACEBAR', up: 'KEY_UP_ARROW', down: 'KEY_DOWN_ARROW',
+  left: 'KEY_LEFT_ARROW', right: 'KEY_RIGHT_ARROW', 'prnt scrn': 'KEY_PRINT_SCREEN', 'num *': 'KEY_NUMPAD_MULTIPLY',
+  'num -': 'KEY_NUMPAD_MINUS', 'num +': 'KEY_NUMPAD_PLUS', 'num /': 'KEY_NUMPAD_DIVIDE', 'num del': 'KEY_NUMPAD_PERIOD',
+  'num lock': 'KEY_NUM_LOCK'
+};
+const calKeyCache = new Map();
+function calKey(label) {
+  const l = String(label || '').trim().toLowerCase();
+  if (!l) return '';
+  if (calKeyCache.has(l)) return calKeyCache.get(l);
+  let name = CAL_ALIASES[l] || '';
+  const num = /^num (\d)$/.exec(l);
+  if (!name && num) name = 'KEY_NUMPAD_' + num[1];
+  if (!name) {
+    const k = KEYS.find(x => x.name && (x.label.toLowerCase() === l || x.short.toLowerCase() === l));
+    name = k ? k.name : '';
+  }
+  calKeyCache.set(l, name);
+  return name;
+}
+
+// What a button does in profile p: its explicit target (if any), its calibrated default and whether they differ.
+function buttonInfo(p, id) {
+  const raw = p && p.buttons[id];
+  const t = raw && raw.key ? { key: raw.key, mods: raw.key.startsWith('KEY_') ? (raw.mods || []) : [] } : null;
+  const cal = S.calibration[id] || '';
+  const sameAsDefault = !!t && !t.mods.length && t.key === calKey(cal);
+  return { t, cal, custom: !!t && !sameAsDefault, off: !!t && t.key === 'DISABLED' };
+}
+const MOD_SHORT = { KEY_LEFT_CTRL: 'Ctrl', KEY_LEFT_SHIFT: 'Shift', KEY_LEFT_ALT: 'Alt', KEY_LEFT_WIN: 'Win', KEY_RIGHT_CTRL: 'RCtrl', KEY_RIGHT_SHIFT: 'RShift', KEY_RIGHT_ALT: 'RAlt', KEY_RIGHT_WIN: 'RWin' };
+const modsPrefix = mods => sortMods(mods).map(m => MOD_SHORT[m] || prettyKeyName(m)).join('+');
+
+/* =============================================================================================
+   Key picker (searchable, grouped) — used for buttons and for macro key presses
+   ============================================================================================= */
+function keyMatches(k, q) {
+  if (q.length === 1) return k.label.toLowerCase() === q || k.short.toLowerCase() === q;
+  return k.words ? k.words.includes(q) : k.label.toLowerCase().includes(q);
+}
+// o: { fk, selected, onPick(k), mouse: include Middle click / Off, macro: include keys that only macros can send,
+//      query, onQuery(q), tall, autofocus }
+function keyPicker(o) {
+  const groups = KEY_GROUPS.map(g => [g, KEYS.filter(k => k.group === g && (o.macro || k.name))]);
+  if (o.mouse) groups.push(['Mouse', MOUSE_TARGETS]);
+  const input = h('input', {
+    class: 'input', type: 'search', placeholder: 'Search keys', 'aria-label': 'Search keys', spellcheck: 'false',
+    autocomplete: 'off', 'data-fk': o.fk + ':q', value: o.query || '', 'data-autofocus': o.autofocus || null
+  });
+  const list = h('div', { class: cx('picker-list', o.tall && 'tall'), 'data-sk': o.fk + ':list' });
+  const fill = () => {
+    const q = input.value.trim().toLowerCase();
+    const out = [];
+    for (const [g, keys] of groups) {
+      const hits = q ? keys.filter(k => keyMatches(k, q)) : keys;
+      if (!hits.length) continue;
+      out.push(h('div', { class: 'pgroup-t' }, g), h('div', { class: 'pgrid', role: 'group', 'aria-label': g }, hits.map(k =>
+        h('button', {
+          class: cx('pkey', o.selected && k.name === o.selected && 'on', k.name === 'DISABLED' && 'off'),
+          title: k.label, 'data-fk': o.fk + ':k:' + (k.name || k.code), onclick: () => o.onPick(k)
+        }, k.group === 'Numpad' ? k.short : k.label))));
+    }
+    list.replaceChildren(...(out.length ? out : [h('div', { class: 'muted small', style: 'padding:14px 2px' }, `No key matches ${quote(input.value.trim())}.`)]));
+  };
+  input.addEventListener('input', () => { if (o.onQuery) o.onQuery(input.value); fill(); list.scrollTop = 0; });
+  input.addEventListener('keydown', e => {
+    const first = list.querySelector('.pkey');
+    if (e.key === 'Enter' && first) { e.preventDefault(); first.click(); }
+    else if (e.key === 'ArrowDown' && first) { e.preventDefault(); first.focus(); }
+  });
+  list.addEventListener('keydown', e => {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return;
+    const items = Array.from(list.querySelectorAll('.pkey'));
+    const i = items.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+    if (!fwd && i === 0) { input.focus(); return; }
+    const next = items[clamp(i + (fwd ? 1 : -1), 0, items.length - 1)];
+    next.focus();
+    next.scrollIntoView({ block: 'nearest' });
+  });
+  fill();
+  return h('div', { class: 'picker' }, h('div', { class: 'search' }, icon('search', 16), input), list);
+}
+
+/* =============================================================================================
+   Key capture: "Press a key" for a button, and macro recording. Runs before every other key handler.
+   ============================================================================================= */
+const MOD_CODES = new Set(['ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+
+function startCapture(spec) {
+  stopCapture(true);
+  ui.capture = Object.assign({ held: new Set(), down: new Set(), last: 0, solo: '' }, spec);
+  window.addEventListener('keydown', onCaptureKey, true);
+  window.addEventListener('keyup', onCaptureKey, true);
+  requestRender();
+}
+function stopCapture(quiet) {
+  if (!ui.capture) return;
+  const c = ui.capture;
+  ui.capture = null;
+  window.removeEventListener('keydown', onCaptureKey, true);
+  window.removeEventListener('keyup', onCaptureKey, true);
+  if (c.kind === 'record' && !quiet && ui.macro) toast(`Recorded ${plural(ui.macro.steps.length, 'step')}`, 'info', 'rec');
+  requestRender();
+}
+function onCaptureKey(e) {
+  const c = ui.capture;
+  if (!c) return;
+  e.preventDefault();               // Tab, Alt, F-keys and Esc must not do their usual thing while capturing
+  e.stopPropagation();
+  if (c.kind === 'button') captureButtonKey(c, e);
+  else if (c.kind === 'record') recordKey(c, e);
+}
+function captureButtonKey(c, e) {
+  const k = KEY_BY_CODE.get(e.code);
+  if (e.type === 'keyup') {
+    if (!MOD_CODES.has(e.code) || !k) return;
+    if (c.solo === k.name) { stopCapture(true); pickButtonKey(c.id, k.name, [], true); return; }   // a modifier alone
+    c.held.delete(k.name);
+    requestRender();
+    return;
+  }
+  if (e.repeat) return;
+  if (e.code === 'Escape' && !c.held.size) { stopCapture(true); return; }
+  if (MOD_CODES.has(e.code) && k) { c.held.add(k.name); c.solo = k.name; requestRender(); return; }
+  c.solo = '';
+  const name = k ? (k.name || (e.code === 'NumpadEnter' ? 'KEY_ENTER' : '')) : '';
+  if (!name) { toast(`That key can't be assigned to a mouse button${e.code ? ` (${e.code})` : ''}.`, 'error', 'cap'); return; }
+  const mods = Array.from(new Set([...(ui.armed[c.id] || []), ...c.held]));
+  stopCapture(true);
+  pickButtonKey(c.id, name, mods, true);
+}
+function recordKey(c, e) {
+  if (e.type === 'keydown' && e.repeat) return;
+  if (e.type === 'keydown' && e.code === 'Escape') { stopCapture(); return; }
+  const k = KEY_BY_CODE.get(e.code);
+  const d = ui.macro;
+  if (!d) { stopCapture(true); return; }
+  if (!k) { if (e.type === 'keydown') toast(`That key can't be recorded${e.code ? ` (${e.code})` : ''}.`, 'error', 'cap'); return; }
+  if (e.type === 'keyup') {
+    if (!c.down.has(e.code)) return;      // released a key that was already down when recording started
+    c.down.delete(e.code);
+  } else c.down.add(e.code);
+  const now = e.timeStamp || performance.now();
+  if (d.steps.length && c.last) d.steps[d.steps.length - 1].delayMs = clamp(Math.round(now - c.last), 0, 60000);
+  c.last = now;
+  d.steps.push({ vk: k.vk, ext: !!k.ext, down: e.type === 'keydown', delayMs: 0 });
+  d.dirty = true;
+  requestRender();
+}
+
+/* =============================================================================================
+   Profile switcher (searchable popover) and the profile "⋯" menu
+   ============================================================================================= */
+const kindLabel = kind => (kind === 'mouse' ? 'mouse' : 'keyboard');
+const profilesOf = kind => (kind === 'mouse' ? S.mouseProfiles : S.keyboardProfiles);
+const activeName = kind => (kind === 'mouse' ? S.activeMouse : S.activeKeyboard);
+const startingName = kind => (kind === 'mouse' ? S.defaultMouse : S.defaultKeyboard);
+
+function kbAvatar() {
+  return h('div', { class: 'avatar', style: 'background:var(--surface-3);color:var(--muted)', 'aria-hidden': 'true' }, icon('keyboard', 16));
+}
+function profileSwitcher(kind) {
+  const name = activeName(kind);
+  const id = 'switch:' + kind;
+  const mode = !S.auto ? 'Picked by you' : S.inGame ? 'Active in game' : 'Active profile';
+  return h('button', {
+    class: 'switcher', 'data-pop': id, 'data-fk': id, 'aria-haspopup': 'dialog', 'aria-expanded': String(!!pop && pop.id === id),
+    'aria-label': `${kind === 'mouse' ? 'Mouse' : 'Keyboard'} profile: ${name || 'none'}. Switch profile`,
+    onclick: e => toggleSwitcher(e.currentTarget, kind)
+  },
+  kind === 'mouse' ? avatar(name || '?', mouseByName(name)) : kbAvatar(),
+  h('span', { class: 'txt' }, h('span', { class: 'l' }, mode), h('span', { class: 'n' }, name || 'No profile')),
+  icon('chevronDown', 16));
+}
+function profileSub(kind, p) {
+  if (kind === 'mouse') {
+    const g = gameOf(p.name);
+    if (!g) return 'Not linked to a game';
+    if (!g.exes.length) return 'Linked · no program yet';
+    return g.exes.length === 1 ? g.exes[0] : `${g.exes[0]} +${g.exes.length - 1}`;
+  }
+  const games = gamesUsingKb(p.name).map(g => g.profile);
+  const bits = [p.snapTap ? 'Snap Tap on' : 'Snap Tap off'];
+  if (games.length) bits.push(games.length <= 2 ? games.join(', ') : `${games[0]} +${games.length - 1} games`);
+  else bits.push('No games');
+  return bits.join(' · ');
+}
+function toggleSwitcher(anchor, kind) {
+  const id = 'switch:' + kind;
+  if (pop && pop.id === id) { closePopover(); return; }
+  openPopover(anchor, id, el => {
+    let query = '';
+    const input = h('input', {
+      class: 'input', type: 'search', placeholder: `Search ${plural(profilesOf(kind).length, kindLabel(kind) + ' profile')}`,
+      'aria-label': 'Search profiles', spellcheck: 'false', autocomplete: 'off'
+    });
+    const list = h('div', { class: 'pop-scroll', role: 'listbox', 'aria-label': 'Profiles' });
+    const item = p => {
+      const on = p.name === activeName(kind);
+      return h('button', {
+        class: 'pitem', role: 'option', 'aria-selected': String(on), title: p.name,
+        onclick: () => pickProfile(kind, p.name)
+      },
+      kind === 'mouse' ? avatar(p.name, p) : kbAvatar(),
+      h('div', { style: 'min-width:0' }, h('div', { class: 'n ellipsis' }, p.name), h('div', { class: 's ellipsis' }, profileSub(kind, p))),
+      h('span', { class: 'tail' },
+        p.name === startingName(kind) ? h('span', { class: 'badge outline', title: 'Starting profile: used when no game is in front' }, icon('star', 12), 'Starting') : null,
+        kind === 'mouse' && p.antiCheat ? h('span', { class: 'badge shield', title: 'Anti-cheat game' }, icon('shield', 12)) : null,
+        on ? icon('check', 16) : null));
+    };
+    const fill = () => {
+      const q = query.trim().toLowerCase();
+      const all = profilesOf(kind).slice().sort((a, b) => byName(a.name, b.name));
+      const hits = q ? all.filter(p => p.name.toLowerCase().includes(q) || profileSub(kind, p).toLowerCase().includes(q)) : all;
+      const start = !q && all.find(p => p.name === startingName(kind));
+      const out = [];
+      if (start) out.push(h('div', { class: 'pgroup eyebrow' }, 'Starting profile'), item(start), h('div', { class: 'pgroup eyebrow' }, 'All profiles'));
+      for (const p of hits) if (p !== start) out.push(item(p));
+      if (!hits.length) out.push(h('div', { class: 'muted small', style: 'padding:16px 10px' }, `No profile matches ${quote(query.trim())}.`));
+      list.replaceChildren(...out);
+    };
+    input.addEventListener('input', () => { query = input.value; fill(); list.scrollTop = 0; });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { const f = list.querySelector('.pitem'); if (f) { e.preventDefault(); f.click(); } }
+    });
+    el.addEventListener('keydown', e => listNav(e, el, '.pitem'));
+    el.append(
+      h('div', { class: 'search' }, icon('search', 16), input),
+      list,
+      h('div', { class: 'pop-foot' },
+        h('span', { class: 'pop-note' }, S.auto ? 'Picking a profile turns auto-switch off.' : 'Auto-switch is off.'),
+        h('span', { class: 'spacer' }),
+        h('button', { class: 'btn sm', onclick: () => { closePopover(); newProfile(kind); } }, icon('plus', 14), 'New')));
+    fill();
+    const cur = list.querySelector('[aria-selected="true"]');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+    input.focus();
+    return fill;
+  }, { width: 380, label: `Switch ${kindLabel(kind)} profile` });
+}
+function pickProfile(kind, name) {
+  closePopover(true);
+  if (name === activeName(kind) && !S.auto) return;
+  act('selectProfile', { kind, name }, { ok: `${quote(name)} is active${S.auto ? ' · auto-switch is off' : ''}`, key: 'profile' });
+}
+
+function moreButton(kind) {
+  const id = 'more:' + kind;
+  return h('button', {
+    class: 'btn icon', 'data-pop': id, 'data-fk': id, 'aria-haspopup': 'menu', 'aria-expanded': String(!!pop && pop.id === id),
+    'aria-label': 'Profile actions', title: 'Profile actions',
+    onclick: e => openMenu(e.currentTarget, id, profileMenu(kind), 'Profile actions')
+  }, icon('more'));
+}
+function profileMenu(kind) {
+  const name = activeName(kind);
+  const has = !!name && !!(kind === 'mouse' ? mouseByName(name) : kbByName(name));
+  const starting = name === startingName(kind);
+  return [
+    { icon: 'plus', label: 'New profile…', run: () => newProfile(kind) },
+    { icon: 'pencil', label: 'Rename…', disabled: !has, run: () => renameProfile(kind, name) },
+    { icon: 'copy', label: 'Duplicate', disabled: !has, run: () => duplicateProfile(kind, name) },
+    '-',
+    { icon: 'download', label: 'Export…', disabled: !has, run: () => exportProfile(kind, name) },
+    { icon: 'upload', label: 'Import…', hint: '.synapse4 · .xml', run: importProfiles },
+    '-',
+    { icon: 'star', label: 'Set as starting profile', hint: starting ? 'Current' : '', disabled: !has || starting, run: () => act('setStartingProfile', { kind, name }, { ok: `${quote(name)} is the starting profile` }) },
+    { icon: 'reset', label: 'Reset…', disabled: !has, run: () => resetProfile(kind, name) },
+    { icon: 'trash', label: 'Delete…', danger: true, disabled: !has || starting, title: starting ? 'The starting profile cannot be deleted' : '', run: () => deleteProfile(kind, name) }
+  ];
+}
+function nameTaken(kind, v, except) {
+  return profilesOf(kind).some(p => p.name !== except && eqi(p.name, v)) ? `A ${kindLabel(kind)} profile named ${quote(v)} already exists.` : '';
+}
+async function newProfile(kind) {
+  const check = h('input', { type: 'checkbox', checked: true });
+  const name = await promptModal({
+    title: `New ${kindLabel(kind)} profile`, label: 'Name', placeholder: kind === 'mouse' ? 'e.g. Apex Legends' : 'e.g. Shooter keys', ok: 'Create',
+    icon: 'plus', validate: v => nameTaken(kind, v),
+    extra: { node: h('label', { class: 'check' }, check, S.auto ? 'Switch to it now (turns auto-switch off)' : 'Switch to it now') }
+  });
+  if (!name) return;
+  const switchNow = check.checked;
+  if (await act('addProfile', { kind, name }, { ok: `Created ${quote(name)}` }) === FAILED) return;
+  if (switchNow) act('selectProfile', { kind, name });
+}
+async function renameProfile(kind, from) {
+  const to = await promptModal({ title: `Rename ${quote(from)}`, label: 'New name', value: from, ok: 'Rename', validate: v => nameTaken(kind, v, from) });
+  if (!to || to === from) return;
+  act('renameProfile', { kind, from, to }, { ok: `Renamed to ${quote(to)}` });
+}
+async function duplicateProfile(kind, name) {
+  const r = await act('duplicateProfile', { kind, name });
+  if (r !== FAILED && r && r.name) toast(`Created ${quote(r.name)}`, 'ok');
+}
+async function exportProfile(kind, name) {
+  const r = await act('exportProfile', { kind, name });
+  if (r !== FAILED && r && r.path) toast(`Exported to ${r.path}`, 'ok');
+}
+async function importProfiles() {
+  const r = await act('importProfiles', {});
+  const msg = r !== FAILED && r && r.message ? String(r.message) : '';
+  if (!msg) return;
+  if (msg.length <= 90 && !msg.includes('\n')) { toast(msg, 'ok'); return; }
+  infoModal('Import finished', msg, 'upload');
+}
+async function resetProfile(kind, name) {
+  const what = kind === 'mouse'
+    ? 'All button remaps are cleared, so every button sends its default key again. DPI, polling rate and lighting stay as they are.'
+    : 'The arrow-key macros are cleared. Snap Tap and lighting stay as they are.';
+  if (!await confirmModal({ title: `Reset ${quote(name)}?`, body: what, ok: 'Reset', icon: 'reset' })) return;
+  act('resetProfile', { kind, name }, { ok: `${quote(name)} was reset` });
+}
+async function deleteProfile(kind, name) {
+  const g = kind === 'mouse' ? gameOf(name) : null;
+  const users = kind === 'keyboard' ? gamesUsingKb(name).filter(x => x.keyboardProfile === name).length : 0;
+  const body = [
+    h('p', null, 'This cannot be undone. Export it first if you may want it back.'),
+    g ? h('p', { style: 'margin-top:8px' }, `Its game link (${g.exes.length ? g.exes.join(', ') : 'no program'}) is removed too.`) : null,
+    users ? h('p', { style: 'margin-top:8px' }, `${plural(users, 'game')} that use it will fall back to the default keyboard profile.`) : null
+  ];
+  if (!await confirmModal({ title: `Delete ${quote(name)}?`, body, ok: 'Delete', danger: true })) return;
+  act('deleteProfile', { kind, name }, { ok: `Deleted ${quote(name)}` });
+}
+function infoModal(title, text, ic) {
+  let m = null;
+  m = modal({
+    title, icon: ic || 'info',
+    body: h('div', { class: 'selectable', style: 'white-space:pre-wrap' }, text),
+    actions: [h('button', { class: 'btn primary', onclick: () => m.close(true) }, 'OK')]
+  });
+  return m;
+}
+
+/* =============================================================================================
+   Shared page pieces: warning banners, device info, slots
+   ============================================================================================= */
+const SLOT_NAMES = ['', 'White', 'Red', 'Green', 'Blue', 'Cyan'];
+const SLOT_COLORS = ['', '#F2F4F7', '#FF4D5E', '#3DDC84', '#4F8CFF', '#3FD8F2'];
+const slotDot = n => h('span', { class: 'slot-dot', style: `color:${SLOT_COLORS[n] || '#888'};background:${SLOT_COLORS[n] || '#888'}` });
+
+function elevatedBanner() {
+  if (!S.elevatedGame) return null;
+  return banner('danger', 'admin', 'This game runs as administrator',
+    'Run LiteSynapse as administrator for this game, otherwise Snap Tap and macros can’t reach it. Windows does not let a normal program send keys to a program that runs as administrator. Mouse buttons stored on the mouse keep working.');
+}
+function leftoversSummary() {
+  const r = S.razer, bits = [];
+  if (r.synapseInstalled) bits.push('Razer Synapse is installed');
+  if (r.gmsService === 'running') bits.push('Game Manager service is running');
+  else if (r.gmsService === 'stopped') bits.push('Game Manager service still starts with Windows');
+  if (r.filterDrivers.length) bits.push(plural(r.filterDrivers.length, 'filter driver') + ' in the input path');
+  if (r.rzCommon) bits.push('RzCommon driver');
+  return bits.join(' · ');
+}
+function leftoversBanner() {
+  if (!isLeftovers()) return null;
+  return banner('warn', 'warn', 'Razer leftovers found', leftoversSummary() + '. They cost CPU time and add a layer to every mouse and keyboard report.',
+    h('button', { class: 'btn sm', onclick: () => go('settings', 'performance') }, 'Review', icon('chevronRight', 14)));
+}
+function disconnectedBanner(dev, what) {
+  if (dev.connected) return null;
+  return banner('info', 'info', `${dev.name} is not connected`,
+    `Changes are saved and applied as soon as the ${what} is plugged in. LiteSynapse picks it up by itself.`);
+}
+
+function loadDeviceInfo() {
+  if (ui.device.loading || !host) return;
+  ui.device.loading = true;
+  ui.device.error = '';
+  requestRender();
+  call('getDeviceInfo', {}, 10000).then(r => { ui.device.info = r || { mouse: null, keyboard: null }; },
+    e => { ui.device.error = e.message; }).finally(() => { ui.device.loading = false; requestRender(); });
+}
+function liveText() {
+  const t = S.liveStatus || '';
+  if (!t) return S.liveWrite ? '' : 'Profiles run in software (“Run profiles on the mouse itself” is off)';
+  if (/^back on slot/i.test(t)) return 'The mouse is ' + t;
+  const nice = t.replace(/"([^"]*)"/g, '\u201C$1\u201D');
+  return nice.charAt(0).toUpperCase() + nice.slice(1);
+}
+function effectName(e) { return { off: 'Off', static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', reactive: 'Reactive', starlight: 'Starlight' }[e] || e; }
+
+/* =============================================================================================
+   Page: Overview
+   ============================================================================================= */
+function pageOverview() {
+  const mp = activeMouse(), kp = activeKb();
+  const mode = S.inGame ? 'game' : !S.auto ? 'manual' : 'desktop';
+  const title = mode === 'game' ? `In game · ${S.activeMouse || 'profile active'}` : mode === 'manual' ? 'Profiles picked by you' : 'On the desktop';
+  const desc = mode === 'game'
+    ? 'A linked game is in front: its profiles are active, and Snap Tap and macro keys work while it has focus.'
+    : mode === 'manual'
+      ? 'Auto-switch is off, so these profiles stay active until you pick others or turn auto-switch back on.'
+      : 'The keyboard hook is off on the desktop, so typing gets zero added latency. Profiles switch the moment a linked game comes to the front.';
+  const live = liveText();
+  const hero = h('div', { class: 'card hero' },
+    h('div', { class: cx('orb', mode !== 'game' && 'idle') }, icon(mode === 'game' ? 'games' : mode === 'manual' ? 'mouse' : 'monitor', 28)),
+    h('div', { style: 'min-width:0' },
+      h('div', { class: 'eyebrow' }, 'Right now'),
+      h('div', { class: 'hero-t' }, title),
+      h('div', { class: 'hero-d' }, desc),
+      h('div', { class: 'hero-chips' },
+        h('button', { class: 'chip', title: 'Mouse profile', onclick: () => go('mouse') },
+          h('span', { class: 'swatch-dot', style: `background:${lightingFill(mp) || 'var(--surface-4)'}` }), S.activeMouse || 'No mouse profile'),
+        h('button', { class: 'chip', title: 'Keyboard profile', onclick: () => go('keyboard') }, icon('keyboard', 14), S.activeKeyboard || 'No keyboard profile'),
+        live ? h('span', { class: 'chip', title: live }, icon('chip', 14), h('span', { class: 'ellipsis', style: 'max-width:340px' }, live)) : null)),
+    h('div', { class: 'hero-side' },
+      h('div', { class: 'lbl' }, 'Auto-switch', toggle(S.auto, on => setAuto(on), 'Auto-switch', 'sw:auto-hero')),
+      h('div', { class: 'sub' }, S.auto ? 'Profiles follow the game in front' : 'Off: your picked profiles stay')));
+
+  const info = ui.device.info || {};
+  const skel = () => h('span', { class: 'skel' });
+  const val = (v, fallback) => (ui.device.loading && !ui.device.info) ? skel() : (v === null || v === undefined ? (fallback || '—') : v);
+  const mi = info.mouse, ki = info.keyboard;
+  const refresh = h('button', {
+    class: cx('btn ghost sm', ui.device.loading && 'busy'), title: 'Read the devices again', onclick: loadDeviceInfo
+  }, ui.device.loading ? h('span', { class: 'spin' }) : icon('refresh', 14), h('span', { class: 'lbl-wide' }, 'Refresh'));
+
+  const L = mp && mp.lighting;
+  const mouseCard = h('div', { class: 'card' },
+    h('div', { class: 'dev-h' },
+      h('div', { class: cx('tile-ico', S.mouse.connected && 'accent') }, icon('mouse', 20)),
+      h('div', { style: 'min-width:0;flex:1' }, h('div', { class: 'dev-n' }, S.mouse.name),
+        h('div', { class: 'dev-s' }, h('span', { class: cx('dot', S.mouse.connected ? 'ok' : 'off') }), S.mouse.connected ? 'Connected' : 'Not connected')),
+      refresh),
+    h('dl', { class: 'kv' },
+      h('dt', null, 'Profile'), h('dd', null, h('span', { class: 'ellipsis' }, S.activeMouse || '—')),
+      h('dt', null, 'DPI'), h('dd', { class: 'num' }, val(mi ? mi.dpi : null, mp ? String(mp.dpi) : '—')),
+      h('dt', null, 'Polling rate'), h('dd', { class: 'num' }, val(mi ? `${mi.polling} Hz` : null, mp ? `${mp.pollingRate} Hz` : '—')),
+      h('dt', null, 'Onboard slot'), h('dd', null, (ui.device.loading && !ui.device.info) ? skel() : mi && mi.slot ? [slotDot(mi.slot), `${mi.slot} · ${mi.slotName || SLOT_NAMES[mi.slot] || ''}`] : '—'),
+      h('dt', null, 'Lighting'), h('dd', null, L ? [h('span', { class: 'swatch-dot', style: `background:${lightingFill(mp) || 'transparent'}` }), effectName(L.effect)] : 'Left as it is')));
+
+  const macroCount = kp ? Object.keys(kp.macroKeys).filter(k => kp.macroKeys[k]).length : 0;
+  const kbCard = h('div', { class: 'card' },
+    h('div', { class: 'dev-h' },
+      h('div', { class: cx('tile-ico', S.keyboard.connected && 'accent') }, icon('keyboard', 20)),
+      h('div', { style: 'min-width:0;flex:1' }, h('div', { class: 'dev-n' }, S.keyboard.name),
+        h('div', { class: 'dev-s' }, h('span', { class: cx('dot', S.keyboard.connected ? 'ok' : 'off') }), S.keyboard.connected ? 'Connected' : 'Not connected'))),
+    h('dl', { class: 'kv' },
+      h('dt', null, 'Profile'), h('dd', null, h('span', { class: 'ellipsis' }, S.activeKeyboard || '—')),
+      h('dt', null, 'Snap Tap'), h('dd', null, kp ? h('span', { class: cx('badge', kp.snapTap ? 'accent' : '') }, kp.snapTap ? 'On' : 'Off') : '—'),
+      h('dt', null, 'Macro keys'), h('dd', null, kp ? `${macroCount} of 4 arrows` : '—'),
+      h('dt', null, 'Brightness'), h('dd', { class: 'num' }, val(ki ? `${ki.brightness}%` : null, kp ? `${kp.brightness}%` : '—')),
+      h('dt', null, 'Lighting'), h('dd', null, kp ? effectName(kp.effect) : '—')));
+
+  const linked = S.games.filter(g => g.exes.length).length;
+  const cal = calibratedCount();
+  const stat = (v, small, label, ic, onclick, note) => h('button', { class: 'stat', onclick },
+    h('div', { class: 'stat-top' }, h('span', { class: 'stat-ico' }, icon(ic, 16)), note ? h('span', { class: 'stat-note' }, note) : null),
+    h('div', { class: 'stat-v' }, v, small ? h('small', null, small) : null),
+    h('div', { class: 'stat-l' }, label));
+
+  return h('div', { class: 'stack' },
+    elevatedBanner(), leftoversBanner(), disconnectedBanner(S.mouse, 'mouse'), disconnectedBanner(S.keyboard, 'keyboard'),
+    hero,
+    h('div', { class: 'grid cols-2' }, mouseCard, kbCard),
+    ui.device.error ? h('div', { class: 'small muted row' }, icon('warn', 14), 'Could not read the devices: ' + ui.device.error) : null,
+    h('div', { class: 'grid cols-4' },
+      stat(linked, '/' + S.games.length, 'Games auto-switch', 'games', () => go('games'), linked < S.games.length ? `${S.games.length - linked} need a program` : ''),
+      stat(cal, '/' + S.buttonIds.length, 'Buttons calibrated', 'target', () => go('mouse', 'calibration'), cal < S.buttonIds.length ? 'Calibrate' : ''),
+      stat(S.macros.length, '', S.macros.length === 1 ? 'Macro' : 'Macros', 'macros', () => go('macros')),
+      stat(S.mouseProfiles.length, '', 'Mouse profiles', 'layers', () => go('mouse'))));
+}
+
+/* =============================================================================================
+   Page: Mouse
+   ============================================================================================= */
+function pageMouse() {
+  const p = activeMouse();
+  if (!p) {
+    return h('div', { class: 'stack' }, disconnectedBanner(S.mouse, 'mouse'), h('div', { class: 'card' },
+      emptyBlock('mouse', 'No mouse profile is active', 'Pick one with the profile switcher above, or create a new one.',
+        h('button', { class: 'btn primary', onclick: () => newProfile('mouse') }, icon('plus', 16), 'New profile'))));
+  }
+  const tabs = { buttons: mouseButtons, performance: mousePerformance, lighting: mouseLighting, onboard: mouseOnboard, calibration: mouseCalibration };
+  return h('div', { class: 'stack' }, disconnectedBanner(S.mouse, 'mouse'), (tabs[ui.tabs.mouse] || mouseButtons)(p));
+}
+
+/* ---- Buttons -------------------------------------------------------------------------------- */
+function buttonTile(p, id, label) {
+  const b = buttonInfo(p, id);
+  let key = '—', mods = '', cls = 'default', desc;
+  if (b.off) { key = 'Off'; cls = 'off'; desc = 'turned off'; }
+  else if (b.t) { key = keyShort(b.t.key); mods = b.t.mods.length ? modsPrefix(b.t.mods) + ' +' : ''; cls = b.custom ? 'remap' : 'set'; desc = targetLabel(b.t) + (b.custom ? ' (remapped)' : ''); }
+  else if (b.cal) { key = b.cal; desc = b.cal + ' (default)'; }
+  else desc = 'not calibrated';
+  return h('button', {
+    class: cx('ktile', cls), 'aria-pressed': String(ui.button === id), 'data-fk': 'btn:' + id,
+    title: `${buttonName(id)}: ${desc}`, 'aria-label': `${buttonName(id)}: ${desc}`, onclick: () => selectButton(id)
+  }, h('span', { class: 'n' }, label), mods ? h('span', { class: 'm' }, mods) : null, h('span', { class: 'k' }, key));
+}
+function selectButton(id) {
+  if (ui.capture && ui.capture.kind === 'button') stopCapture(true);
+  if (ui.button !== id) {
+    const list = document.querySelector('[data-sk="pick:list"]');
+    if (list) list.scrollTop = 0;      // the picker starts at the top for another button
+  }
+  ui.button = id;
+  requestRender();
+}
+function mouseButtons(p) {
+  if (!S.buttonIds.includes(ui.button)) ui.button = S.buttonIds[0] || 'Side1';
+  const remaps = S.buttonIds.filter(id => buttonInfo(p, id).custom).length;
+  const panel = h('div', { class: 'card' },
+    cardHead('Side panel', remaps ? `${plural(remaps, 'button')} of ${quote(p.name)} ${remaps === 1 ? 'is' : 'are'} remapped. Pick a button to change what it sends.` : `Every button of ${quote(p.name)} sends its default key. Pick a button to remap it.`),
+    h('div', { class: 'panel' }, h('div', { class: 'kgrid' }, SIDE_IDS.map((id, i) => buttonTile(p, id, String(i + 1))))),
+    h('div', { class: 'legend', style: 'justify-content:center;margin-top:14px' },
+      h('span', null, h('i', { style: 'background:var(--accent)' }), 'Remapped'),
+      h('span', null, h('i', { style: 'background:#3A3F48' }), 'Default key'),
+      h('span', null, h('i', { style: 'background:transparent;box-shadow:inset 0 0 0 1px var(--faint)' }), 'Off')),
+    h('div', { class: 'section-l' }, h('span', { class: 'eyebrow' }, 'Top & wheel'), h('span', { class: 'line' })),
+    h('div', { class: 'krow' }, TOP_IDS.map(id => buttonTile(p, id, id === 'Scroll' ? 'Scroll' : TOP_NAMES[id]))),
+    h('div', { class: 'fixed-row' }, icon('lock', 14), h('span', null, 'Fixed'),
+      LOCKED_BUTTONS.map(n => h('span', { class: 'chip' }, n)),
+      h('span', { class: 'chip', title: 'Left and right click are swapped for left-handed use (stored on the mouse with this profile).' },
+        p.clickSwap ? 'Left-handed click swap' : 'No click swap')));
+  return h('div', { class: 'split' }, panel, assignPanel(p));
+}
+function assignPanel(p) {
+  const id = ui.button;
+  const b = buttonInfo(p, id);
+  const capturing = !!ui.capture && ui.capture.kind === 'button' && ui.capture.id === id;
+  const keyTarget = !!b.t && b.t.key.startsWith('KEY_');
+  const armed = ui.armed[id] || [];
+  const mods = keyTarget ? b.t.mods : armed;
+  const modsOff = !!b.t && !keyTarget;
+
+  let current, what;
+  if (b.t) {
+    current = [];
+    for (const m of sortMods(b.t.mods)) current.push(h('span', { class: 'kc lg' }, MOD_SHORT[m] || prettyKeyName(m)), h('span', { class: 'plus' }, '+'));
+    current.push(h('span', { class: cx('kc lg', b.off ? 'off' : b.custom && 'accent') }, keyLabel(b.t.key)));
+    what = b.off ? 'Does nothing' : b.custom ? (b.cal ? `Remapped · default is ${b.cal}` : 'Remapped') : 'Same as its default key';
+  } else if (b.cal) {
+    current = [h('span', { class: 'kc lg dim' }, b.cal)];
+    what = 'Default key';
+  } else {
+    current = [h('span', { class: 'kc lg off' }, '?')];
+    what = 'Not calibrated yet';
+  }
+  const heldNow = capturing ? Array.from(ui.capture.held) : [];
+  const capText = capturing
+    ? (heldNow.length ? `${modsPrefix(heldNow)} + …` : 'Press a key…  Esc cancels')
+    : 'Press a key to assign';
+  const modHint = modsOff ? 'Modifiers work with keyboard keys only.'
+    : !keyTarget && armed.length ? `${modsPrefix(armed)} will be added to the next key you pick.`
+      : 'Hold with the key: Ctrl, Shift, Alt or Win.';
+
+  return h('div', { class: 'card assign' },
+    h('div', { class: 'assign-h' },
+      h('div', { style: 'min-width:0;flex:1' }, h('div', { class: 'eyebrow' }, 'Selected button'), h('div', { class: 'assign-t' }, buttonName(id))),
+      b.off ? h('span', { class: 'badge' }, 'Off') : b.custom ? h('span', { class: 'badge accent' }, 'Remapped') : h('span', { class: 'badge outline' }, 'Default')),
+    h('div', { class: 'current' }, current, h('span', { class: 'what' }, what)),
+    h('button', {
+      class: cx('capture', capturing && 'on'), 'data-fk': 'capture', 'aria-pressed': String(capturing),
+      onclick: () => (capturing ? stopCapture(true) : startCapture({ kind: 'button', id }))
+    }, icon('keyboard', 18), capText),
+    h('div', { class: 'field' },
+      h('div', { class: 'field-l' }, 'Modifiers'),
+      h('div', { class: 'mods', role: 'group', 'aria-label': 'Modifiers' }, MOD_TOGGLES.map(([label, left, right]) => {
+        const on = mods.includes(left) || mods.includes(right);
+        return h('button', {
+          class: 'mod', 'aria-pressed': String(on), disabled: modsOff, 'data-fk': 'mod:' + label,
+          onclick: () => toggleMod(id, left, right, on)
+        }, mods.includes(right) ? 'Right ' + label : label);
+      })),
+      h('div', { class: 'small faint' }, modHint)),
+    h('div', { class: 'field' },
+      h('div', { class: 'field-l' }, 'Or pick a key'),
+      keyPicker({
+        fk: 'pick', mouse: true, selected: b.t ? b.t.key : '', query: ui.pickerQuery, onQuery: q => { ui.pickerQuery = q; },
+        onPick: k => pickButtonKey(id, k.name, keyTarget ? b.t.mods : armed)
+      })),
+    h('div', { class: 'assign-f' },
+      h('button', {
+        class: 'btn sm', disabled: !b.t, 'data-fk': 'btn-reset',
+        onclick: () => act('setButton', { id, key: '', mods: [] }, { ok: `${buttonName(id)} → default${b.cal ? ` (${b.cal})` : ''}`, key: 'button' })
+      }, icon('reset', 14), 'Reset to default'),
+      h('span', { class: 'spacer' }),
+      h('span', { class: 'small faint' }, `Saved to ${quote(p.name)}`)));
+}
+function toggleMod(id, left, right, on) {
+  const b = buttonInfo(activeMouse(), id);
+  if (b.t && b.t.key.startsWith('KEY_')) {
+    pickButtonKey(id, b.t.key, on ? b.t.mods.filter(m => m !== left && m !== right) : [...b.t.mods, left]);
+    return;
+  }
+  const a = ui.armed[id] || [];
+  ui.armed[id] = on ? a.filter(m => m !== left && m !== right) : [...a, left];
+  requestRender();
+}
+function pickButtonKey(id, key, mods) {
+  const m = key.startsWith('KEY_') ? sortMods(Array.from(new Set(mods || []))) : [];
+  delete ui.armed[id];
+  return act('setButton', { id, key, mods: m }, { ok: `${buttonName(id)} → ${targetLabel({ key, mods: m })}`, key: 'button' });
+}
+
+/* ---- Performance (DPI stages, polling) -------------------------------------------------------- */
+function dpiDraft(p) {
+  if (ui.dpi && ui.dpi.profile === p.name) return ui.dpi;
+  const stages = p.dpiStages.slice(0, 5);
+  return { profile: p.name, stages, active: clamp(p.dpiActive || 1, 1, stages.length), rev: 0 };
+}
+function editDpi(mutate, quiet) {
+  const p = activeMouse();
+  if (!p) return;
+  if (!ui.dpi || ui.dpi.profile !== p.name) ui.dpi = dpiDraft(p);
+  mutate(ui.dpi);
+  ui.dpi.active = clamp(ui.dpi.active, 1, ui.dpi.stages.length);
+  ui.dpi.rev++;
+  saveDpi();
+  if (!quiet) requestRender();
+}
+const saveDpi = debounce(() => {
+  const d = ui.dpi;
+  if (!d) return;
+  if (d.profile !== S.activeMouse) {
+    ui.dpi = null;
+    toast(`The active profile changed, so the DPI change for ${quote(d.profile)} was not saved.`, 'error');
+    requestRender();
+    return;
+  }
+  const rev = d.rev;
+  act('setDpiStages', { stages: d.stages.slice(), active: d.active }, { ok: `${d.stages[d.active - 1]} DPI · stage ${d.active} of ${d.stages.length}`, key: 'dpi' })
+    .then(r => { if (ui.dpi === d && (r === FAILED || d.rev === rev)) { ui.dpi = null; requestRender(); } });
+}, 400);
+
+// DPI sliders use a log scale: 400 to 6400 (where people play) spans most of the track instead of its first third.
+const DPI_LN = Math.log(20000 / 100);
+const dpiToPos = v => Math.round(1000 * Math.log(clamp(v, 100, 20000) / 100) / DPI_LN);
+const posToDpi = x => clamp(Math.round(100 * Math.exp(x / 1000 * DPI_LN) / 50) * 50, 100, 20000);
+function mousePerformance(p) {
+  const d = dpiDraft(p);
+  const big = h('span', null, String(d.stages[d.active - 1]));
+  const rows = d.stages.map((v, i) => {
+    const on = d.active === i + 1;
+    let range = null;
+    const num = h('input', {
+      class: 'input', type: 'number', min: 100, max: 20000, step: 50, value: v, 'aria-label': `Stage ${i + 1} DPI`, 'data-fk': 'dpi:n:' + i,
+      onchange: e => {
+        const n = clamp(Math.round(Number(e.target.value) || v), 100, 20000);
+        e.target.value = n;
+        range.value = dpiToPos(n);
+        range.setAttribute('aria-valuetext', n + ' DPI');
+        setFill(range);
+        if (on) big.textContent = n;
+        editDpi(x => { x.stages[i] = n; }, true);
+      },
+      onkeydown: e => { if (e.key === 'Enter') e.target.blur(); }
+    });
+    range = rangeInput({ min: 0, max: 1000, step: 1, value: dpiToPos(v), 'aria-label': `Stage ${i + 1} DPI`, 'aria-valuetext': v + ' DPI', 'data-fk': 'dpi:r:' + i },
+      x => {
+        const n = posToDpi(x);
+        num.value = n;
+        range.setAttribute('aria-valuetext', n + ' DPI');
+        if (on) big.textContent = n;
+        editDpi(s => { s.stages[i] = n; }, true);
+      });
+    return h('div', { class: cx('dpi-row', on && 'on') },
+      h('button', { class: 'radio', role: 'radio', 'aria-checked': String(on), 'aria-label': `Use stage ${i + 1}`, 'data-fk': 'dpi:a:' + i,
+        onclick: () => { if (!on) { editDpi(x => { x.active = i + 1; }); saveDpi.flush(); } } }),
+      h('span', { class: 'dpi-l' }, `Stage ${i + 1}`),
+      range,
+      h('span', { class: 'unit' }, num, h('span', null, 'DPI')),
+      h('button', {
+        class: 'btn ghost icon sm', disabled: d.stages.length <= 1, 'aria-label': `Remove stage ${i + 1}`, title: 'Remove stage',
+        onclick: () => { editDpi(x => { x.stages.splice(i, 1); if (x.active > i + 1) x.active--; }); saveDpi.flush(); }
+      }, icon('x', 14)));
+  });
+  const addStage = () => {
+    editDpi(x => {
+      const last = x.stages[x.stages.length - 1] || 800;
+      x.stages.push(clamp(Math.round(last * 2 / 50) * 50, 100, 20000));
+    });
+    saveDpi.flush();
+  };
+  const POLL = [[125, '8 ms between reports. Uses the least CPU.'], [500, '2 ms between reports.'], [1000, '1 ms between reports. Lowest latency, best for games.']];
+  const cur = POLL.find(x => x[0] === p.pollingRate);
+  return h('div', { class: 'stack' },
+    h('div', { class: 'card' },
+      cardHead('DPI stages', 'Up to 5 stages. The selected stage is the DPI the mouse uses with this profile.',
+        h('div', { class: 'big-val' }, big, h('small', null, 'DPI')), 'dpi'),
+      h('div', { role: 'radiogroup', 'aria-label': 'DPI stages' }, rows),
+      h('div', { class: 'row', style: 'margin-top:14px' },
+        h('button', { class: 'btn sm', disabled: d.stages.length >= 5, onclick: addStage, 'data-fk': 'dpi:add' }, icon('plus', 14), 'Add stage'),
+        h('span', { class: 'small faint' }, `${d.stages.length} of 5 · 100 – 20,000 DPI`),
+        h('span', { class: 'spacer' }),
+        ui.dpi ? h('span', { class: 'small muted row' }, h('span', { class: 'spin' }), 'Saving…')
+          : h('span', { class: 'small faint row' }, icon('check', 14), S.mouse.connected ? 'Saved and applied' : 'Saved · applied when the mouse is plugged in'))),
+    h('div', { class: 'card' },
+      cardHead('Polling rate', 'How often the mouse reports to the PC.', null, 'gauge'),
+      h('div', { class: 'row wrap', style: 'gap:16px' },
+        h('div', { class: 'seg', role: 'group', 'aria-label': 'Polling rate' }, POLL.map(([hz]) => h('button', {
+          'aria-pressed': String(p.pollingRate === hz), 'data-fk': 'poll:' + hz,
+          onclick: () => { if (p.pollingRate !== hz) act('setPolling', { hz }, { ok: `Polling rate ${hz} Hz`, key: 'poll' }); }
+        }, `${hz} Hz`))),
+        h('span', { class: 'small muted' }, cur ? cur[1] : `${p.pollingRate} Hz`))));
+}
+
+/* ---- Lighting (per profile) ----------------------------------------------------------------- */
+const MOUSE_EFFECTS = [['off', 'Off', 'power'], ['static', 'Static', 'sun'], ['breathing', 'Breathing', 'pulse'], ['spectrum', 'Spectrum', 'palette']];
+const PRESET_COLORS = ['#00FF00', '#2EE6A6', '#00FFFF', '#0050FF', '#8000FF', '#FF00FF', '#FF0000', '#FF8000', '#FFD000', '#FFFFFF'];
+function lightDraft(p) {
+  if (ui.light && ui.light.profile === p.name) return ui.light;
+  const L = p.lighting;
+  return { profile: p.name, effect: L ? L.effect : '', color: ((L && L.color) || '#00FF00').toUpperCase(), brightness: L ? L.brightness : 100, rev: 0 };
+}
+function editLight(p, mutate, now) {
+  if (!ui.light || ui.light.profile !== p.name) ui.light = lightDraft(p);
+  mutate(ui.light);
+  if (!ui.light.effect) ui.light.effect = 'static';
+  ui.light.rev++;
+  saveLight();
+  if (now) saveLight.flush();
+}
+const saveLight = debounce(() => {
+  const d = ui.light;
+  if (!d) return;
+  const rev = d.rev;
+  act('setMouseLighting', { profile: d.profile, effect: d.effect, color: d.color.toUpperCase(), brightness: d.brightness },
+    { ok: `Lighting saved for ${quote(d.profile)}`, key: 'light' })
+    .then(r => { if (ui.light === d && (r === FAILED || d.rev === rev)) { ui.light = null; requestRender(); } });
+}, 300);
+
+function mousePreviewSvg(d) {
+  const on = d.effect && d.effect !== 'off';
+  const a = on ? Math.max(0.18, d.brightness / 100) : 0;
+  const fill = !on ? '#2B2F37' : d.effect === 'spectrum' ? 'url(#lsSpec)' : d.color;
+  const glow = on ? `<g filter="url(#lsGlow)" opacity="${(a * 0.9).toFixed(2)}"><rect x="66" y="22" width="18" height="42" rx="9" fill="${fill}"/><circle cx="75" cy="158" r="17" fill="${fill}"/><rect x="108" y="92" width="26" height="74" rx="9" fill="${fill}"/></g>` : '';
+  const op = on ? a.toFixed(2) : '1';
+  return `<svg width="150" height="224" viewBox="0 0 150 224" aria-hidden="true">
+<defs>
+  <linearGradient id="lsBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2E35"/><stop offset="1" stop-color="#15171B"/></linearGradient>
+  <linearGradient id="lsSpec" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF4D6A"/><stop offset=".25" stop-color="#FFB547"/><stop offset=".5" stop-color="#3DDC84"/><stop offset=".75" stop-color="#4F8CFF"/><stop offset="1" stop-color="#8B7BFF"/></linearGradient>
+  <filter id="lsGlow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="9"/></filter>
+</defs>
+<ellipse cx="75" cy="216" rx="50" ry="6" fill="#000" opacity=".45"/>
+${glow}
+<path d="M75 8C112 8 132 40 134 88L136 150C137 192 110 214 75 214S13 192 14 150L16 88C18 40 38 8 75 8Z" fill="url(#lsBody)" stroke="rgba(255,255,255,.10)"/>
+<path d="M75 10V80M18 84Q75 98 132 84" fill="none" stroke="rgba(255,255,255,.09)"/>
+<rect x="68" y="26" width="14" height="34" rx="7" fill="${fill}" opacity="${op}"/>
+<path d="M70 34h10M70 42h10M70 50h10" stroke="rgba(0,0,0,.35)" stroke-width="1.5"/>
+<circle cx="75" cy="158" r="12" fill="none" stroke="${fill}" stroke-width="3" opacity="${op}"/>
+<circle cx="75" cy="158" r="4" fill="${fill}" opacity="${op}"/>
+<rect x="112" y="96" width="18" height="66" rx="6" fill="${fill}" opacity="${on ? (a * 0.85).toFixed(2) : '1'}"/>
+<g fill="rgba(0,0,0,.42)">${[0, 1, 2, 3].map(r => [0, 1, 2].map(c => `<rect x="${114 + c * 5}" y="${100 + r * 15}" width="3.6" height="12" rx="1.4"/>`).join('')).join('')}</g>
+</svg>`;
+}
+function mouseLighting(p) {
+  const d = lightDraft(p);
+  const set = !!d.effect;
+  const colorOk = set && (d.effect === 'static' || d.effect === 'breathing');
+  const preview = h('div', { class: 'preview' });
+  const caption = h('div', { class: 'cap' });
+  // Repaints the preview from the live draft (slider and color drags update it without re-rendering the page).
+  const paint = () => {
+    const x = ui.light && ui.light.profile === p.name ? ui.light : d;
+    preview.replaceChildren(svg(mousePreviewSvg(x)), caption);
+    setKids(caption,
+      x.effect ? h('span', { class: 'swatch-dot', style: `background:${x.effect === 'spectrum' ? lightingFill({ lighting: x }) : x.effect === 'off' ? 'transparent' : x.color}` }) : null,
+      !x.effect ? 'Left as it is' : x.effect === 'off' ? 'Lights off' : `${effectName(x.effect)} · ${x.brightness}%`);
+  };
+  paint();
+  const hex = h('input', {
+    class: 'input hexin', value: d.color, maxlength: 7, 'aria-label': 'Hex color', spellcheck: 'false', disabled: !colorOk, 'data-fk': 'light:hex',
+    onchange: e => {
+      const v = e.target.value.trim().replace(/^#?/, '#').toUpperCase();
+      if (!/^#[0-9A-F]{6}$/.test(v)) { e.target.value = d.color; toast('Use a color like #00FF00.', 'error'); return; }
+      editLight(p, x => { x.color = v; }, true);
+      requestRender();
+    },
+    onkeydown: e => { if (e.key === 'Enter') e.target.blur(); }
+  });
+  const custom = h('input', {
+    type: 'color', value: d.color.toLowerCase(), 'aria-label': 'Custom color', disabled: !colorOk,
+    oninput: e => { editLight(p, x => { x.color = e.target.value.toUpperCase(); }); hex.value = ui.light.color; paint(); },
+    onchange: () => requestRender()
+  });
+  const bright = h('span', { class: 'num small muted', style: 'width:44px;text-align:right' }, `${d.brightness}%`);
+  return h('div', { class: 'stack' },
+    h('div', { class: 'card' },
+      cardHead([`Lighting for ${quote(p.name)}`, h('span', { class: 'badge warn' }, 'Experimental')],
+        'Saved with this profile and applied whenever it becomes active. Written to the mouse with the profile’s slot.', null, 'sun'),
+      h('div', { class: 'light-grid' },
+        preview,
+        h('div', { class: 'stack' },
+          !set ? banner('calm', 'info', 'This profile leaves the lighting alone', 'The mouse keeps whatever lighting it has. Pick an effect to give this profile its own.') : null,
+          h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Effect'),
+            h('div', { class: 'choices' }, MOUSE_EFFECTS.map(([id, label, ic]) => h('button', {
+              class: 'choice', 'aria-pressed': String(d.effect === id), 'data-fk': 'light:fx:' + id,
+              onclick: () => { editLight(p, x => { x.effect = id; }, true); requestRender(); }
+            }, icon(ic, 16), label)))),
+          h('div', { class: 'field', style: colorOk ? null : 'opacity:.45' }, h('div', { class: 'field-l' }, 'Color'),
+            h('div', { class: 'row wrap', style: 'gap:12px' },
+              h('div', { class: 'swatches' },
+                PRESET_COLORS.map(c => h('button', {
+                  class: 'swatch', style: `background:${c}`, 'aria-pressed': String(colorOk && d.color === c), 'aria-label': c, title: c, disabled: !colorOk,
+                  onclick: () => { editLight(p, x => { x.color = c; }, true); requestRender(); }
+                })),
+                h('label', { class: 'swatch custom', title: 'Custom color', 'aria-pressed': String(colorOk && !PRESET_COLORS.includes(d.color)) }, icon('plus', 14), custom)),
+              hex)),
+          h('div', { class: 'field', style: set && d.effect !== 'off' ? null : 'opacity:.45' }, h('div', { class: 'field-l' }, 'Brightness'),
+            h('div', { class: 'row' },
+              rangeInput({ min: 0, max: 100, step: 1, value: d.brightness, 'aria-label': 'Brightness', disabled: !set || d.effect === 'off', 'data-fk': 'light:b' },
+                n => { editLight(p, x => { x.brightness = n; }); bright.textContent = n + '%'; paint(); }),
+              bright))))),
+    h('details', { class: 'card adv', open: !!ui.zones.list || ui.zones.loading || null },
+      h('summary', null, icon('chevronRight', 16), 'Advanced'),
+      h('div', { class: 'adv-body' },
+        h('div', { class: 'small muted' }, 'Asks the mouse which lighting zones it has. Read-only: nothing is changed.'),
+        h('div', { class: 'row wrap' },
+          h('button', { class: cx('btn sm', ui.zones.loading && 'busy'), onclick: probeZones, disabled: !S.mouse.connected },
+            ui.zones.loading ? h('span', { class: 'spin' }) : icon('target', 14), 'Detect zones'),
+          ui.zones.error ? h('span', { class: 'small', style: 'color:var(--danger-text)' }, ui.zones.error) : null,
+          (ui.zones.list || []).map(z => h('span', { class: 'chip' }, h('span', { class: 'faint num' }, '#' + z.id), z.name))))));
+}
+function probeZones() {
+  if (ui.zones.loading) return;
+  ui.zones = { loading: true, list: ui.zones.list, error: '' };
+  requestRender();
+  call('probeMouseLighting', {}, 15000).then(r => { ui.zones.list = (r && r.zones) || []; if (!ui.zones.list.length) ui.zones.error = 'The mouse reported no zones.'; },
+    e => { ui.zones.error = e.message; }).finally(() => { ui.zones.loading = false; requestRender(); });
+}
+
+/* ---- Onboard memory ------------------------------------------------------------------------- */
+function mouseOnboard() {
+  const busy = ui.onboard.slot;
+  const names = S.mouseProfiles.map(p => p.name).sort(byName);
+  const row = n => {
+    const live = S.liveSlots.includes(n);
+    const stored = S.onboard[String(n)] || '';
+    const who = h('div', { class: 'who' }, slotDot(n),
+      h('div', null, h('div', { class: 'slot-n' }, `Slot ${n}`), h('div', { class: 'slot-c' }, SLOT_NAMES[n])));
+    const what = (t, d, cls) => h('div', { class: 'what' }, h('div', { class: cx('t ellipsis', cls), title: typeof t === 'string' ? t : null }, t), h('div', { class: 'd' }, d));
+    if (live) {
+      return h('div', { class: 'slot-row live' }, who,
+        what([h('span', { class: 'badge accent' }, 'Live'), ' Used by LiteSynapse'], stored ? `Now holds ${quote(stored)}` : 'Holds the active profile'),
+        h('div', { class: 'side' }, n === S.liveSlots[0] ? 'Slots 1 and 2 take turns, so the slot the mouse is using is never rewritten.' : ''));
+    }
+    if (n === 1) {
+      return h('div', { class: 'slot-row' }, who,
+        what(stored || 'Not written by LiteSynapse', 'Kept for live profiles', stored ? '' : 'faint'),
+        h('div', { class: 'side' }, 'Turn on “Run profiles on the mouse itself” in Settings to use it.'));
+    }
+    const pick = ui.onboardPick[n] || stored || S.activeMouse || names[0] || '';
+    const writing = busy === n;
+    return h('div', { class: cx('slot-row', writing && 'writing') }, who,
+      what(stored || 'Unknown content', stored ? 'Last written by LiteSynapse' : 'Not written by LiteSynapse', stored ? '' : 'faint'),
+      writing
+        ? h('div', { class: 'prog' }, h('div', { class: 'bar' }, h('i')), h('div', { class: 'small muted', 'data-progress': 'onboard', 'aria-live': 'polite' }, ui.onboard.text || 'Writing…'))
+        : [selectBox(names.map(x => [x, x]), pick, v => { ui.onboardPick[n] = v; }, { label: `Profile for slot ${n}`, small: true, fk: 'slot:' + n, disabled: !!busy }),
+          h('button', { class: 'btn sm', disabled: !!busy || !S.mouse.connected || !pick, 'data-fk': 'slotw:' + n, onclick: () => writeSlot(n) }, icon('download', 14), 'Write to slot')]);
+  };
+  return h('div', { class: 'stack' },
+    banner('calm', 'chip', 'The Naga keeps up to 5 profiles in its own memory',
+      'They work without LiteSynapse, even on another PC. The profile button on the mouse cycles through the slots, and its light shows which slot is in use.'),
+    h('div', { class: 'card' }, cardHead('Onboard slots', S.liveWrite ? 'Slots 1 and 2 are LiteSynapse’s. Slots 3 to 5 are yours: write any profile into them.' : 'Slots 2 to 5 are yours: write any profile into them.', null, 'layers'),
+      h('div', { class: 'slot-list' }, [1, 2, 3, 4, 5].map(row))));
+}
+async function writeSlot(n) {
+  const profile = ui.onboardPick[n] || S.onboard[String(n)] || S.activeMouse;
+  if (!profile) return;
+  const ok = await confirmModal({
+    title: `Write ${quote(profile)} to slot ${n}?`, icon: 'download', ok: 'Write to slot',
+    body: [h('p', null, `This replaces what slot ${n} (${SLOT_NAMES[n]}) holds now. It takes a few seconds — keep the mouse plugged in.`),
+      h('p', { style: 'margin-top:8px' }, 'Afterwards, press the profile button on the mouse until its light is ' + SLOT_NAMES[n].toLowerCase() + ' to use it.')]
+  });
+  if (!ok || ui.onboard.slot) return;
+  ui.onboard = { slot: n, text: `Writing ${quote(profile)} to slot ${n}…` };
+  requestRender();
+  try {
+    const r = await call('onboardWrite', { slot: n, profile }, 180000);
+    if (r && r.ok) toast(r.message || `Wrote ${quote(profile)} to slot ${n}`, 'ok');
+    else infoModal('The slot was not written', (r && r.message) || 'The mouse did not confirm the write.', 'warn');
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    ui.onboard = { slot: 0, text: '' };
+    requestRender();
+  }
+}
+function onProgress(op, text) {
+  if (op === 'onboard' && ui.onboard.slot) {
+    ui.onboard.text = text || '';
+    const el = document.querySelector('[data-progress="onboard"]');
+    if (el) el.textContent = ui.onboard.text;
+    return;
+  }
+  if (text) toast(text, 'info', 'progress:' + op);
+}
+
+/* ---- Calibration ---------------------------------------------------------------------------- */
+function mouseCalibration() {
+  const n = calibratedCount(), total = S.buttonIds.length;
+  return h('div', { class: 'card' },
+    cardHead(['Calibration', h('span', { class: cx('badge', n < total ? 'warn' : 'ok') }, `${n}/${total}`)],
+      'Calibration records the key each button sends with the mouse’s own default mapping, so LiteSynapse can tell the buttons apart and show their default keys. Run it again after resetting the mouse.',
+      h('button', { class: 'btn primary', 'data-fk': 'calibrate', onclick: () => act('calibrate', {}, { ok: 'The calibration window is open' }) }, icon('target', 16), n ? 'Calibrate again' : 'Calibrate'),
+      'target'),
+    n < total ? banner('warn', 'warn', `${plural(total - n, 'button is', 'buttons are')} not calibrated`, 'LiteSynapse cannot remap those buttons in software until they are calibrated.') : null,
+    h('div', { class: 'cal-grid', style: n < total ? 'margin-top:14px' : null }, S.buttonIds.map(id => {
+      const lab = S.calibration[id];
+      return h('div', { class: cx('cal-item', !lab && 'missing') },
+        h('span', { class: 'nm' }, buttonName(id)),
+        lab ? h('span', { class: 'kc' }, lab) : h('span', { class: 'badge warn' }, 'Not set'));
+    })));
+}
+
+/* =============================================================================================
+   Page: Keyboard
+   ============================================================================================= */
+const ARROWS = [
+  ['KEY_UP_ARROW', 'Up arrow', 'arrowUp', 'up'],
+  ['KEY_DOWN_ARROW', 'Down arrow', 'arrowDown', 'down'],
+  ['KEY_LEFT_ARROW', 'Left arrow', 'arrowLeft', 'left'],
+  ['KEY_RIGHT_ARROW', 'Right arrow', 'arrowRight', 'right']
+];
+function pageKeyboard() {
+  const kp = activeKb();
+  if (!kp) {
+    return h('div', { class: 'stack' }, disconnectedBanner(S.keyboard, 'keyboard'), h('div', { class: 'card' },
+      emptyBlock('keyboard', 'No keyboard profile is active', 'Pick one with the profile switcher above, or create a new one.',
+        h('button', { class: 'btn primary', onclick: () => newProfile('keyboard') }, icon('plus', 16), 'New profile'))));
+  }
+  const tabs = { macrokeys: kbMacroKeys, snaptap: kbSnapTap, lighting: kbLighting };
+  return h('div', { class: 'stack' }, disconnectedBanner(S.keyboard, 'keyboard'), (tabs[ui.tabs.keyboard] || kbMacroKeys)(kp));
+}
+function shortList(names, max) {
+  return names.length <= max ? names.join(', ') : `${names.slice(0, max).join(', ')} +${names.length - max}`;
+}
+// Warning for keyboard features that anti-cheat games punish, when a linked anti-cheat game uses this profile.
+function antiCheatBanner(kp, what) {
+  const ac = antiCheatGamesForKb(kp.name);
+  if (!ac.length) return null;
+  const names = shortList(ac, 3);
+  const goSafe = h('button', { class: 'btn sm', onclick: () => go('settings', 'gaming') }, 'Competitive-safe', icon('chevronRight', 14));
+  if (S.competitiveSafe) {
+    return banner('calm', 'shieldCheck', 'Competitive-safe is on',
+      `${names} ${ac.length === 1 ? 'is an anti-cheat game' : 'are anti-cheat games'}, so LiteSynapse turns ${what} off there. Those games see only your real key presses.`, goSafe);
+  }
+  return banner('warn', 'shield', `${names} ${ac.length === 1 ? 'uses' : 'use'} this profile and ${ac.length === 1 ? 'has' : 'have'} anti-cheat`,
+    'Valve kicks players on official CS2 servers for Snap Tap-style counter-strafe automation and for macros that do several actions from one key. FACEIT bans them. Competitive-safe turns these off in anti-cheat games for you.', goSafe);
+}
+function usedByLine(kp) {
+  const games = gamesUsingKb(kp.name).map(g => g.profile);
+  if (!games.length) return 'No linked game uses this profile yet, so it only applies when you pick it yourself.';
+  return `Used by ${shortList(games, 4)}.`;
+}
+
+function kbMacroKeys(kp) {
+  const keys = kp.macroKeys;
+  const cluster = h('div', { class: 'cluster', 'aria-hidden': 'true' }, ARROWS.map(([key, , ic, pos]) =>
+    h('div', { class: cx('kc', pos, keys[key] && 'accent') }, icon(ic, 18), keys[key] ? h('small', null, keys[key]) : null)));
+  const macroOpts = [['', 'Normal arrow key'], ...S.macros.map(m => [m.name, m.name])];
+  const rows = ARROWS.map(([key, label, ic]) => {
+    const cur = keys[key] || '';
+    const missing = cur && !S.macros.some(m => m.name === cur);
+    return h('div', { class: 'mk-row' },
+      h('span', { class: cx('kc', cur && 'accent') }, icon(ic, 16)),
+      h('div', null, h('div', { style: 'font-weight:600;font-size:13.5px' }, label),
+        h('div', { class: 'small muted' }, missing ? 'Macro is missing' : cur ? 'Runs a macro' : 'Works as usual')),
+      selectBox(missing ? [...macroOpts, [cur, cur + ' (missing)']] : macroOpts, cur, v => act('setMacroKey', { key, macro: v },
+        { ok: v ? `${label} runs ${quote(v)}` : `${label} is a normal arrow key again`, key: 'macrokey' }),
+      { label: `Macro for ${label}`, fk: 'mk:' + key }),
+      h('button', {
+        class: 'btn ghost icon sm', disabled: !cur || missing, 'aria-label': `Edit ${cur || 'macro'}`, title: 'Edit macro',
+        onclick: () => openMacro(cur)
+      }, icon('pencil', 16)));
+  });
+  return h('div', { class: 'stack' },
+    elevatedBanner(),
+    antiCheatBanner(kp, 'the macro keys'),
+    h('div', { class: 'card' },
+      cardHead('Macro keys', 'An arrow key with a macro runs it instead of moving while a linked game is in front. On the desktop the arrows work as usual. ' + usedByLine(kp), null, 'macros'),
+      S.macros.length
+        ? h('div', { class: 'mk-grid' }, cluster, h('div', null, rows))
+        : emptyBlock('macros', 'No macros yet', 'Record a macro first, then give it an arrow key here.',
+          h('button', { class: 'btn primary', onclick: () => { go('macros'); newMacro(); } }, icon('plus', 16), 'Create a macro'))));
+}
+
+function kbSnapTap(kp) {
+  const step = (n, title, keys, text) => h('div', { class: 'howto-step' },
+    h('div', { class: 'n' }, `Step ${n}`), h('div', { style: 'font-weight:600' }, title),
+    h('div', { class: 'keys' }, keys), h('p', null, text));
+  const k = (label, state) => h('span', { class: cx('kc lg', state) }, label);
+  return h('div', { class: 'stack' },
+    elevatedBanner(),
+    antiCheatBanner(kp, 'Snap Tap'),
+    h('div', { class: 'card' },
+      cardHead(['Snap Tap', kp.snapTap ? h('span', { class: 'badge accent' }, 'On') : h('span', { class: 'badge' }, 'Off')],
+        'Last key wins for A and D: you never stand still because both are held.',
+        toggle(kp.snapTap, on => act('setSnapTap', { on }, { ok: on ? 'Snap Tap is on' : 'Snap Tap is off', key: 'snap' }), 'Snap Tap', 'sw:snap'),
+        'zap'),
+      h('div', { class: 'howto' },
+        step(1, 'Hold A', [k('A', 'held'), k('D', 'ghosted')], 'You move left.'),
+        step(2, 'Press D, keep holding A', [k('A', 'ghosted'), k('D', 'held')], 'The game sees A let go at once, so you move right with no dead stop.'),
+        step(3, 'Let go of D', [k('A', 'held'), k('D', 'ghosted')], 'A is pressed again for you, so you keep moving left.')),
+      h('div', { class: 'small muted', style: 'margin-top:16px;max-width:760px' },
+        'Your real key presses always pass through untouched; LiteSynapse only adds the release and re-press of the other key. It works while a linked game is in front. On the desktop the keyboard hook is off. ' + usedByLine(kp))));
+}
+
+const KB_EFFECTS = [['off', 'Off', 'power'], ['static', 'Static', 'sun'], ['breathing', 'Breathing', 'pulse'], ['reactive', 'Reactive', 'zap'], ['starlight', 'Starlight', 'star']];
+const saveKbBright = debounce(() => {
+  const d = ui.kbBright;
+  if (!d) return;
+  if (d.profile !== S.activeKeyboard) { ui.kbBright = null; requestRender(); return; }
+  const rev = d.rev;
+  act('setKbBrightness', { value: d.value }, { ok: `Keyboard brightness ${d.value}%`, key: 'kbb' })
+    .then(r => { if (ui.kbBright === d && (r === FAILED || d.rev === rev)) { ui.kbBright = null; requestRender(); } });
+}, 300);
+function kbPreview(effect, brightness) {
+  const g = effect === 'off' ? 0 : Math.max(0.06, brightness / 100);
+  const lit = (r, c) => effect === 'reactive' ? (r === 1 && (c === 1 || c === 2)) || (r === 2 && c === 3)
+    : effect === 'starlight' ? (r * 7 + c * 3) % 5 === 0 : true;
+  const rows = [12, 11, 10].map((n, r) => h('div', { class: 'kbp-row' },
+    Array.from({ length: n }, (_, c) => h('i', { class: lit(r, c) ? 'lit' : null }))));
+  return h('div', { class: 'kbp', style: `--g:${(effect === 'breathing' ? g * 0.7 : g).toFixed(2)}`, 'aria-hidden': 'true' }, rows,
+    h('div', { class: 'kbp-row' }, h('i', { class: 'lit', style: 'flex:6' })));
+}
+function kbLighting(kp) {
+  const d = ui.kbBright && ui.kbBright.profile === kp.name ? ui.kbBright : { profile: kp.name, value: kp.brightness, rev: 0 };
+  const val = h('span', { class: 'big-val' }, String(d.value), h('small', null, '%'));
+  const prevBox = h('div', { style: 'width:100%;display:flex;justify-content:center' }, kbPreview(kp.effect, d.value));
+  const speedOn = ['breathing', 'reactive', 'starlight'].includes(kp.effect);
+  return h('div', { class: 'card' },
+    cardHead('Backlight', 'The BlackWidow Lite has a single-color white backlight. Saved with this keyboard profile.', val, 'sun'),
+    h('div', { class: 'light-grid' },
+      h('div', { class: 'preview', style: 'min-height:220px' }, prevBox, h('div', { class: 'cap' }, `${effectName(kp.effect)} · white`)),
+      h('div', { class: 'stack' },
+        h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Brightness'),
+          rangeInput({ min: 0, max: 100, step: 1, value: d.value, 'aria-label': 'Keyboard brightness', 'data-fk': 'kb:b' }, n => {
+            if (!ui.kbBright || ui.kbBright.profile !== kp.name) ui.kbBright = { profile: kp.name, value: n, rev: 0 };
+            ui.kbBright.value = n;
+            ui.kbBright.rev++;
+            val.firstChild.textContent = String(n);
+            prevBox.replaceChildren(kbPreview(kp.effect, n));
+            saveKbBright();
+          })),
+        h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Effect'),
+          h('div', { class: 'choices' }, KB_EFFECTS.map(([id, label, ic]) => h('button', {
+            class: 'choice', 'aria-pressed': String(kp.effect === id), 'data-fk': 'kbfx:' + id,
+            onclick: () => { if (kp.effect !== id) act('setKbEffect', { effect: id, speed: kp.effectSpeed || 2 }, { ok: `Keyboard effect: ${label}`, key: 'kbfx' }); }
+          }, icon(ic, 16), label)))),
+        h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Speed'),
+          h('div', { class: 'row wrap' },
+            h('div', { class: 'seg', role: 'group', 'aria-label': 'Effect speed', 'aria-disabled': String(!speedOn) },
+              [[1, 'Slow'], [2, 'Medium'], [3, 'Fast']].map(([sp, label]) => h('button', {
+                'aria-pressed': String((kp.effectSpeed || 2) === sp), disabled: !speedOn, 'data-fk': 'kbsp:' + sp,
+                onclick: () => { if ((kp.effectSpeed || 2) !== sp) act('setKbEffect', { effect: kp.effect, speed: sp }, { ok: `Effect speed: ${label}`, key: 'kbfx' }); }
+              }, label))),
+            h('span', { class: 'small faint' }, 'For Breathing, Reactive and Starlight.'))))));
+}
+
+/* =============================================================================================
+   Page: Macros
+   ============================================================================================= */
+function draftOf(m) {
+  return { orig: m.name, name: m.name, steps: m.steps.map(s => ({ vk: s.vk | 0, ext: !!s.ext, down: !!s.down, delayMs: s.delayMs | 0 })), dirty: false };
+}
+function macroUsers(name) {
+  const out = [];
+  for (const kp of S.keyboardProfiles) for (const [key, label] of ARROWS) if (kp.macroKeys[key] === name) out.push({ kb: kp.name, key, label });
+  return out;
+}
+const ARROW_GLYPH = { KEY_UP_ARROW: '↑', KEY_DOWN_ARROW: '↓', KEY_LEFT_ARROW: '←', KEY_RIGHT_ARROW: '→' };
+async function confirmDiscard() {
+  if (!ui.macro || !ui.macro.dirty) return true;
+  return confirmModal({ title: 'Discard your changes?', body: `The changes to ${quote(ui.macro.name || 'this macro')} are not saved.`, ok: 'Discard', danger: true, icon: 'warn' });
+}
+async function openMacro(name) {
+  const m = S.macros.find(x => x.name === name);
+  if (!m) return;
+  if (ui.macro && ui.macro.orig === name) { go('macros'); return; }
+  if (!await confirmDiscard()) { go('macros'); return; }
+  stopCapture(true);
+  ui.macro = draftOf(m);
+  go('macros');
+}
+async function newMacro() {
+  if (!await confirmDiscard()) return;
+  stopCapture(true);
+  let n = 1;
+  while (S.macros.some(m => eqi(m.name, 'Macro ' + n))) n++;
+  ui.macro = { orig: null, name: 'Macro ' + n, steps: [], dirty: true };
+  if (ui.page !== 'macros') go('macros'); else renderPage();
+  const input = document.querySelector('[data-fk="macro:name"]');
+  if (input) { input.focus(); input.select(); }
+}
+function markMacroDirty() {
+  const d = ui.macro;
+  if (!d) return;
+  d.dirty = true;
+  document.querySelectorAll('[data-macro-dirty]').forEach(el => { el.disabled = false; });
+  const dot = document.querySelector('.mitem[aria-current="true"] .dirty');
+  if (!dot) requestRender();
+}
+function pageMacros() {
+  if (ui.macro && ui.macro.orig && !S.macros.some(m => m.name === ui.macro.orig) && !ui.macro.dirty) ui.macro = null;
+  if (!ui.macro && S.macros.length) ui.macro = draftOf(S.macros.slice().sort((a, b) => byName(a.name, b.name))[0]);
+  const d = ui.macro;
+  const items = S.macros.slice().sort((a, b) => byName(a.name, b.name)).map(m => {
+    const users = macroUsers(m.name);
+    const cur = d && d.orig === m.name;
+    return h('button', { class: 'mitem', 'aria-current': cur ? 'true' : null, 'data-fk': 'macro:' + m.name, onclick: () => openMacro(m.name) },
+      h('span', { class: 'n' }, h('span', { class: 'ellipsis' }, m.name), cur && d.dirty ? h('span', { class: 'dirty', title: 'Not saved' }) : null),
+      h('span', { class: 's' }, plural(m.steps.length, 'step') + (users.length ? ' · ' + users.map(u => ARROW_GLYPH[u.key]).join(' ') : ' · not on a key')));
+  });
+  if (d && !d.orig) {
+    items.unshift(h('button', { class: 'mitem', 'aria-current': 'true' },
+      h('span', { class: 'n' }, h('span', { class: 'ellipsis' }, d.name || 'New macro'), h('span', { class: 'dirty', title: 'Not saved' })),
+      h('span', { class: 's' }, 'New · not saved')));
+  }
+  const list = h('div', { class: 'card flush' },
+    h('div', { class: 'row', style: 'padding:14px 14px 4px 18px' }, h('span', { class: 'eyebrow' }, plural(S.macros.length, 'macro')), h('span', { class: 'spacer' }),
+      h('button', { class: 'btn sm', onclick: newMacro, 'data-fk': 'macro:new' }, icon('plus', 14), 'New')),
+    items.length ? h('div', { class: 'mlist' }, items) : h('div', { class: 'small muted', style: 'padding:10px 18px 18px' }, 'No macros yet.'));
+  const editor = d ? macroEditor(d) : h('div', { class: 'card' },
+    emptyBlock('macros', 'No macros yet', 'A macro is a short sequence of key presses with exact timing — like a jumpthrow bind. Give it an arrow key on the Keyboard page.',
+      h('button', { class: 'btn primary', onclick: newMacro }, icon('plus', 16), 'Create a macro')));
+  return h('div', { class: 'mac' }, list, editor);
+}
+function macroEditor(d) {
+  const recording = !!ui.capture && ui.capture.kind === 'record';
+  const users = d.orig ? macroUsers(d.orig) : [];
+  const total = d.steps.reduce((t, s) => t + (s.delayMs || 0), 0);
+  const name = h('input', {
+    class: 'input lg', value: d.name, maxlength: 64, 'aria-label': 'Macro name', 'data-fk': 'macro:name', spellcheck: 'false', style: 'flex:1;min-width:0',
+    oninput: e => { d.name = e.target.value; markMacroDirty(); }
+  });
+  const stepsBox = h('div', { class: 'steps', 'data-sk': recording ? null : 'macro:steps' },
+    d.steps.length ? d.steps.map((s, i) => stepRow(d, s, i)) : h('div', { class: 'empty', style: 'padding:28px 12px' },
+      h('div', { class: 'tile-ico' }, icon('list', 20)), h('div', { class: 'empty-t' }, 'No steps yet'),
+      h('div', null, 'Press Record and play the keys, or add key presses and delays by hand.')));
+  if (recording) queueMicrotask(() => { stepsBox.scrollTop = stepsBox.scrollHeight; });
+  return h('div', { class: 'card stack' },
+    h('div', { class: 'row', style: 'gap:12px' }, name),
+    h('div', { class: 'row wrap', style: 'gap:8px' },
+      h('span', { class: 'small muted' }, 'Used by'),
+      users.length ? users.map(u => h('span', { class: 'chip' }, icon('keyboard', 13), u.kb, h('span', { class: 'faint' }, '·'), ARROW_GLYPH[u.key] + ' ' + u.label))
+        : h('span', { class: 'chip dashed' }, 'No arrow key yet'),
+      h('span', { class: 'spacer' }),
+      h('span', { class: 'small faint num' }, `${plural(d.steps.length, 'step')} · ${total} ms`)),
+    h('div', { class: 'toolbar' },
+      h('button', { class: cx('btn rec', recording && 'on'), 'data-fk': 'macro:rec', onclick: () => (recording ? stopCapture() : startCapture({ kind: 'record' })) },
+        icon(recording ? 'stop' : 'record', 16), recording ? 'Stop' : 'Record'),
+      h('button', { class: 'btn', 'data-pop': 'addkey', 'data-fk': 'macro:addkey', disabled: recording, onclick: e => openAddKey(e.currentTarget) }, icon('plus', 16), 'Add key press'),
+      h('button', { class: 'btn', disabled: recording, 'data-fk': 'macro:delay', onclick: () => { d.steps.push({ vk: 0, ext: false, down: false, delayMs: 50 }); markMacroDirty(); requestRender(); } }, icon('clock', 16), 'Add delay'),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn ghost', disabled: recording || !d.steps.length, onclick: clearSteps, title: 'Clear all steps', 'aria-label': 'Clear all steps' }, icon('x', 16), h('span', { class: 'lbl-wide' }, 'Clear'))),
+    recording ? h('div', { class: 'rec-note', role: 'status' }, h('span', { class: 'rec-dot' }),
+      'Recording — play the keys now. Presses, releases and the time between them are recorded. Press Esc or Stop to finish.') : null,
+    stepsBox,
+    h('div', { class: 'assign-f' },
+      h('button', { class: 'btn ghost danger', onclick: deleteMacroDraft, 'data-fk': 'macro:del' }, icon('trash', 16), d.orig ? 'Delete' : 'Discard'),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn', disabled: !d.dirty || !d.orig, 'data-macro-dirty': d.orig ? '' : null, onclick: revertMacro }, 'Revert'),
+      h('button', { class: 'btn primary', disabled: !d.dirty, 'data-macro-dirty': '', onclick: saveMacro, 'data-fk': 'macro:save' }, icon('check', 16), 'Save')));
+}
+function stepRow(d, s, i) {
+  const wait = !s.vk;
+  const move = delta => {
+    const j = i + delta;
+    if (j < 0 || j >= d.steps.length) return;
+    [d.steps[i], d.steps[j]] = [d.steps[j], d.steps[i]];
+    markMacroDirty();
+    requestRender();
+  };
+  const delay = h('input', {
+    class: cx('input', !wait && !s.delayMs && 'zero'), type: 'number', min: 0, max: 60000, step: 1, value: s.delayMs || 0,
+    'aria-label': wait ? `Step ${i + 1}: wait (ms)` : `Step ${i + 1}: wait after (ms)`, 'data-fk': `step:${i}:ms`,
+    oninput: e => { s.delayMs = clamp(Math.round(Number(e.target.value) || 0), 0, 60000); markMacroDirty(); },
+    onchange: e => { e.target.value = s.delayMs; },
+    onkeydown: e => { if (e.key === 'Enter') e.target.blur(); }
+  });
+  return h('div', { class: cx('step', wait && 'wait') },
+    h('span', { class: 'step-i' }, i + 1),
+    h('span', { class: cx('step-ico', !wait && s.down && 'down') }, icon(wait ? 'clock' : s.down ? 'arrowDown' : 'arrowUp', 14)),
+    h('div', { class: 'step-txt' }, wait ? h('span', { class: 'muted' }, 'Wait') : [h('span', { class: cx('kc', s.down && 'accent') }, vkLabel(s.vk, s.ext)), h('span', { class: 'muted' }, s.down ? 'press' : 'release')]),
+    h('label', { class: 'step-delay' }, wait ? null : h('span', { class: 'tw' }, 'then wait'), delay, 'ms'),
+    h('div', { class: 'step-a' },
+      h('button', { class: 'btn ghost icon sm', 'aria-label': 'Move up', title: 'Move up', disabled: i === 0, onclick: () => move(-1) }, icon('arrowUp', 14)),
+      h('button', { class: 'btn ghost icon sm', 'aria-label': 'Move down', title: 'Move down', disabled: i === d.steps.length - 1, onclick: () => move(1) }, icon('arrowDown', 14)),
+      h('button', { class: 'btn ghost icon sm', 'aria-label': 'Delete step', title: 'Delete step', onclick: () => { d.steps.splice(i, 1); markMacroDirty(); requestRender(); } }, icon('trash', 14))));
+}
+function openAddKey(anchor) {
+  if (pop && pop.id === 'addkey') { closePopover(); return; }
+  openPopover(anchor, 'addkey', el => {
+    el.append(h('div', { style: 'padding:6px 6px 2px' }, keyPicker({
+      fk: 'addkey', macro: true, tall: true, autofocus: true,
+      onPick: k => {
+        const d = ui.macro;
+        if (!d) return;
+        d.steps.push({ vk: k.vk, ext: !!k.ext, down: true, delayMs: 20 }, { vk: k.vk, ext: !!k.ext, down: false, delayMs: 0 });
+        markMacroDirty();
+        closePopover(true);
+        requestRender();
+        toast(`Added ${k.label} (press, 20 ms, release)`, 'ok', 'addkey');
+      }
+    })), h('div', { class: 'pop-foot' }, h('span', { class: 'pop-note' }, 'Adds a press and a release with 20 ms between them.')));
+    const q = el.querySelector('input');
+    if (q) q.focus();
+  }, { width: 420, align: 'start', label: 'Add key press' });
+}
+async function clearSteps() {
+  const d = ui.macro;
+  if (!d || !d.steps.length) return;
+  if (!await confirmModal({ title: 'Clear all steps?', body: `All ${plural(d.steps.length, 'step')} of ${quote(d.name)} are removed from the editor. Nothing is saved until you press Save.`, ok: 'Clear', danger: true, icon: 'x' })) return;
+  d.steps = [];
+  markMacroDirty();
+  requestRender();
+}
+async function saveMacro() {
+  const d = ui.macro;
+  if (!d) return;
+  const name = d.name.trim();
+  const input = document.querySelector('[data-fk="macro:name"]');
+  if (!name) { toast('Give the macro a name.', 'error'); if (input) input.focus(); return; }
+  if (S.macros.some(m => m.name !== d.orig && eqi(m.name, name))) { toast(`A macro named ${quote(name)} already exists.`, 'error'); if (input) input.focus(); return; }
+  stopCapture(true);
+  const r = await act('saveMacro', { originalName: d.orig, macro: { name, steps: d.steps.map(s => ({ vk: s.vk, ext: s.ext, down: s.down, delayMs: s.delayMs })) } }, { ok: `Saved ${quote(name)}`, key: 'macro' });
+  if (r === FAILED) return;
+  const saved = S.macros.find(m => m.name === name);
+  if (ui.macro === d) ui.macro = saved ? draftOf(saved) : null;
+  requestRender();
+}
+function revertMacro() {
+  const d = ui.macro;
+  if (!d) return;
+  stopCapture(true);
+  const src = d.orig && S.macros.find(m => m.name === d.orig);
+  ui.macro = src ? draftOf(src) : null;
+  requestRender();
+}
+async function deleteMacroDraft() {
+  const d = ui.macro;
+  if (!d) return;
+  stopCapture(true);
+  if (!d.orig) {
+    if (d.steps.length && !await confirmModal({ title: 'Discard this new macro?', body: 'It has not been saved yet.', ok: 'Discard', danger: true })) return;
+    ui.macro = null;
+    requestRender();
+    return;
+  }
+  const users = macroUsers(d.orig);
+  const body = [h('p', null, 'This cannot be undone.'),
+    users.length ? h('p', { style: 'margin-top:8px' }, `It is removed from ${users.map(u => `${ARROW_GLYPH[u.key]} in ${quote(u.kb)}`).join(', ')}; those arrow keys work as usual again.`) : null];
+  if (!await confirmModal({ title: `Delete ${quote(d.orig)}?`, body, ok: 'Delete', danger: true })) return;
+  if (await act('deleteMacro', { name: d.orig }, { ok: `Deleted ${quote(d.orig)}` }) === FAILED) return;
+  ui.macro = null;
+  requestRender();
+}
+
+/* =============================================================================================
+   Page: Games
+   ============================================================================================= */
+const normKey = s => String(s || '').toLowerCase().replace(/\.exe$/, '').replace(/[^a-z0-9]/g, '');
+// Turns typed text into a program file name the way the app cleans it: path -> file name, "game" -> "game.exe".
+function cleanExe(text) {
+  let e = String(text || '').trim().replace(/^"+|"+$/g, '').trim().replace(/\//g, '\\');
+  e = e.slice(e.lastIndexOf('\\') + 1).trim();
+  if (!e) return '';
+  if (!e.includes('.')) e += '.exe';
+  return e;
+}
+// Best-guess mouse profile for a program name ("r5apex.exe" -> no guess, "valorant.exe" -> "Valorant").
+function guessProfile(exe) {
+  const x = normKey(exe);
+  if (x.length < 3) return '';
+  const hit = S.mouseProfiles.find(p => { const n = normKey(p.name); return n.length >= 3 && (x.includes(n) || n.includes(x)); });
+  return hit ? hit.name : '';
+}
+function flashGame(profile) {
+  ui.flashGame = profile;
+  requestRender();
+  requestAnimationFrame(() => {
+    const row = document.querySelector(`[data-game="${CSS.escape(profile)}"]`);
+    if (row) row.scrollIntoView({ block: 'center' });   // instant: a smooth scroll would be cut short by the next state push
+  });
+  setTimeout(() => {
+    if (ui.flashGame !== profile) return;
+    ui.flashGame = '';
+    const row = document.querySelector(`[data-game="${CSS.escape(profile)}"]`);
+    if (row) row.classList.remove('flash');
+  }, 1800);
+}
+function runningCard() {
+  const exe = S.lastGameExe;
+  if (!exe) return null;
+  const linked = gameWithExe(exe);
+  if (linked) {
+    return h('div', { class: 'card running done' },
+      h('div', { class: 'tile-ico accent' }, icon('check', 18)),
+      h('div', { class: 'txt' }, h('div', { class: 'eyebrow' }, 'Last program in front'),
+        h('div', { class: 'running-t' }, h('span', { class: 'mono' }, exe), h('span', { class: 'muted', style: 'font-weight:500' }, ' switches to '), linked.profile)),
+      h('div', { class: 'act' }, h('button', { class: 'btn sm', onclick: () => { ui.gameQuery = ''; flashGame(linked.profile); } }, 'Show')));
+  }
+  if (ui.linkFor !== exe) { ui.linkFor = exe; ui.linkProfile = guessProfile(exe); }
+  const names = S.mouseProfiles.map(p => p.name).sort(byName);
+  const linkBtn = h('button', { class: 'btn primary', disabled: !ui.linkProfile, 'data-fk': 'link:go', onclick: () => linkRunning(ui.linkProfile) }, icon('link', 16), 'Link');
+  return h('div', { class: 'card running' },
+    h('div', { class: 'orb', style: 'width:44px;height:44px;border-radius:13px' }, icon('play', 20)),
+    h('div', { class: 'txt' },
+      h('div', { class: 'eyebrow', style: 'color:var(--accent-text)' }, 'Running now'),
+      h('div', { class: 'running-t' }, 'Link the game that’s running: ', h('span', { class: 'mono' }, exe)),
+      h('div', { class: 'small muted', style: 'margin-top:2px' }, 'Pick the mouse profile it should switch to.')),
+    h('div', { class: 'act' },
+      selectBox([['', 'Choose a profile…'], ...names.map(n => [n, n]), ['\u0000new', '+ New profile…']], ui.linkProfile, (v, sel) => {
+        if (v === '\u0000new') { sel.value = ui.linkProfile; newProfileForExe(exe); return; }
+        ui.linkProfile = v;
+        linkBtn.disabled = !v;      // no page re-render needed (it may be deferred while the search box has focus)
+      }, { label: 'Profile for the running game', fk: 'link:profile' }),
+      linkBtn));
+}
+async function newProfileForExe(exe) {
+  const base = cleanExe(exe).replace(/\.exe$/i, '');
+  const name = await promptModal({ title: `New profile for ${exe}`, label: 'Profile name', value: base, ok: 'Create and link', icon: 'plus', validate: v => nameTaken('mouse', v) });
+  if (!name) return;
+  if (await act('addProfile', { kind: 'mouse', name }) === FAILED) return;
+  linkRunning(name);
+}
+async function linkRunning(profile) {
+  if (!profile) return;
+  const r = await act('linkRunningGame', { profile });
+  if (r === FAILED) return;
+  if (r && r.exe) { toast(`${r.exe} → ${quote(profile)}`, 'ok'); ui.gameQuery = ''; flashGame(profile); }
+  else toast('No game has been in front yet. Start the game, then come back.', 'info');
+}
+function gameRow(g) {
+  const p = mouseByName(g.profile);
+  const kbOpts = [['', S.gameKeyboardDefault ? `Default · ${S.gameKeyboardDefault}` : 'No keyboard profile'], ...S.keyboardProfiles.map(k => [k.name, k.name])];
+  if (g.keyboardProfile && !kbByName(g.keyboardProfile)) kbOpts.push([g.keyboardProfile, g.keyboardProfile + ' (missing)']);
+  return h('div', { class: cx('grow', ui.flashGame === g.profile && 'flash'), 'data-game': g.profile },
+    avatar(g.profile, p, true),
+    h('div', { style: 'min-width:0' },
+      h('div', { class: 'g-name' },
+        h('span', { class: 'g-t' }, g.profile),
+        p && p.antiCheat ? h('span', { class: 'badge shield', title: 'Anti-cheat game: Competitive-safe applies here' }, icon('shield', 12), 'Anti-cheat') : null,
+        !p ? h('span', { class: 'badge danger' }, 'Profile missing') : null,
+        !g.exes.length ? h('span', { class: 'badge warn', title: 'Add the game’s program so LiteSynapse can switch to this profile' }, icon('warn', 12), 'Won’t auto-switch') : null),
+      h('div', { class: 'g-exes' },
+        g.exes.map(exe => h('span', { class: 'chip exe' }, exe,
+          h('button', { class: 'chip-x', 'aria-label': `Remove ${exe}`, title: `Remove ${exe}`, onclick: () => removeExe(g.profile, exe) }, icon('x', 12)))),
+        h('button', { class: 'chip dashed', 'data-pop': 'exe:' + g.profile, 'data-fk': 'exe:' + g.profile, 'aria-haspopup': 'dialog', onclick: e => openExePicker(e.currentTarget, g.profile) }, icon('plus', 12), 'Program'))),
+    h('div', { class: 'g-kb' }, selectBox(kbOpts, g.keyboardProfile, v => act('setGameKeyboard', { profile: g.profile, keyboardProfile: v },
+      { ok: v ? `${g.profile} uses keyboard profile ${quote(v)}` : `${g.profile} uses the default keyboard profile`, key: 'gkb' }),
+    { label: `Keyboard profile for ${g.profile}`, small: true, quiet: true, fk: 'gkb:' + g.profile })),
+    h('button', { class: 'btn ghost icon sm', 'aria-label': `Unlink ${g.profile}`, title: 'Unlink this game', onclick: () => removeGame(g.profile) }, icon('trash', 16)));
+}
+function gameMatches(g, q) {
+  return !q || g.profile.toLowerCase().includes(q) || g.exes.some(e => e.toLowerCase().includes(q));
+}
+function pageGames() {
+  const all = S.games.slice().sort((a, b) => byName(a.profile, b.profile));
+  const listBox = h('div', { class: 'card flush glist' });
+  const fillList = () => {
+    const q = ui.gameQuery.trim().toLowerCase();
+    const rows = all.filter(g => gameMatches(g, q)).map(gameRow);
+    if (rows.length) listBox.replaceChildren(...rows);
+    else if (!all.length) listBox.replaceChildren(emptyBlock('games', 'No games linked yet', 'Link a mouse profile to a game’s program, and LiteSynapse switches to it whenever that game is in front.'));
+    else listBox.replaceChildren(h('div', { class: 'empty', style: 'padding:28px' }, h('div', null, `No game matches ${quote(ui.gameQuery.trim())}.`)));
+  };
+  fillList();
+  const off = S.games.filter(g => !g.exes.length).length;
+  const search = h('input', {
+    class: 'input', type: 'search', placeholder: 'Search games or programs', 'aria-label': 'Search games', value: ui.gameQuery, 'data-fk': 'games:q', spellcheck: 'false',
+    oninput: e => { ui.gameQuery = e.target.value; fillList(); }
+  });
+  return h('div', { class: 'stack' },
+    runningCard(),
+    h('div', { class: 'gtools' },
+      h('div', { class: 'search' }, icon('search', 16), search),
+      h('span', { class: 'small muted' }, plural(S.games.length, 'game') + (off ? ` · ${off} won’t auto-switch` : '')),
+      h('span', { class: 'spacer' }),
+      h('button', { class: 'btn primary', 'data-pop': 'linkp', 'data-fk': 'games:link', 'aria-haspopup': 'dialog', onclick: e => openLinkProfile(e.currentTarget) }, icon('plus', 16), 'Link a profile')),
+    listBox);
+}
+function openLinkProfile(anchor) {
+  if (pop && pop.id === 'linkp') { closePopover(); return; }
+  openPopover(anchor, 'linkp', el => {
+    const input = h('input', { class: 'input', type: 'search', placeholder: 'Search profiles', 'aria-label': 'Search profiles', spellcheck: 'false' });
+    const list = h('div', { class: 'pop-scroll' });
+    const fill = () => {
+      const q = input.value.trim().toLowerCase();
+      const free = S.mouseProfiles.filter(p => !gameOf(p.name)).sort((a, b) => byName(a.name, b.name));
+      const hits = free.filter(p => !q || p.name.toLowerCase().includes(q));
+      list.replaceChildren(...(hits.length ? hits.map(p => h('button', { class: 'pitem', onclick: () => linkProfile(p.name) },
+        avatar(p.name, p), h('div', { style: 'min-width:0' }, h('div', { class: 'n ellipsis' }, p.name), h('div', { class: 's' }, p.antiCheat ? 'Anti-cheat game' : 'Not linked yet')), h('span', { class: 'tail' }, icon('plus', 16))))
+        : [h('div', { class: 'small muted', style: 'padding:14px 10px' }, free.length ? `No unlinked profile matches ${quote(input.value.trim())}.` : 'Every mouse profile is already linked to a game. Create a new profile for a new game.')]));
+    };
+    input.addEventListener('input', fill);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { const f = list.querySelector('.pitem'); if (f) { e.preventDefault(); f.click(); } } });
+    el.addEventListener('keydown', e => listNav(e, el, '.pitem'));
+    el.append(h('div', { class: 'search' }, icon('search', 16), input), list,
+      h('div', { class: 'pop-foot' }, h('span', { class: 'pop-note' }, 'Then add the game’s program.'), h('span', { class: 'spacer' }),
+        h('button', { class: 'btn sm', onclick: async () => {
+          closePopover();
+          const name = await promptModal({ title: 'New mouse profile', label: 'Name', placeholder: 'e.g. Elden Ring', ok: 'Create and link', icon: 'plus', validate: v => nameTaken('mouse', v) });
+          if (name && await act('addProfile', { kind: 'mouse', name }) !== FAILED) linkProfile(name);
+        } }, icon('plus', 14), 'New profile')));
+    fill();
+    input.focus();
+    return fill;
+  }, { width: 340, label: 'Link a profile' });
+}
+async function linkProfile(name) {
+  closePopover();
+  if (await act('addGame', { profile: name }, { ok: `Linked ${quote(name)}. Now add its program.` }) === FAILED) return;
+  ui.gameQuery = '';
+  ui.flashGame = name;
+  renderPage();
+  flashGame(name);
+  const chip = document.querySelector(`[data-pop="exe:${CSS.escape(name)}"]`);
+  if (chip) { chip.scrollIntoView({ block: 'center' }); openExePicker(chip, name); }
+}
+function openExePicker(anchor, profile) {
+  const id = 'exe:' + profile;
+  if (pop && pop.id === id) { closePopover(); return; }
+  openPopover(anchor, id, el => {
+    let apps = null, err = '';
+    const input = h('input', { class: 'input', type: 'search', placeholder: 'Type a program, e.g. game.exe', 'aria-label': 'Program name', spellcheck: 'false', autocomplete: 'off' });
+    const list = h('div', { class: 'pop-scroll' });
+    const item = (exe, hint, ic) => h('button', { class: 'menu-item', onclick: () => addExe(profile, exe) }, icon(ic || 'window', 16),
+      h('span', { class: 'ellipsis' }, exe), hint ? h('span', { class: 'hint' }, hint) : null);
+    const fill = () => {
+      const g = gameOf(profile);
+      if (!g) { closePopover(); return; }
+      const typed = cleanExe(input.value);
+      const q = input.value.trim().toLowerCase();
+      const out = [];
+      if (typed && !g.exes.some(e => eqi(e, typed)) && !(apps || []).some(a => eqi(a, typed))) out.push(item(typed, 'Add', 'plus'));
+      if (apps === null) out.push(h('div', { class: 'row small muted', style: 'padding:10px' }, h('span', { class: 'spin' }), 'Looking for running programs…'));
+      else if (err) out.push(h('div', { class: 'small', style: 'padding:10px;color:var(--danger-text)' }, err));
+      else {
+        const hits = apps.filter(a => !g.exes.some(e => eqi(e, a)) && (!q || a.toLowerCase().includes(q)));
+        if (hits.length) out.push(h('div', { class: 'pgroup eyebrow' }, 'Running programs'));
+        for (const a of hits) { const other = gameWithExe(a); out.push(item(a, other ? 'in ' + other.profile : '')); }
+        if (!hits.length && !typed) out.push(h('div', { class: 'small muted', style: 'padding:10px' }, 'No other program with a window is running. Type its name instead.'));
+      }
+      list.replaceChildren(...out);
+    };
+    input.addEventListener('input', fill);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { const f = list.querySelector('.menu-item'); if (f) { e.preventDefault(); f.click(); } } });
+    el.addEventListener('keydown', e => listNav(e, el, '.menu-item'));
+    el.append(h('div', { class: 'search' }, icon('search', 16), input), list,
+      h('div', { class: 'pop-foot' }, h('span', { class: 'pop-note' }, 'Tip: start the game first, then pick it here.')));
+    fill();
+    input.focus();
+    call('runningApps', {}, 10000).then(r => { apps = Array.isArray(r) ? r : []; }, e => { err = e.message; apps = []; })
+      .finally(() => { if (pop && pop.id === id) fill(); });
+    return fill;
+  }, { width: 340, align: 'start', label: `Add a program to ${profile}` });
+}
+async function addExe(profile, exe) {
+  closePopover(true);
+  const other = S.games.find(x => x.profile !== profile && x.exes.some(e => eqi(e, exe)));
+  if (other) {
+    const ok = await confirmModal({ title: `Move ${exe}?`, icon: 'link', ok: 'Move',
+      body: `${exe} switches to ${quote(other.profile)} now. A program can switch to one profile only, so it is removed there.` });
+    if (!ok) return;
+    if (await act('setGameExes', { profile: other.profile, exes: other.exes.filter(e => !eqi(e, exe)) }) === FAILED) return;
+  }
+  const g = gameOf(profile);
+  if (!g) return;
+  act('setGameExes', { profile, exes: [...g.exes, exe] }, { ok: `${exe} → ${quote(profile)}`, key: 'exe' });
+}
+function removeExe(profile, exe) {
+  const g = gameOf(profile);
+  if (!g) return;
+  const left = g.exes.filter(e => e !== exe);
+  act('setGameExes', { profile, exes: left }, { ok: left.length ? `Removed ${exe}` : `Removed ${exe}. ${profile} won’t auto-switch until it has a program.`, key: 'exe' });
+}
+async function removeGame(profile) {
+  const g = gameOf(profile);
+  if (!await confirmModal({ title: `Unlink ${quote(profile)}?`, danger: true, ok: 'Unlink', icon: 'link',
+    body: `LiteSynapse stops switching to this profile${g && g.exes.length ? ` when ${g.exes.join(', ')} is in front` : ''}. The profile itself is kept.` })) return;
+  act('removeGame', { profile }, { ok: `Unlinked ${quote(profile)}` });
+}
+
+/* =============================================================================================
+   Page: Settings
+   ============================================================================================= */
+function pageSettings() {
+  const tabs = { general: setGeneral, gaming: setGaming, performance: setPerformance, appearance: setAppearance, maintenance: setMaintenance, log: setLog };
+  return (tabs[ui.tabs.settings] || setGeneral)();
+}
+function setGeneral() {
+  return h('div', { class: 'card' },
+    srow('Auto-switch', 'Switch mouse and keyboard profiles when a linked game comes to the front. When it is off, the profiles you pick stay active.',
+      toggle(S.auto, on => setAuto(on), 'Auto-switch', 'sw:auto-set')),
+    srow('Start with Windows', 'Start LiteSynapse in the tray when you sign in.',
+      toggle(S.startup, on => act('setStartup', { on }, { ok: on ? 'LiteSynapse starts with Windows' : 'LiteSynapse no longer starts with Windows' }), 'Start with Windows', 'sw:startup')),
+    srow('Run profiles on the mouse itself',
+      'LiteSynapse writes the active profile into the mouse’s own memory (slots 1 and 2). Button remaps then run inside the mouse with no software delay and keep working if LiteSynapse closes. When it is off, remaps run in software and slots 1 and 2 are left alone.',
+      toggle(S.liveWrite, on => act('setLiveWrite', { on }, { ok: on ? 'Profiles now run on the mouse itself' : 'Profiles now run in software' }), 'Run profiles on the mouse itself', 'sw:live'),
+      h('span', { class: 'badge accent' }, 'Recommended')),
+    'closeOnGame' in S ? srow('Close this window when a game starts',
+      'The window frees its memory while you play. LiteSynapse keeps running in the tray, and nothing in the window runs in the background.',
+      toggle(S.closeOnGame, on => act('setCloseOnGame', { on }, { ok: on ? 'The window closes when a game starts' : 'The window stays open when a game starts' }), 'Close this window when a game starts', 'sw:close')) : null);
+}
+function setGaming() {
+  const ac = S.mouseProfiles.filter(p => p.antiCheat).sort((a, b) => byName(a.name, b.name));
+  const kbOpts = [['', 'None'], ...S.keyboardProfiles.map(k => [k.name, k.name])];
+  return h('div', { class: 'stack' },
+    h('div', { class: 'card' },
+      srow('Competitive-safe',
+        'In anti-cheat games, LiteSynapse turns off Snap Tap, macro keys and software remaps, so the game sees only your real key presses. Buttons stored on the mouse itself keep working.',
+        toggle(S.competitiveSafe, on => act('setCompetitiveSafe', { on }, { ok: on ? 'Competitive-safe is on' : 'Competitive-safe is off' }), 'Competitive-safe', 'sw:safe'),
+        S.competitiveSafe ? h('span', { class: 'badge accent' }, icon('shieldCheck', 12), 'On') : null),
+      h('div', { style: 'padding-top:4px' },
+        banner(S.competitiveSafe ? 'calm' : 'warn', S.competitiveSafe ? 'shieldCheck' : 'shield', 'Why this matters',
+          'Valve kicks players on official CS2 servers for Snap Tap-style counter-strafe automation and for macros that do several actions from one key (like a jumpthrow bind). FACEIT bans them.')),
+      h('div', { class: 'section-l' }, h('span', { class: 'eyebrow' }, `Anti-cheat games · ${ac.length}`), h('span', { class: 'line' })),
+      ac.length ? h('div', { class: 'ac-list' }, ac.map(p => {
+        const g = gameOf(p.name);
+        return h('span', { class: 'chip', title: g && g.exes.length ? g.exes.join(', ') : 'Not linked to a program' },
+          h('span', { class: 'shield', style: 'display:inline-grid;place-items:center;width:18px;height:18px;border-radius:6px' }, icon('shield', 12)), p.name);
+      })) : h('div', { class: 'small muted' }, 'None of your profiles is an anti-cheat game.'),
+      h('div', { class: 'small faint', style: 'margin-top:12px' }, 'Profiles are matched to anti-cheat games by name, from the flag in Razer’s game list.')),
+    h('div', { class: 'card' },
+      srow('Keyboard profile for games',
+        'Used by linked games that don’t pick their own keyboard profile. With “None”, those games get no Snap Tap and no macro keys.',
+        selectBox(kbOpts, S.gameKeyboardDefault, v => act('setGameKeyboardDefault', { keyboardProfile: v },
+          { ok: v ? `Games use ${quote(v)} by default` : 'Games get no keyboard profile by default' }), { label: 'Keyboard profile for games', fk: 'gkd', style: 'width:220px' }))));
+}
+function setPerformance() {
+  const r = S.razer;
+  const busy = ui.razerBusy || '';
+  const state = (ok, okText, badText, tone) => h('span', { class: cx('badge', ok ? 'ok' : (tone || 'warn')) }, ok ? icon('check', 12) : null, ok ? okText : badText);
+  const gms = { absent: [true, 'Not installed'], disabled: [true, 'Disabled'], running: [false, 'Running'], stopped: [false, 'Starts with Windows'] }[r.gmsService] || [false, r.gmsService];
+  const leftRow = (ic, title, desc, badge) => h('div', { class: 'leftover' }, icon(ic, 18), h('div', { style: 'min-width:0' }, h('div', { class: 't' }, title), h('div', { class: 'd' }, desc)), badge);
+  const cleanup = async (action, label) => {
+    ui.razerBusy = action;
+    requestRender();
+    const res = await act('razerCleanup', { action }, { timeout: 120000 });
+    ui.razerBusy = '';
+    requestRender();
+    if (res !== FAILED && res && res.message) infoModal(label, res.message, action === 'driverGuide' ? 'terminal' : 'power');
+  };
+  const recheck = async () => {
+    ui.razerBusy = 'check';
+    requestRender();
+    const res = await act('razerCheck', {}, { timeout: 30000 });
+    ui.razerBusy = '';
+    requestRender();
+    if (res !== FAILED) toast(isLeftovers() ? 'Checked: Razer leftovers are still there' : 'Checked: no Razer leftovers found', isLeftovers() ? 'info' : 'ok');
+  };
+  const spinOr = (key, ic) => busy === key ? h('span', { class: 'spin' }) : icon(ic, 16);
+  const body = !r.checked
+    ? emptyBlock('refresh', 'Not checked yet', 'LiteSynapse looks for Razer software that is still on this PC: registry and driver lists only, nothing is changed.')
+    : h('div', null,
+      leftRow('window', 'Razer Synapse', r.synapseInstalled ? 'Installed. It reinstalls its drivers and services, so uninstall it in Windows Settings › Apps first.' : 'Not installed.', state(!r.synapseInstalled, 'Not installed', 'Installed')),
+      leftRow('power', 'Razer Game Manager Service 3', 'Starts with Windows, runs with full system rights and watches every program that starts. LiteSynapse does not need it.', state(gms[0], gms[1], gms[1])),
+      leftRow('layers', 'Filter drivers', r.filterDrivers.length ? `In the input path of: ${r.filterDrivers.join(', ')}. Every mouse and keyboard report passes through them.` : 'No Razer filter on the Naga or the BlackWidow Lite.', state(!r.filterDrivers.length, 'None', plural(r.filterDrivers.length, 'driver'))),
+      leftRow('chip', 'RzCommon driver', r.rzCommon ? 'Installed. It sits in every mouse and keyboard report, even when no Razer app is running.' : 'Not installed.', state(!r.rzCommon, 'Not installed', 'Installed')));
+  return h('div', { class: 'stack' },
+    h('div', { class: 'card' },
+      cardHead(['Razer leftovers', r.checked ? (isLeftovers() ? h('span', { class: 'badge warn' }, 'Found') : h('span', { class: 'badge ok' }, icon('check', 12), 'Clean')) : null],
+        'Razer software that costs performance even when Synapse is closed.',
+        h('button', { class: cx('btn sm', busy === 'check' && 'busy'), onclick: recheck, 'data-fk': 'razer:check' }, spinOr('check', 'refresh'), r.checked ? 'Re-check' : 'Check now'), 'gauge'),
+      body,
+      r.checked ? h('div', { class: 'row wrap', style: 'margin-top:16px;padding-top:16px;border-top:1px solid var(--line)' },
+        h('button', { class: cx('btn', busy === 'disableGameManager' && 'busy'), disabled: !!busy || r.gmsService === 'absent' || r.gmsService === 'disabled', 'data-fk': 'razer:gms',
+          onclick: () => cleanup('disableGameManager', 'Game Manager service') }, spinOr('disableGameManager', 'power'), 'Disable Game Manager'),
+        h('button', { class: cx('btn', busy === 'driverGuide' && 'busy'), disabled: !!busy || (!r.filterDrivers.length && !r.rzCommon), 'data-fk': 'razer:drv',
+          onclick: () => cleanup('driverGuide', 'Driver removal guide') }, spinOr('driverGuide', 'terminal'), 'Driver removal guide'),
+        h('span', { class: 'small faint' }, 'Both ask Windows for administrator permission.')) : null),
+    h('div', { class: 'risk' },
+      h('div', null, h('b', null, 'Disable Game Manager · low risk'),
+        'Stops the service and keeps it from starting with Windows. Nothing is deleted; to undo it, set the service back to Automatic in services.msc.'),
+      h('div', null, h('b', null, 'Driver removal guide · moderate risk'),
+        'Opens an administrator PowerShell window that lists the Razer driver packages first and changes nothing on its own. Follow its steps to back them up and remove them. Uninstall Synapse first, or it puts them back.')));
+}
+const ACCENTS = [['mint', 'Mint', '#2EE6A6'], ['green', 'Green', '#44D62C'], ['blue', 'Blue', '#4F8CFF'], ['violet', 'Violet', '#8B7BFF'], ['amber', 'Amber', '#FFB547']];
+function setAppearance() {
+  const cur = ui.accent || S.accent;
+  return h('div', { class: 'card' },
+    cardHead('Accent color', 'Used for highlights, switches and the active page.', null, 'palette'),
+    h('div', { class: 'accents', role: 'radiogroup', 'aria-label': 'Accent color' }, ACCENTS.map(([id, label, c]) => h('button', {
+      class: 'accent-opt', role: 'radio', 'aria-checked': String(cur === id), 'aria-pressed': String(cur === id), 'data-fk': 'accent:' + id,
+      onclick: () => {
+        if (cur === id) return;
+        ui.accent = id;
+        applyAccent();
+        requestRender();
+        act('setAccent', { accent: id }).then(r => { if (r === FAILED) { ui.accent = ''; applyAccent(); } });
+      }
+    }, h('i', { style: `background:${c}` }, cur === id ? icon('check', 16) : null), label))));
+}
+function setMaintenance() {
+  const item = (ic, title, desc, run) => h('button', { onclick: run }, icon(ic, 20), h('div', null, h('div', { class: 't' }, title), h('div', { class: 'd' }, desc)));
+  return h('div', { class: 'card' },
+    cardHead('Maintenance', 'Tools for when something looks wrong.', null, 'wrench'),
+    h('div', { class: 'maint' },
+      item('folder', 'Open config folder', 'Profiles, games, calibration and the log.', () => act('openConfigFolder', {})),
+      item('refresh', 'Reload config', 'Read the config files again after editing them by hand.', () => act('reloadConfig', {}, { ok: 'Config reloaded' })),
+      item('mouse', 'Windows mouse settings', 'Pointer speed, acceleration and button swap.', () => act('openMouseProperties', {})),
+      item('window', 'Open classic window', 'The previous LiteSynapse window.', () => act('openClassicWindow', {})),
+      item('terminal', 'Run self-test', 'Checks devices, profiles and the keyboard hook in a console window.', () => act('runSelfTest', {}, { ok: 'Self-test started in a new window' }))));
+}
+function loadLog() {
+  if (ui.log.loading || !host) return;
+  ui.log.loading = true;
+  ui.log.error = '';
+  requestRender();
+  call('getLog', { lines: ui.log.lines || 200 }, 15000).then(t => { ui.log.text = typeof t === 'string' ? t : ''; ui.log.scrollEnd = true; },
+    e => { ui.log.error = e.message; }).finally(() => { ui.log.loading = false; requestRender(); });
+}
+function setLog() {
+  if (ui.log.text === null && !ui.log.loading && !ui.log.error) loadLog();
+  const lines = String(ui.log.text || '').split(/\r?\n/).filter(Boolean);
+  const pre = h('pre', { class: 'log', 'data-sk': ui.log.scrollEnd ? null : 'log', tabIndex: 0, 'aria-label': 'Log' },
+    lines.map(l => {
+      const m = /^(\S+\s+)?(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)\s(.*)$/.exec(l) || /^(\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:\.\d+)?)\s(.*)$/.exec(l);
+      if (!m) return l + '\n';
+      return m.length === 4 ? [h('span', { class: 'tm' }, (m[1] || '') + m[2] + ' '), m[3] + '\n'] : [h('span', { class: 'tm' }, m[1] + ' '), m[2] + '\n'];
+    }));
+  if (ui.log.scrollEnd) { ui.log.scrollEnd = false; queueMicrotask(() => { pre.scrollTop = pre.scrollHeight; }); }
+  return h('div', { class: 'card' },
+    cardHead('Log', 'What LiteSynapse did recently: profile switches, device writes and problems.',
+      [selectBox([['200', 'Last 200 lines'], ['500', 'Last 500 lines'], ['2000', 'Last 2000 lines']], String(ui.log.lines || 200),
+        v => { ui.log.lines = Number(v); loadLog(); }, { label: 'Lines', small: true, fk: 'log:lines' }),
+      h('button', { class: cx('btn sm', ui.log.loading && 'busy'), onclick: loadLog, 'data-fk': 'log:refresh' }, ui.log.loading ? h('span', { class: 'spin' }) : icon('refresh', 14), 'Refresh')], 'list'),
+    ui.log.error ? banner('danger', 'warn', 'Could not read the log', ui.log.error, h('button', { class: 'btn sm', onclick: loadLog }, 'Try again')) : null,
+    ui.log.text === null && !ui.log.error ? h('div', { class: 'empty' }, h('span', { class: 'spin lg' }), 'Reading the log…')
+      : lines.length ? pre : !ui.log.error ? h('div', { class: 'empty' }, h('div', { class: 'empty-t' }, 'The log is empty')) : null);
+}
+
+/* =============================================================================================
+   Pages, boot
+   ============================================================================================= */
+const PAGES = { overview: pageOverview, mouse: pageMouse, keyboard: pageKeyboard, macros: pageMacros, games: pageGames, settings: pageSettings };
+
+function bootScreen(...kids) {
+  const b = $('#boot');
+  b.replaceChildren(h('div', { class: 'boot-card' }, kids));
+  b.hidden = false;
+  $('#app').hidden = true;
+}
+function showNoHost() {
+  bootScreen(appMark(true),
+    h('div', { class: 'boot-t' }, 'Open from LiteSynapse'),
+    h('div', { class: 'boot-d' }, 'This page is the LiteSynapse window. It only works inside the app, which talks to your mouse and keyboard.'),
+    h('ol', { class: 'steps-howto' },
+      h('li', null, 'Start LiteSynapse (it lives in the system tray, next to the clock).'),
+      h('li', null, 'Double-click its tray icon, or right-click it and choose Open.')));
+}
+function showBootError(message) {
+  bootScreen(appMark(true),
+    h('div', { class: 'boot-t' }, 'LiteSynapse did not answer'),
+    h('div', { class: 'boot-d' }, message || 'The window could not load your profiles.'),
+    h('button', { class: 'btn primary lg', onclick: boot }, icon('refresh', 16), 'Try again'));
+}
+function boot() {
+  bootScreen(h('div', { class: 'spin lg' }), h('div', { class: 'boot-d' }, 'Loading LiteSynapse…'));
+  call('getState', {}, 15000).then(r => {
+    if (!isState(r)) throw new Error('LiteSynapse sent an unexpected answer.');
+    lastJson = '';
+    setState(r);
+    showApp();
+    if (ui.page === 'overview') loadDeviceInfo();
+  }).catch(e => showBootError(e.message));
+}
+
+if (!host) showNoHost();
+else {
+  host.addEventListener('message', onMessage);
+  boot();
+}
 })();
 </script>
 </body>

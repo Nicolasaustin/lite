@@ -201,9 +201,14 @@ internal sealed class TrayFlyout : Form
 			{
 				text = svc.LiveStatus;
 			}
+			else if (!svc.Auto)
+			{
+				// A manual pick stays active whether or not a game is in front.
+				text = "Profile active (picked by you)";
+			}
 			else if (svc.InGame)
 			{
-				text = (svc.Auto ? "Game profile active" : "Profile active (picked by you)");
+				text = "Game profile active";
 			}
 			else
 			{
