@@ -13,6 +13,24 @@
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Macro.cs" Link="App\Macro.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Data model, protocol encoding and data migration. RazerDevice (Windows HID) is replaced by Fakes\RazerDevice.cs. -->
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Cfg.cs" Link="App\Cfg.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\MouseProfile.cs" Link="App\MouseProfile.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\MouseLightingSettings.cs" Link="App\MouseLightingSettings.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\KbProfile.cs" Link="App\KbProfile.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\KeyTarget.cs" Link="App\KeyTarget.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\GameRule.cs" Link="App\GameRule.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\ProfileStore.cs" Link="App\ProfileStore.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\AntiCheat.cs" Link="App\AntiCheat.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Keys2.cs" Link="App\Keys2.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\OnboardMemory.cs" Link="App\OnboardMemory.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\MouseLighting.cs" Link="App\MouseLighting.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\KbLighting.cs" Link="App\KbLighting.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Importer.cs" Link="App\Importer.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\DataMigrations.cs" Link="App\DataMigrations.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\DefaultGames.cs" Link="App\DefaultGames.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />

@@ -26,12 +26,17 @@ internal static class Importer
 		}
 		return inputId switch
 		{
-			"ScrollButton" => "Scroll", 
-			"DKM_M_01" => "M1", 
-			"DKM_M_02" => "M2", 
-			"RepeatScrollLeft" => "TiltR", 
-			"RepeatScrollRight" => "TiltL", 
-			_ => null, 
+			// Older exports ("Valorant (1)"/"(2)") number the last three side buttons KEY_10..KEY_12.
+			"KEY_10" => "Side10",
+			"KEY_11" => "Side11",
+			"KEY_12" => "Side12",
+			"KEY_HYPHEN" => "Side11",
+			"ScrollButton" => "Scroll",
+			"DKM_M_01" => "M1",
+			"DKM_M_02" => "M2",
+			"RepeatScrollLeft" => "TiltR",
+			"RepeatScrollRight" => "TiltL",
+			_ => null,
 		};
 	}
 
@@ -44,6 +49,7 @@ internal static class Importer
 	{
 		ProfileStore store = Cfg.Load<ProfileStore>(Cfg.Profiles);
 		StringBuilder sb = new StringBuilder();
+		List<string> notes = new List<string>();
 		StringBuilder stringBuilder;
 		StringBuilder.AppendInterpolatedStringHandler handler;
 		foreach (string f in files)
@@ -71,7 +77,7 @@ internal static class Importer
 				JsonNode j = Payload(item);
 				if (cat == "MOUSE")
 				{
-					MouseProfile mp = MouseFrom(j);
+					MouseProfile mp = MouseFrom(j, notes);
 					store.Mouse.RemoveAll((MouseProfile x) => x.Name == mp.Name);
 					store.Mouse.Add(mp);
 				}
@@ -99,6 +105,10 @@ internal static class Importer
 			stringBuilder3.AppendLine(ref handler);
 		}
 		Cfg.Save(Cfg.Profiles, store);
+		foreach (string note in notes)
+		{
+			sb.AppendLine("note: " + note);
+		}
 		stringBuilder = sb;
 		StringBuilder stringBuilder4 = stringBuilder;
 		handler = new StringBuilder.AppendInterpolatedStringHandler(51, 3, stringBuilder);
@@ -113,7 +123,8 @@ internal static class Importer
 		return sb.ToString();
 	}
 
-	private static MouseProfile MouseFrom(JsonNode j)
+	// One Synapse 4 mouse profile payload. notes (optional) collects mappings that could not be carried over.
+	internal static MouseProfile MouseFrom(JsonNode j, List<string> notes = null)
 	{
 		MouseProfile p = new MouseProfile
 		{
@@ -137,33 +148,143 @@ internal static class Importer
 		{
 			all.Add(m2);
 		}
+		string leftClick = null;
+		string rightClick = null;
 		foreach (JsonNode m3 in all)
 		{
-			if (m3["outputType"]?.GetValue<string>() != "keyboardGroup")
+			string input = Str(m3["inputID"]);
+			string output = Str(m3["outputType"]);
+			string mouseAssignment = Str(m3["mouseGroup"]?["mouseAssignment"]);
+			if (input == "LeftClick" || input == "RightClick")
 			{
+				if (output == "mouseGroup")
+				{
+					if (input == "LeftClick")
+					{
+						leftClick = mouseAssignment;
+					}
+					else
+					{
+						rightClick = mouseAssignment;
+					}
+				}
+				else
+				{
+					notes?.Add($"{p.Name}: {input} -> {output} is not supported");
+				}
 				continue;
 			}
-			string id = ButtonId(m3["inputID"].GetValue<string>());
+			string id = ButtonId(input);
 			if (id == null)
 			{
+				notes?.Add($"{p.Name}: button {input} is not supported");
 				continue;
 			}
-			JsonNode kg = m3["keyboardGroup"];
-			if (kg?["key"] == null)
+			if (output == "keyboardGroup")
 			{
-				continue;
+				JsonNode kg = m3["keyboardGroup"];
+				string key = Str(kg?["key"]);
+				if (string.IsNullOrEmpty(key))
+				{
+					// Synapse "keyboard function" with no key: the button sends nothing.
+					p.Buttons[id] = new KeyTarget { Key = KeyTarget.Disabled };
+					continue;
+				}
+				KeyTarget t = new KeyTarget
+				{
+					Key = key
+				};
+				foreach (JsonNode mod in kg["modifiers"]?.AsArray() ?? new JsonArray())
+				{
+					t.Mods.Add(mod.GetValue<string>());
+				}
+				p.Buttons[id] = t;
 			}
-			KeyTarget t = new KeyTarget
+			else if (output == "mouseGroup" && mouseAssignment == "ScrollButton")
 			{
-				Key = kg["key"].GetValue<string>()
-			};
-			foreach (JsonNode mod in kg["modifiers"]?.AsArray() ?? new JsonArray())
-			{
-				t.Mods.Add(mod.GetValue<string>());
+				p.Buttons[id] = new KeyTarget { Key = KeyTarget.MouseMiddle };
 			}
-			p.Buttons[id] = t;
+			else
+			{
+				notes?.Add($"{p.Name}: {id} -> {output} {mouseAssignment} is not supported");
+			}
 		}
+		// Synapse's left-handed default maps LeftClick to "Menu" (right click) and RightClick to "Click".
+		// A profile without these mappings uses the mouse's own, unswapped order.
+		p.ClickSwap = leftClick == "Menu" || rightClick == "Click";
+		p.Lighting = LightingFrom(j, p.Name, notes);
 		return p;
+	}
+
+	// quickEffects + brightness -> Lighting. Effect id 1 = static (carries color1), 3 = spectrum cycling.
+	internal static MouseLightingSettings LightingFrom(JsonNode j, string profileName = null, List<string> notes = null)
+	{
+		JsonNode qe = j["quickEffects"];
+		if (qe == null)
+		{
+			return null;
+		}
+		int? effectId = Int(qe["selectedEffectId"]);
+		MouseLightingSettings s = new MouseLightingSettings();
+		JsonNode brightness = j["brightness"];
+		if (brightness != null)
+		{
+			bool enabled = Bool(brightness["isEnabled"]) ?? true;
+			s.Brightness = enabled ? Math.Clamp(Int(brightness["value"]) ?? 100, 0, 100) : 0;
+		}
+		switch (effectId)
+		{
+		case 1:
+		{
+			s.Effect = "static";
+			string color = Str(qe["selectedEffectSetting"]?["color1"]);
+			if (MouseLighting.TryParseColor(color, out var r, out var g, out var b))
+			{
+				s.Color = $"#{r:X2}{g:X2}{b:X2}";
+			}
+			return s;
+		}
+		case 3:
+			s.Effect = "spectrum";
+			return s;
+		default:
+			notes?.Add($"{profileName}: lighting effect {effectId?.ToString() ?? "?"} is not supported");
+			return null;
+		}
+	}
+
+	private static string Str(JsonNode n)
+	{
+		if (n is JsonValue v && v.TryGetValue<string>(out var s))
+		{
+			return s;
+		}
+		return null;
+	}
+
+	private static int? Int(JsonNode n)
+	{
+		if (n is JsonValue v)
+		{
+			if (v.TryGetValue<int>(out var i))
+			{
+				return i;
+			}
+			if (v.TryGetValue<double>(out var d))
+			{
+				return (int)Math.Round(d);
+			}
+		}
+		return null;
+	}
+
+	private static bool? Bool(JsonNode n)
+	{
+		if (n is JsonValue v && v.TryGetValue<bool>(out var b))
+		{
+			return b;
+		}
+		return null;
 	}
 
 	private static void ReadStages(JsonNode j, MouseProfile p)
