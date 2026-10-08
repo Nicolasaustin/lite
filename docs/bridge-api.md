@@ -142,19 +142,16 @@ public void OnSuspend(); public void OnResume(); public void OnSessionLock(); pu
 public class RazerLeftovers { bool Checked; bool SynapseInstalled; string GmsService; List<string> FilterDrivers; bool RzCommon; }
 ```
 
-## Older helper signatures (still valid)
+Lighting helpers (data/protocol work):
 
 ```csharp
 internal static class KbLighting {
     public static readonly string[] Effects;            // "off","static","breathing","reactive","starlight"
     public static bool Apply(RazerDevice kb, string effect, int speed, int brightness); // brightness 0..100
 }
-public class MouseLightingState { string Effect; string Color; int Brightness; List<int> Zones; }
 internal static class MouseLighting {
-    public static MouseLightingState Load();
-    public static void Save(MouseLightingState s);
-    public static List<(int Id, string Name)> Probe(RazerDevice mouse);
-    public static string Apply(RazerDevice mouse, MouseLightingState s);   // null = ok, else error text
+    public static List<(int Id, string Name)> Probe(RazerDevice mouse);                       // read-only
+    public static string Apply(RazerDevice mouse, MouseLightingSettings s, byte storage = 0x01); // null = ok
 }
 // KbProfile gains: string Effect = "static"; int EffectSpeed = 2;
 ```
