@@ -49,4 +49,37 @@ internal class RazerDevice
 		}
 		return SetBrightnessResult;
 	}
+
+	// Onboard slots (used by LiveProfile). ActiveSlot null = the mouse does not answer.
+	public int? ActiveSlot = 3;
+
+	public readonly List<int> SlotSwitches = new List<int>();
+
+	public readonly List<int> DpiWrites = new List<int>();
+
+	public readonly List<int> PollingWrites = new List<int>();
+
+	public int? GetActiveSlot()
+	{
+		return ActiveSlot;
+	}
+
+	public bool SetActiveSlot(int slot)
+	{
+		SlotSwitches.Add(slot);
+		ActiveSlot = slot;
+		return true;
+	}
+
+	public bool SetDpi(int dpi, int? slot = null)
+	{
+		DpiWrites.Add(dpi);
+		return true;
+	}
+
+	public bool SetPolling(int hz)
+	{
+		PollingWrites.Add(hz);
+		return true;
+	}
 }

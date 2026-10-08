@@ -20,9 +20,37 @@
     <PublishReadyToRun>true</PublishReadyToRun>
     <!-- Do not copy package API docs (.xml) next to the exe. -->
     <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
+    <!-- No empty satellite-language folders in the output. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <NoWarn>$(NoWarn);CS8632;CA1416;WFO1000</NoWarn>
+  </PropertyGroup>
+  <!-- Publishing (dotnet publish -c Release -r win-x64): one framework-dependent exe. WebView2Loader.dll is
+       bundled into it and extracted on first use; the .NET Desktop Runtime must be installed. -->
+  <PropertyGroup>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- The loader comes from the package's runtimes\win-*\native assets (bundled when publishing for a RID),
+         not from the extra copies the WebView2 targets would add next to the exe. -->
+    <WebView2NeverCopyLoaderDllToOutputDirectory>true</WebView2NeverCopyLoaderDllToOutputDirectory>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The HTML window (WebWindow loads it with NavigateToString). -->
+    <EmbeddedResource Include="ui\index.html" LogicalName="LiteSynapse.ui.index.html" Condition="Exists('ui\index.html')" />
+    <!-- Run elevated by the Razer clean-up (RazerLeftovers.FindDriverScript looks in tools\ next to the exe). -->
+    <None Update="tools\remove-razer-filter-drivers.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <!-- The WebView2 package also references its WPF control; this WinForms app does not use it. -->
+  <Target Name="DropWebView2Wpf" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferencePath Remove="@(ReferencePath)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+  <Target Name="WarnMissingUi" BeforeTargets="Build" Condition="!Exists('ui\index.html')">
+    <Warning Text="src/LiteSynapse/ui/index.html is missing: the app will open the classic window instead of the HTML window." />
+  </Target>
 </Project>

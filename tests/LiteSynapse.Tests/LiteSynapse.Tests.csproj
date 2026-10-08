@@ -31,6 +31,23 @@
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\DefaultGames.cs" Link="App\DefaultGames.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Device transport and service logic (Windows-free parts). -->
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\RazerReport.cs" Link="App\RazerReport.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\OnboardSlots.cs" Link="App\OnboardSlots.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\AppSettings.cs" Link="App\AppSettings.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\ServicePlan.cs" Link="App\ServicePlan.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\DeviceWorker.cs" Link="App\DeviceWorker.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\RazerLeftovers.cs" Link="App\RazerLeftovers.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\LiveProfile.cs" Link="App\LiveProfile.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Window bridge: message parsing, State JSON shape and the profile edits behind the commands. -->
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\WebProtocol.cs" Link="App\WebProtocol.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\WebState.cs" Link="App\WebState.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\WebOps.cs" Link="App\WebOps.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\UiPrefs.cs" Link="App\UiPrefs.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />

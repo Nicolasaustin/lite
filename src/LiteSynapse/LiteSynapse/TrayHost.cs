@@ -74,11 +74,35 @@ internal sealed class TrayHost
 
 	private const int WM_ENDSESSION = 22;
 
+	private const uint WM_WTSSESSION_CHANGE = 0x02B1u;
+
+	private const int PBT_APMSUSPEND = 4;
+
 	private const int PBT_APMRESUMESUSPEND = 7;
 
 	private const int PBT_APMRESUMEAUTOMATIC = 18;
 
+	private const int WTS_SESSION_LOCK = 7;
+
+	private const int WTS_SESSION_UNLOCK = 8;
+
+	private const int NOTIFY_FOR_THIS_SESSION = 0;
+
+	// Tray menu commands.
+	private const int MenuOpen = 1;
+
+	private const int MenuSettings = 2;
+
+	private const int MenuStartup = 3;
+
+	private const int MenuExit = 4;
+
+	private const int MenuClassic = 5;
+
 	private static readonly nint SettleTimer = 1;
+
+	// Retries the session (lock/unlock) registration, which fails while the session service is not up yet.
+	private static readonly nint SessionTimer = 2;
 
 	private readonly Service svc;
 
@@ -89,6 +113,10 @@ internal sealed class TrayHost
 	private nint devNotify;
 
 	private nint fgHook;
+
+	private bool sessionRegistered;
+
+	private int sessionAttempts;
 
 	private uint taskbarCreated;
 
@@ -120,6 +148,12 @@ internal sealed class TrayHost
 	[DllImport("user32")]
 	private static extern bool SetMenuDefaultItem(nint m, uint item, uint byPos);
 
+	[DllImport("wtsapi32.dll", SetLastError = true)]
+	private static extern bool WTSRegisterSessionNotification(nint hwnd, int flags);
+
+	[DllImport("wtsapi32.dll")]
+	private static extern bool WTSUnRegisterSessionNotification(nint hwnd);
+
 	[DllImport("uxtheme.dll", EntryPoint = "#135")]
 	private static extern int SetPreferredAppMode(int mode);
 
@@ -143,6 +177,7 @@ internal sealed class TrayHost
 		icon = small[0];
 		AddIcon();
 		devNotify = DeviceEvents.Register(hwnd);
+		RegisterSession();
 		fgProc = (nint _, uint _, nint _, int _, int _, uint _, uint _) =>
 		{
 			svc.Check();
@@ -157,12 +192,36 @@ internal sealed class TrayHost
 			Native.UnhookWinEvent(fgHook);
 		}
 		DeviceEvents.Unregister(devNotify);
+		if (sessionRegistered)
+		{
+			WTSUnRegisterSessionNotification(hwnd);
+		}
 		RemoveIcon();
 		if (icon != IntPtr.Zero)
 		{
 			DestroyIcon(icon);
 		}
 		W32.DestroyWindow(hwnd);
+	}
+
+	// Lock/unlock notifications (WM_WTSSESSION_CHANGE) for the service.
+	private void RegisterSession()
+	{
+		sessionAttempts++;
+		if (WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION))
+		{
+			sessionRegistered = true;
+			return;
+		}
+		int err = Marshal.GetLastWin32Error();
+		if (sessionAttempts <= 10)
+		{
+			W32.SetTimer(hwnd, SessionTimer, 15000u, IntPtr.Zero);
+		}
+		else
+		{
+			Cfg.Log($"session lock notifications unavailable (error {err})");
+		}
 	}
 
 	private void OnServiceChanged()
@@ -209,16 +268,25 @@ internal sealed class TrayHost
 				}
 				return null;
 			case 536u:
-				if ((int)w == 7 || (int)w == 18)
-				{
-					Settle();
-				}
+				OnPower((int)w);
+				return null;
+			case WM_WTSSESSION_CHANGE:
+				OnSession((int)w);
 				return null;
 			case 275u:
 				if (w == SettleTimer)
 				{
 					W32.KillTimer(hwnd, SettleTimer);
 					svc.EnsureDevices();
+					return IntPtr.Zero;
+				}
+				if (w == SessionTimer)
+				{
+					W32.KillTimer(hwnd, SessionTimer);
+					if (!sessionRegistered)
+					{
+						RegisterSession();
+					}
 					return IntPtr.Zero;
 				}
 				break;
@@ -229,6 +297,50 @@ internal sealed class TrayHost
 				return null;
 			}
 			return null;
+		}
+	}
+
+	// WM_POWERBROADCAST: sleep and wake. Both resume events arrive on a wake; the service is told once.
+	private void OnPower(int evt)
+	{
+		switch (evt)
+		{
+		case PBT_APMSUSPEND:
+			Safe("suspend", svc.OnSuspend);
+			break;
+		case PBT_APMRESUMEAUTOMATIC:
+			Safe("resume", svc.OnResume);
+			Settle();
+			break;
+		case PBT_APMRESUMESUSPEND:
+			Settle();
+			break;
+		}
+	}
+
+	// WM_WTSSESSION_CHANGE: the workstation was locked or unlocked.
+	private void OnSession(int evt)
+	{
+		switch (evt)
+		{
+		case WTS_SESSION_LOCK:
+			Safe("session lock", svc.OnSessionLock);
+			break;
+		case WTS_SESSION_UNLOCK:
+			Safe("session unlock", svc.OnSessionUnlock);
+			break;
+		}
+	}
+
+	private static void Safe(string what, Action action)
+	{
+		try
+		{
+			action();
+		}
+		catch (Exception ex)
+		{
+			Cfg.Log(what + ": " + ex.Message);
 		}
 	}
 
@@ -286,12 +398,13 @@ internal sealed class TrayHost
 	internal static int TrackMenu(nint owner, bool startupOn, int x, int y)
 	{
 		nint menu = CreatePopupMenu();
-		AppendMenu(menu, 0u, 1u, "LiteSynapse");
+		AppendMenu(menu, 0u, MenuOpen, "LiteSynapse");
 		AppendMenu(menu, 2048u, UIntPtr.Zero, null);
-		AppendMenu(menu, 0u, 2u, "Settings");
-		AppendMenu(menu, (uint)(0 | (startupOn ? 8 : 0)), 3u, "Start with Windows");
+		AppendMenu(menu, 0u, MenuSettings, "Settings");
+		AppendMenu(menu, 0u, MenuClassic, "Classic window");
+		AppendMenu(menu, (uint)(0 | (startupOn ? 8 : 0)), MenuStartup, "Start with Windows");
 		AppendMenu(menu, 2048u, UIntPtr.Zero, null);
-		AppendMenu(menu, 0u, 4u, "Exit");
+		AppendMenu(menu, 0u, MenuExit, "Exit");
 		SetMenuDefaultItem(menu, 1u, 0u);
 		W32.SetForegroundWindow(owner);
 		int result = TrackPopupMenu(menu, 298u, x, y, 0, owner, IntPtr.Zero);
@@ -305,13 +418,16 @@ internal sealed class TrayHost
 		W32.GetCursorPos(out var p);
 		switch (TrackMenu(hwnd, Service.IsStartup(), p.x, p.y))
 		{
-		case 1:
+		case MenuOpen:
 			UiHost.ShowWindow(svc);
 			break;
-		case 2:
+		case MenuSettings:
 			UiHost.ShowWindow(svc, 5);
 			break;
-		case 3:
+		case MenuClassic:
+			UiHost.ShowClassicWindow(svc);
+			break;
+		case MenuStartup:
 			try
 			{
 				Service.SetStartup(!Service.IsStartup());
@@ -322,7 +438,7 @@ internal sealed class TrayHost
 				Cfg.Log("startup: " + ex.Message);
 				break;
 			}
-		case 4:
+		case MenuExit:
 			W32.PostQuitMessage(0);
 			break;
 		}

@@ -364,7 +364,7 @@ internal static class UiTests
 			GC.KeepAlive(keep);
 			return;
 		}
-		Check("right-click menu: LiteSynapse / Settings / Start with Windows / Exit", string.Join(" | ", items) == "LiteSynapse | Settings | Start with Windows | Exit" && seps == 2, string.Join(" | ", items) + $"  ({seps} separators, {size.Width}x{size.Height})");
+		Check("right-click menu: LiteSynapse / Settings / Classic window / Start with Windows / Exit", string.Join(" | ", items) == "LiteSynapse | Settings | Classic window | Start with Windows | Exit" && seps == 2, string.Join(" | ", items) + $"  ({seps} separators, {size.Width}x{size.Height})");
 		Check("right-click menu: \"Start with Windows\" shows its check mark when on", checkedStartup);
 		W32.DestroyWindow(owner);
 		GC.KeepAlive(keep);

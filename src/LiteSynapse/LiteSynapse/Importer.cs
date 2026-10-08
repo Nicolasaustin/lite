@@ -131,9 +131,9 @@ internal static class Importer
 			Name = j["name"].GetValue<string>(),
 			PollingRate = (j["pollingRate"]?.GetValue<int>() ?? 1000)
 		};
-		JsonNode? jsonNode = j["dpiStages"];
-		int active = jsonNode?["active"]?.GetValue<int>() ?? 1;
-		JsonArray stages = jsonNode?["stages"]?.AsArray();
+		JsonNode dpiStages = j["dpiStages"];
+		int active = dpiStages?["active"]?.GetValue<int>() ?? 1;
+		JsonArray stages = dpiStages?["stages"]?.AsArray();
 		if (stages != null && active >= 1 && active <= stages.Count)
 		{
 			p.Dpi = stages[active - 1]["x"].GetValue<int>();

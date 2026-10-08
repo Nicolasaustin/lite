@@ -175,6 +175,12 @@ internal static class OnboardMemory
 		};
 	}
 
+	// True when Write can put this target on the mouse (a known key, DISABLED or MOUSE_MIDDLE).
+	public static bool CanWrite(KeyTarget t)
+	{
+		return Action(t, out _, out _) != null;
+	}
+
 	// Everything Write sends for one slot, in order. Buttons that cannot be written are listed in problems.
 	internal static List<OnboardCommand> BuildCommands(int slot, MouseProfile p, out List<string> problems)
 	{
@@ -246,7 +252,9 @@ internal static class OnboardMemory
 				{
 					Progress = first ? "Writing lighting" : null,
 					Required = false,
-					Label = "lighting (" + c.Zone + ")"
+					Label = "lighting (" + c.Zone + ")",
+					// Unverified: that 0F/02 takes the slot number as storage (only 0F/04 brightness is confirmed).
+					Unverified = first ? "lighting stored with storage = slot" : null
 				});
 				first = false;
 			}

@@ -67,7 +67,25 @@ internal static class Program
 		if (args.Length >= 1 && args[0] == "testall")
 		{
 			AttachConsole(-1);
-			return Tests.TestAll();
+			int transport = TransportCheck();
+			int all = Tests.TestAll();
+			Cfg.FlushLog();
+			return (transport != 0) ? 1 : all;
+		}
+		if (args.Length >= 1 && args[0] == "transport")
+		{
+			AttachConsole(-1);
+			int result = TransportCheck();
+			Cfg.FlushLog();
+			return result;
+		}
+		if (args.Length >= 1 && args[0] == "razer")
+		{
+			AttachConsole(-1);
+			Console.WriteLine(RazerLeftovers.Check());
+			Console.WriteLine("driver script: " + (RazerLeftovers.FindDriverScript() ?? "not found"));
+			Cfg.FlushLog();
+			return 0;
 		}
 		if (args.Length >= 2 && args[0] == "import-stages")
 		{
@@ -142,6 +160,7 @@ internal static class Program
 			AppDomain.CurrentDomain.UnhandledException += (object _, UnhandledExceptionEventArgs e) =>
 			{
 				Cfg.Log("FATAL: " + e.ExceptionObject);
+				Cfg.FlushLog(500);
 				try
 				{
 					string path = Path.Combine(Cfg.Dir, "last_restart.txt");
@@ -187,6 +206,7 @@ internal static class Program
 			}
 			new TrayHost(svc).Run();
 			svc.Shutdown();
+			Cfg.FlushLog();
 			return 0;
 		}
 	}
@@ -244,6 +264,86 @@ internal static class Program
 		Console.WriteLine($"Removed {m} mouse profile(s), {k} keyboard profile(s), {g} game rule(s); cleared the keyboard profile on {r} game(s).");
 		Console.WriteLine($"Starting profiles: mouse CS2, keyboard {node["DefaultKeyboard"]}. Backup: {backup}");
 		return 0;
+	}
+
+	// Checks the HID transport on the real devices: one handle kept open, the fixed transaction id, short
+	// SET/GET round trips, and setters that send nothing when the value is already set. Read-only except for
+	// re-sending values the devices already have.
+	private static int TransportCheck()
+	{
+		int fails = 0;
+		Console.WriteLine("-- HID transport");
+		RazerDevice mouse = RazerDevice.Find(141, "Naga");
+		RazerDevice kb = RazerDevice.Find(565, "BlackWidow Lite");
+		Report("Naga found", mouse != null);
+		if (kb == null)
+		{
+			Console.WriteLine("INFO  BlackWidow Lite not found (keyboard checks skipped)");
+		}
+		if (mouse != null)
+		{
+			Device(mouse, 0x1F, () => mouse.GetActiveSlot().HasValue);
+			(int, int)? dpi = mouse.GetDpi();
+			if (dpi.HasValue)
+			{
+				int before = mouse.Transactions;
+				bool ok = mouse.SetDpi(dpi.Value.Item1);
+				Report("mouse: setting the DPI it already has sends nothing", ok && mouse.Transactions == before, $"{mouse.Transactions - before} transaction(s)");
+			}
+			else
+			{
+				Report("mouse: DPI read", ok: false);
+			}
+			int? polling = mouse.GetPolling();
+			Report("mouse: polling rate read", polling.HasValue, $"{polling} Hz");
+		}
+		if (kb != null)
+		{
+			Device(kb, 0x3F, () => kb.GetBrightness().HasValue);
+			int? b = kb.GetBrightness();
+			if (b.HasValue)
+			{
+				int before2 = kb.Transactions;
+				bool ok2 = kb.SetBrightness(b.Value);
+				Report("keyboard: setting the brightness it already has sends nothing", ok2 && kb.Transactions == before2, $"{kb.Transactions - before2} transaction(s)");
+			}
+		}
+		mouse?.Dispose();
+		kb?.Dispose();
+		Console.WriteLine((fails == 0) ? "TRANSPORT OK" : $"TRANSPORT: {fails} FAILED");
+		return fails;
+		void Device(RazerDevice d, byte expectedTxn, Func<bool> read)
+		{
+			int good = 0;
+			for (int i = 0; i < 20; i++)
+			{
+				if (read())
+				{
+					good++;
+				}
+			}
+			double avg = (d.Transactions > 0) ? (d.TotalMs / d.Transactions) : 0.0;
+			Report($"{d.Name}: 20 reads answered", good == 20, $"{good}/20");
+			if (d.TransactionId == expectedTxn)
+			{
+				Report($"{d.Name}: transaction id 0x{expectedTxn:X2} accepted", ok: true);
+			}
+			else
+			{
+				// Works, but through the fallback probe: worth knowing, not a failure.
+				Console.WriteLine($"INFO  {d.Name}: transaction id 0x{expectedTxn:X2} was not accepted, using 0x{d.TransactionId:X2}");
+			}
+			Report($"{d.Name}: one handle kept open", d.Reopens == 0, $"{d.Reopens} reopen(s)");
+			Report($"{d.Name}: round trip under 30 ms (was 20-100 ms)", d.Transactions > 0 && d.SlowestMs < 30.0, $"average {avg:N1} ms, slowest {d.SlowestMs:N1} ms");
+		}
+		void Report(string name, bool ok, string detail = "")
+		{
+			Console.WriteLine((ok ? "PASS" : "FAIL") + "  " + name + ((detail.Length > 0) ? ("  - " + detail) : ""));
+			if (!ok)
+			{
+				fails++;
+			}
+		}
 	}
 
 	private static void SelfTest()

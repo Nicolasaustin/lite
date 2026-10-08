@@ -63,36 +63,22 @@ internal sealed class RazerDevice : IDisposable
 		public nint Reserved;
 	}
 
-	public const int StatusNew = 0;
+	public const int StatusNew = StatusPoll.New;
 
-	public const int StatusBusy = 1;
+	public const int StatusBusy = StatusPoll.Busy;
 
-	public const int StatusOk = 2;
+	public const int StatusOk = StatusPoll.Ok;
 
-	public const int StatusFailed = 3;
+	public const int StatusFailed = StatusPoll.Failed;
 
-	public const int StatusTimeout = 4;
+	public const int StatusTimeout = StatusPoll.Timeout;
 
-	public const int StatusNotSupported = 5;
+	public const int StatusNotSupported = StatusPoll.NotSupported;
 
 	// Returned instead of a device status when the device could not be reached at all.
 	public const int IoError = -1;
 
-	private const int ReportLength = 91;
-
-	// Synapse's host default between SET and GET.
-	private const int FirstPollMs = 5;
-
-	// Synapse adds 3 ms per retry.
-	private const int PollStepMs = 3;
-
-	private const int Polls = 5;
-
-	// A flash write can keep the device busy longer than the five quick polls; keep asking (still without
-	// re-sending) for up to ~200 ms more, but only while it actually reports "busy".
-	private const int BusyPolls = 8;
-
-	private const int BusyPollMs = 25;
+	private const int ReportLength = RazerReport.Length;
 
 	private static readonly byte[] ProbeIds = new byte[4] { 0x1F, 0x3F, 0xFF, 0x00 };
 
@@ -110,6 +96,7 @@ internal sealed class RazerDevice : IDisposable
 
 	private byte txn;
 
+	// The transaction id is settled: it worked once, or the one-time probe already ran.
 	private bool probed;
 
 	private bool disposed;
@@ -146,6 +133,8 @@ internal sealed class RazerDevice : IDisposable
 	public int Transactions { get; private set; }
 
 	public double SlowestMs { get; private set; }
+
+	public double TotalMs { get; private set; }
 
 	[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
 	private static extern SafeFileHandle CreateFile(string n, uint access, uint share, nint sa, uint disp, uint flags, nint t);
@@ -379,6 +368,7 @@ internal sealed class RazerDevice : IDisposable
 			int status = Poll(h, reply);
 			Transactions++;
 			double ms = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+			TotalMs += ms;
 			if (ms > SlowestMs)
 			{
 				SlowestMs = ms;
@@ -393,50 +383,43 @@ internal sealed class RazerDevice : IDisposable
 		return IoError;
 	}
 
+	// Reads the status until the device gives a final answer (see StatusPoll). The SET is never repeated here.
 	private int Poll(SafeFileHandle h, byte[] reply)
 	{
-		int wait = FirstPollMs;
 		int status = StatusNew;
-		for (int i = 0; i < Polls + BusyPolls; i++)
+		for (int read = 0; ; read++)
 		{
-			if (i >= Polls)
+			int wait = StatusPoll.WaitBefore(read, status);
+			if (wait < 0)
 			{
-				if (status != StatusBusy)
-				{
-					break;
-				}
-				wait = BusyPollMs;
+				return status;
 			}
 			timer.Sleep(wait);
-			wait += PollStepMs;
 			Array.Clear(response);
 			if (!HidD_GetFeature(h, response, ReportLength))
 			{
 				return IoError;
 			}
 			status = response[1];
-			if (status == StatusOk)
+			if (status == StatusOk && reply != null)
 			{
-				if (reply != null)
-				{
-					Array.Copy(response, 9, reply, 0, Math.Min(reply.Length, 80));
-				}
-				return StatusOk;
-			}
-			if (status != StatusNew && status != StatusBusy)
-			{
-				return status;
+				Array.Copy(response, RazerReport.ArgsOffset, reply, 0, Math.Min(reply.Length, RazerReport.ArgsLength));
 			}
 		}
-		return status;
 	}
 
-	// Sends with this device's transaction id; if the very first failure looks like a wrong id, tries the
-	// other usual ids once and keeps the one that works.
+	// Sends with this device's transaction id. If the id has never worked yet and a command fails, tries the
+	// other usual ids once and keeps the one that works. Once a command succeeded the id is known to be right,
+	// so a later failure (e.g. an LED the device does not have) never starts a probe.
 	private int TransactAuto(byte cls, byte id, byte size, ReadOnlySpan<byte> args, byte[] reply)
 	{
 		int status = Transact(txn, cls, id, size, args, reply);
-		if (status == StatusOk || status == IoError || probed)
+		if (status == StatusOk)
+		{
+			probed = true;
+			return status;
+		}
+		if (status == IoError || probed)
 		{
 			return status;
 		}
@@ -610,8 +593,24 @@ internal sealed class RazerDevice : IDisposable
 			// A slot switch loads that slot's DPI (and possibly polling): forget both.
 			dpi = null;
 			polling = null;
-			this.slot = (s == StatusOk) ? slot : null;
-			return s == StatusOk;
+			this.slot = null;
+			bool ok = s == StatusOk;
+			if (!ok && s != IoError)
+			{
+				// The previous transport ignored this command's status and read the slot back; do the same
+				// whenever the answer is not a clean success.
+				byte[] a = new byte[RazerReport.ArgsLength];
+				ok = TransactAuto(5, 132, 1, ReadOnlySpan<byte>.Empty, a) == StatusOk && a[0] == slot;
+				if (ok)
+				{
+					Cfg.Log($"{Name}: slot switch answered status {s}, read-back shows slot {slot}");
+				}
+			}
+			if (ok)
+			{
+				this.slot = slot;
+			}
+			return ok;
 		}
 	}
 
@@ -644,27 +643,5 @@ internal sealed class RazerDevice : IDisposable
 			brightness = (s == StatusOk) ? percent : null;
 			return s == StatusOk;
 		}
-	}
-}
-
-// Builds a protocol 2.5 feature report: [0] report id 0, [1] status, [2] transaction id,
-// [3-4] remaining packets, [5] protocol type, [6] data size, [7] class, [8] command, [9-88] arguments,
-// [89] CRC = XOR of bytes 3..88, [90] reserved.
-internal static class RazerReport
-{
-	public static void Build(byte[] r, byte txnId, byte cls, byte id, byte size, ReadOnlySpan<byte> args)
-	{
-		Array.Clear(r);
-		r[2] = txnId;
-		r[6] = size;
-		r[7] = cls;
-		r[8] = id;
-		args.Slice(0, Math.Min(args.Length, 80)).CopyTo(r.AsSpan(9));
-		byte crc = 0;
-		for (int i = 3; i < 89; i++)
-		{
-			crc ^= r[i];
-		}
-		r[89] = crc;
 	}
 }

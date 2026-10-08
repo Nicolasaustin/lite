@@ -85,6 +85,35 @@ public static class Cfg
 		File.WriteAllText(path, JsonSerializer.Serialize(v, Opt));
 	}
 
+	// Copies the files that exist into a new folder data/backup-<yyyyMMdd-HHmmss>[-n] and returns that folder,
+	// or null when nothing could be backed up (the caller should then not overwrite the originals).
+	public static string BackupFiles(params string[] paths)
+	{
+		try
+		{
+			string stamp = "backup-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+			string dir = Path.Combine(Dir, stamp);
+			for (int n = 2; Directory.Exists(dir); n++)
+			{
+				dir = Path.Combine(Dir, stamp + "-" + n);
+			}
+			Directory.CreateDirectory(dir);
+			foreach (string p in paths)
+			{
+				if (p != null && File.Exists(p))
+				{
+					File.Copy(p, Path.Combine(dir, Path.GetFileName(p)));
+				}
+			}
+			return dir;
+		}
+		catch (Exception ex)
+		{
+			Log("backup: " + ex.Message);
+			return null;
+		}
+	}
+
 	// ---- Logging --------------------------------------------------------------------------------
 	// Log() only stamps the line and puts it in a queue, so the keyboard hook, the tray thread and the
 	// device worker never touch the disk. One below-normal background thread writes the queue to a

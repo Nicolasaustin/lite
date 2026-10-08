@@ -280,6 +280,124 @@ internal static class Native
 		}
 	}
 
+	[DllImport("advapi32", SetLastError = true)]
+	private static extern bool OpenProcessToken(nint process, uint access, out nint token);
+
+	[DllImport("advapi32", SetLastError = true)]
+	private static extern bool GetTokenInformation(nint token, int cls, out int info, int length, out int returned);
+
+	private const uint PROCESS_QUERY_INFORMATION = 0x0400;
+
+	private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+	private const uint TOKEN_QUERY = 0x0008;
+
+	private const int TokenElevation = 20;
+
+	private const int ERROR_ACCESS_DENIED = 5;
+
+	// Full path of the program that owns the foreground window, or null (no window, or the process cannot be
+	// queried). pid receives its process id (0 when unknown).
+	public static string ForegroundExePath(out uint pid)
+	{
+		pid = 0u;
+		try
+		{
+			nint w = GetForegroundWindow();
+			if (w == IntPtr.Zero)
+			{
+				return null;
+			}
+			GetWindowThreadProcessId(w, out pid);
+			nint h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, inh: false, pid);
+			if (h == IntPtr.Zero)
+			{
+				return null;
+			}
+			try
+			{
+				StringBuilder sb = new StringBuilder(1024);
+				uint n = 1024u;
+				return QueryFullProcessImageName(h, 0u, sb, ref n) ? sb.ToString() : null;
+			}
+			finally
+			{
+				CloseHandle(h);
+			}
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	public static string ForegroundExePath()
+	{
+		return ForegroundExePath(out _);
+	}
+
+	// True when this process runs elevated (as administrator).
+	public static bool IsCurrentProcessElevated()
+	{
+		return TokenElevated(GetCurrentProcess()) == true;
+	}
+
+	// True when the process runs at a higher integrity level than a normal program (elevated), so input sent with
+	// SendInput by a non-elevated program does not reach it (UIPI). null = could not tell.
+	public static bool? IsProcessElevated(uint pid)
+	{
+		if (pid == 0)
+		{
+			return null;
+		}
+		nint h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, inh: false, pid);
+		if (h == IntPtr.Zero)
+		{
+			return null;
+		}
+		try
+		{
+			bool? elevated = TokenElevated(h);
+			if (elevated.HasValue)
+			{
+				return elevated;
+			}
+		}
+		finally
+		{
+			CloseHandle(h);
+		}
+		// The token could not be read. Windows refuses PROCESS_QUERY_INFORMATION (but not the limited right) to a
+		// process of higher integrity, which is exactly the case where our input would be blocked.
+		nint full = OpenProcess(PROCESS_QUERY_INFORMATION, inh: false, pid);
+		if (full != IntPtr.Zero)
+		{
+			CloseHandle(full);
+			return false;
+		}
+		return Marshal.GetLastWin32Error() == ERROR_ACCESS_DENIED ? true : null;
+	}
+
+	private static bool? TokenElevated(nint process)
+	{
+		if (!OpenProcessToken(process, TOKEN_QUERY, out var token))
+		{
+			return null;
+		}
+		try
+		{
+			if (!GetTokenInformation(token, TokenElevation, out var elevated, 4, out _))
+			{
+				return null;
+			}
+			return elevated != 0;
+		}
+		finally
+		{
+			CloseHandle(token);
+		}
+	}
+
 	public static string ForegroundExe()
 	{
 		try
