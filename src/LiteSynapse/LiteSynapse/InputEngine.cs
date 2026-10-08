@@ -88,8 +88,38 @@ internal class InputEngine : IDisposable
 
 	private Dictionary<string, Macro> macros = new Dictionary<string, Macro>();
 
+	// A macro with its send batches built ahead of time, so triggering it costs one SendInput per segment.
+	private sealed class PreparedMacro
+	{
+		public readonly MacroPlan Plan;
+
+		public readonly Native.INPUT[][] Batches;
+
+		public readonly Native.INPUT[] Release;
+
+		public PreparedMacro(Macro m)
+		{
+			Plan = new MacroPlan(m.Steps);
+			Batches = new Native.INPUT[Plan.Segments.Length][];
+			for (int i = 0; i < Batches.Length; i++)
+			{
+				MacroPlan.Key[] keys = Plan.Segments[i].Keys;
+				Batches[i] = new Native.INPUT[keys.Length];
+				for (int j = 0; j < keys.Length; j++)
+				{
+					Batches[i][j] = Native.KeyInput(keys[j].Vk, keys[j].Ext, keys[j].Down);
+				}
+			}
+			Release = new Native.INPUT[Plan.LeftDown.Length];
+			for (int k = 0; k < Release.Length; k++)
+			{
+				Release[k] = Native.KeyInput(Plan.LeftDown[k].Vk, Plan.LeftDown[k].Ext, down: false);
+			}
+		}
+	}
+
 	// Macro bound to each arrow key, indexed by vk - 37 (left, up, right, down).
-	private readonly Macro[] arrowMacros = new Macro[4];
+	private readonly PreparedMacro[] arrowMacros = new PreparedMacro[4];
 
 	private bool anyArrowMacro;
 
@@ -101,13 +131,11 @@ internal class InputEngine : IDisposable
 
 	public Dictionary<string, BaseKey> Base = new Dictionary<string, BaseKey>();
 
-	// Snap Tap / output state. outHeld: keys the game currently sees as down because of us or a passed-through
-	// real press. physHeld: A/D physically held. injected: keys whose current "down" was injected by us, so
-	// ReleaseAll only lifts what we pressed and never fights a key the user is really holding.
-	private readonly HashSet<int> outHeld = new HashSet<int>();
+	private readonly SnapTap snap = new SnapTap(VK_A, VK_D);
 
-	private readonly HashSet<int> physHeld = new HashSet<int>();
+	private readonly Action<int, bool> sendPlain = (int vk, bool down) => Native.SendKey(vk, ext: false, down);
 
+	// Keys held down by remapped output (not Snap Tap), so ReleaseAll only lifts what we pressed.
 	private readonly HashSet<int> injected = new HashSet<int>();
 
 	private readonly Thread thread;
@@ -128,7 +156,7 @@ internal class InputEngine : IDisposable
 
 	private readonly AutoResetEvent macroSignal = new AutoResetEvent(initialState: false);
 
-	private Macro macroNext;
+	private PreparedMacro macroNext;
 
 	private volatile bool macroRunning;
 
@@ -352,7 +380,7 @@ internal class InputEngine : IDisposable
 		string[] arrowNames = new string[4] { "KEY_LEFT_ARROW", "KEY_UP_ARROW", "KEY_RIGHT_ARROW", "KEY_DOWN_ARROW" };
 		for (int i = 0; i < 4; i++)
 		{
-			arrowMacros[i] = ((kb != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && macros.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? macro : null);
+			arrowMacros[i] = ((kb != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && macros.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? new PreparedMacro(macro) : null);
 			anyArrowMacro |= arrowMacros[i] != null;
 		}
 		snapTapActive = (kp?.SnapTap ?? false) && inGame;
@@ -388,7 +416,7 @@ internal class InputEngine : IDisposable
 
 	internal void TestRunMacro(Macro m)
 	{
-		RunMacro(m);
+		RunMacro(new PreparedMacro(m));
 	}
 
 	internal void TestSnapTap(bool on)
@@ -432,7 +460,7 @@ internal class InputEngine : IDisposable
 			}
 			if (anyArrowMacro && vk >= 37 && vk <= 40)
 			{
-				Macro macro = arrowMacros[vk - 37];
+				PreparedMacro macro = arrowMacros[vk - 37];
 				if (macro != null)
 				{
 					if (up)
@@ -480,7 +508,7 @@ internal class InputEngine : IDisposable
 					return 1;
 				}
 			}
-			if (snapTapActive && (vk == VK_A || vk == VK_D) && SnapTapReal(vk, up))
+			if (snapTapActive && snap.Handles(vk) && snap.OnReal(vk, up, sendPlain))
 			{
 				return 1;
 			}
@@ -490,39 +518,6 @@ internal class InputEngine : IDisposable
 			Cfg.Log("hook: " + ex.Message);
 		}
 		return Native.CallNextHookEx(hook, n, w, l);
-	}
-
-	// Snap Tap for a real A/D event. The real press/release is passed through untouched (returns false);
-	// we only inject the release of the opposite key, or its re-press when the newer key is let go.
-	// Returns true when the real event must be swallowed: auto-repeat or release of a key we already lifted.
-	private bool SnapTapReal(int vk, bool up)
-	{
-		int other = ((vk == VK_A) ? VK_D : VK_A);
-		if (!up)
-		{
-			if (physHeld.Contains(vk))
-			{
-				return !outHeld.Contains(vk);
-			}
-			physHeld.Add(vk);
-			if (outHeld.Remove(other))
-			{
-				injected.Remove(other);
-				Native.SendKey(other, ext: false, down: false);
-			}
-			outHeld.Add(vk);
-			injected.Remove(vk);
-			return false;
-		}
-		physHeld.Remove(vk);
-		bool wasDown = outHeld.Remove(vk);
-		injected.Remove(vk);
-		if (physHeld.Contains(other) && outHeld.Add(other))
-		{
-			injected.Add(other);
-			Native.SendKey(other, ext: false, down: true);
-		}
-		return !wasDown;
 	}
 
 	private void OnRaw(nint h)
@@ -665,51 +660,17 @@ internal class InputEngine : IDisposable
 	// Injects a key for remapped Naga buttons and for delayed keyboard keys, applying Snap Tap to A/D.
 	private void Output(int vk, bool ext, bool down)
 	{
-		if (snapTapActive && (vk == VK_A || vk == VK_D))
+		if (snapTapActive && snap.Handles(vk))
 		{
-			int other = ((vk == VK_A) ? VK_D : VK_A);
-			if (down)
-			{
-				if (physHeld.Contains(vk))
-				{
-					if (outHeld.Contains(vk))
-					{
-						Native.SendKey(vk, ext: false, down: true);
-					}
-					return;
-				}
-				physHeld.Add(vk);
-				if (outHeld.Remove(other))
-				{
-					injected.Remove(other);
-					Native.SendKey(other, ext: false, down: false);
-				}
-				outHeld.Add(vk);
-				injected.Add(vk);
-				Native.SendKey(vk, ext: false, down: true);
-				return;
-			}
-			physHeld.Remove(vk);
-			if (outHeld.Remove(vk))
-			{
-				injected.Remove(vk);
-				Native.SendKey(vk, ext: false, down: false);
-			}
-			if (physHeld.Contains(other) && outHeld.Add(other))
-			{
-				injected.Add(other);
-				Native.SendKey(other, ext: false, down: true);
-			}
+			snap.OnOutput(vk, down, sendPlain);
 			return;
 		}
 		if (down)
 		{
-			outHeld.Add(vk);
 			injected.Add(vk);
 		}
 		else
 		{
-			outHeld.Remove(vk);
 			injected.Remove(vk);
 		}
 		Native.SendKey(vk, ext || Keys2.IsExt(vk), down);
@@ -717,18 +678,17 @@ internal class InputEngine : IDisposable
 
 	private void ReleaseAll()
 	{
+		snap.Reset(sendPlain);
 		foreach (int item in injected)
 		{
 			Native.SendKey(item, Keys2.IsExt(item), down: false);
 		}
 		injected.Clear();
-		outHeld.Clear();
-		physHeld.Clear();
 		pending.Clear();
 		macroKeysDown.Clear();
 	}
 
-	private void RunMacro(Macro m)
+	private void RunMacro(PreparedMacro m)
 	{
 		if (macroRunning)
 		{
@@ -742,8 +702,6 @@ internal class InputEngine : IDisposable
 	private void MacroLoop()
 	{
 		using Native.PreciseTimer timer = new Native.PreciseTimer();
-		Native.INPUT[] batch = new Native.INPUT[64];
-		HashSet<(int, bool)> held = new HashSet<(int, bool)>();
 		while (true)
 		{
 			macroSignal.WaitOne();
@@ -751,7 +709,7 @@ internal class InputEngine : IDisposable
 			{
 				return;
 			}
-			Macro m = Interlocked.Exchange(ref macroNext, null);
+			PreparedMacro m = Interlocked.Exchange(ref macroNext, null);
 			if (m == null)
 			{
 				macroRunning = false;
@@ -762,39 +720,14 @@ internal class InputEngine : IDisposable
 			{
 				Native.timeBeginPeriod(1u);
 			}
-			int count = 0;
 			try
 			{
-				// Consecutive steps with no delay go out in one SendInput call, so they land in the same
-				// input frame in that exact order; a delay flushes the batch and then waits.
-				foreach (MacroStep step in m.Steps)
+				MacroPlan.Segment[] segs = m.Plan.Segments;
+				for (int i = 0; i < segs.Length; i++)
 				{
-					if (step.Vk != 0)
-					{
-						if (count == batch.Length)
-						{
-							Native.SendKeys(batch, count);
-							count = 0;
-						}
-						batch[count++] = Native.KeyInput(step.Vk, step.Ext, step.Down);
-						if (step.Down)
-						{
-							held.Add((step.Vk, step.Ext));
-						}
-						else
-						{
-							held.Remove((step.Vk, step.Ext));
-						}
-					}
-					if (step.DelayMs > 0)
-					{
-						Native.SendKeys(batch, count);
-						count = 0;
-						timer.Sleep(step.DelayMs);
-					}
+					Native.SendKeys(m.Batches[i], m.Batches[i].Length);
+					timer.Sleep(segs[i].DelayMs);
 				}
-				Native.SendKeys(batch, count);
-				count = 0;
 			}
 			catch (Exception ex)
 			{
@@ -802,18 +735,7 @@ internal class InputEngine : IDisposable
 			}
 			finally
 			{
-				count = 0;
-				foreach (var (vk, ext) in held)
-				{
-					batch[count++] = Native.KeyInput(vk, ext, down: false);
-					if (count == batch.Length)
-					{
-						Native.SendKeys(batch, count);
-						count = 0;
-					}
-				}
-				Native.SendKeys(batch, count);
-				held.Clear();
+				Native.SendKeys(m.Release, m.Release.Length);
 				if (lowRes)
 				{
 					Native.timeEndPeriod(1u);
