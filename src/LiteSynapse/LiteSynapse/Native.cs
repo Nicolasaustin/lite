@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace LiteSynapse;
 
@@ -136,10 +137,13 @@ internal static class Native
 	[DllImport("kernel32", CharSet = CharSet.Unicode)]
 	public static extern bool QueryFullProcessImageName(nint h, uint flags, StringBuilder b, ref uint size);
 
-	public static void SendKey(int vk, bool ext, bool down)
+	private static readonly int InputSize = Marshal.SizeOf<INPUT>();
+
+	[ThreadStatic]
+	private static INPUT[] one;
+
+	public static INPUT KeyInput(int vk, bool ext, bool down)
 	{
-		uint sc = MapVirtualKey((uint)vk, 0u);
-		uint flags = (uint)(8 | ((!down) ? 2 : 0)) | (ext ? 1u : 0u);
 		INPUT i = new INPUT
 		{
 			type = 1u
@@ -147,11 +151,82 @@ internal static class Native
 		i.u.ki = new KEYBDINPUT
 		{
 			vk = 0,
-			sc = (ushort)sc,
-			flags = flags,
+			sc = (ushort)MapVirtualKey((uint)vk, 0u),
+			flags = (uint)(8 | ((!down) ? 2 : 0)) | (ext ? 1u : 0u),
 			extra = MAGIC
 		};
-		SendInput(1u, new INPUT[1] { i }, Marshal.SizeOf<INPUT>());
+		return i;
+	}
+
+	public static void SendKey(int vk, bool ext, bool down)
+	{
+		INPUT[] a = one ??= new INPUT[1];
+		a[0] = KeyInput(vk, ext, down);
+		SendInput(1u, a, InputSize);
+	}
+
+	// Sends several key events in one call so nothing else can land between them (e.g. jump + release attack).
+	public static void SendKeys(INPUT[] batch, int count)
+	{
+		if (count > 0)
+		{
+			SendInput((uint)count, batch, InputSize);
+		}
+	}
+
+	[DllImport("kernel32")]
+	private static extern nint GetCurrentProcess();
+
+	[DllImport("kernel32")]
+	private static extern bool SetPriorityClass(nint h, uint cls);
+
+	// Above-normal only while the keyboard hook is live, so the hook answers quickly even when a game saturates the CPU.
+	public static void SetInputPriority(bool high)
+	{
+		SetPriorityClass(GetCurrentProcess(), high ? 0x8000u : 0x20u);
+	}
+
+	[DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+	private static extern nint CreateWaitableTimerExW(nint attr, string name, uint flags, uint access);
+
+	[DllImport("kernel32")]
+	private static extern bool SetWaitableTimer(nint h, ref long due, int period, nint completion, nint arg, bool resume);
+
+	[DllImport("kernel32")]
+	private static extern uint WaitForSingleObject(nint h, uint ms);
+
+	// Millisecond-accurate waits without raising the system-wide timer resolution (Windows 10 1803+).
+	public sealed class PreciseTimer : IDisposable
+	{
+		private nint h = CreateWaitableTimerExW(IntPtr.Zero, null, 2u, 0x1F0003u);
+
+		public bool HighResolution => h != IntPtr.Zero;
+
+		public void Sleep(int ms)
+		{
+			if (ms <= 0)
+			{
+				return;
+			}
+			long due = -10000L * ms;
+			if (h != IntPtr.Zero && SetWaitableTimer(h, ref due, 0, IntPtr.Zero, IntPtr.Zero, resume: false))
+			{
+				WaitForSingleObject(h, uint.MaxValue);
+			}
+			else
+			{
+				Thread.Sleep(ms);
+			}
+		}
+
+		public void Dispose()
+		{
+			if (h != IntPtr.Zero)
+			{
+				CloseHandle(h);
+				h = IntPtr.Zero;
+			}
+		}
 	}
 
 	public static string ForegroundExe()
