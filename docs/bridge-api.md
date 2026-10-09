@@ -16,7 +16,7 @@ All JSON property names are camelCase.
   - `{ "type": "progress", "op": "onboard", "text": "Writing buttons..." }` — during long operations.
   - `{ "type": "navigate", "page": "settings", "tab": "general" }` — the app asks the page to show a page/tab
     (tray "Settings", command line `--page/--tab/--mem`). Pages: overview, mouse, keyboard, macros, games, settings;
-    `tab` is optional (mouse: buttons, performance, lighting, onboard, calibration; keyboard: macrokeys, snaptap, lighting;
+    `tab` is optional (mouse: buttons (shown as "Customize"), performance, lighting, onboard; keyboard: macrokeys, snaptap, lighting;
     settings: general, gaming, performance, appearance, maintenance, log).
 - Replies are sent with `CoreWebView2.PostWebMessageAsJson`. JS listens with `window.chrome.webview.addEventListener('message', e => e.data)`.
 - When the page is opened outside WebView2 (no `window.chrome.webview`), it uses a mock bridge (`tools/ui-preview/mock-bridge.js`) for previews only.
@@ -51,7 +51,7 @@ All JSON property names are camelCase.
   ],
   "macros": [ { "name": "Jumpthrow", "steps": [ { "vk": 109, "ext": false, "down": true, "delayMs": 0 } ] } ],
   "games": [ { "profile": "CS2", "exes": ["cs2.exe"], "keyboardProfile": "gamer - S3" } ],
-  "calibration": { "Side1": "3", "Scroll": "Space" },   // label of the key each button sends; missing id = not calibrated
+  "calibration": { "Side1": "3", "Scroll": "Space" },   // keys recorded by the classic calibration (software fallback only; the page shows factory defaults)
   "buttonIds": ["Side1", "...", "Side12", "Scroll", "M1", "M2", "TiltL", "TiltR"],
   "onboard": { "3": "CS2" },        // slot number (string) -> profile name last written there
   "liveSlots": [1, 2],              // slots LiteSynapse uses for live profiles ([] when liveWrite is off)
@@ -106,7 +106,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `saveMacro` | `{ originalName: string\|null, macro: { name, steps } }` | State (rename updates keyboard macro-key references) |
 | `deleteMacro` | `{ name }` | State (removes references from keyboard profiles) |
 | `onboardWrite` | `{ slot: 2..5, profile }` | `{ ok: bool, message }` (sends `progress` pushes while writing) |
-| `calibrate` | `{}` | `null` — opens the native calibration window |
+| `calibrate` | `{}` | `null` — opens the native calibration window (classic; the page no longer offers it) |
 | `probeMouseLighting` | `{}` | `{ zones: [ { id: 0, name: "All zones" }, ... ] }` (read-only probe) |
 | `setMouseLighting` | `{ profile?: name (default: active), effect: "off"\|"static"\|"breathing"\|"spectrum", color: "#RRGGBB", brightness: 0..100 }` | State — saved on that mouse profile, applied now if it is active |
 | `setCompetitiveSafe` | `{ on }` | State |
@@ -122,6 +122,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `getLog` | `{ lines: 200 }` | `string` |
 | `setAccent` | `{ accent }` | State |
 | `setCloseOnGame` | `{ on }` | State — saved in data/ui.json |
+| `exitApp` | `{}` | `null` — exits LiteSynapse like the tray menu's Exit: the window closes and the mouse goes back to its own onboard slot |
 
 Unknown commands reply `ok: false`.
 

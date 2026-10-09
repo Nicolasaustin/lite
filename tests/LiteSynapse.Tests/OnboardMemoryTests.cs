@@ -118,7 +118,15 @@ public class OnboardMemoryTests
 		Assert.Equal(0, OnboardMemory.ModMask(null));
 	}
 
-	// The deterministic GUID is the only intended difference from the writer that works on the user's mouse.
+	// Factory-default commands for the unmapped buttons, keyed by button code.
+	private static Dictionary<byte, OnboardCommand> DefaultCommands(MouseProfile p, List<OnboardCommand> list)
+	{
+		HashSet<int> codes = OnboardMemory.FactoryButtons.Where(d => !p.Buttons.ContainsKey(d.Id)).Select(d => OnboardMemory.ButtonCode(d.Id)).ToHashSet();
+		return list.Where((OnboardCommand c) => c.Class == 2 && c.Id == 12 && codes.Contains(c.Args[1])).ToDictionary((OnboardCommand c) => c.Args[1]);
+	}
+
+	// Besides the deterministic GUID, the only intended difference from the writer that works on the user's mouse:
+	// buttons the profile does not remap get their factory function written (so no slot keeps an old assignment).
 	[Fact]
 	public void Existing_profiles_produce_the_exact_bytes_of_the_previous_writer()
 	{
@@ -135,9 +143,10 @@ public class OnboardMemoryTests
 					List<OnboardCommand> built = OnboardMemory.BuildCommands(slot, p, out List<string> problems);
 					List<string> legacy = LegacyOnboard.Commands(slot, p, OnboardMemory.ProfileGuid(p).ToByteArray())
 						.Select(c => Hex(c.Class, c.Id, c.Size, c.Args)).ToList();
-					Assert.Equal(legacy, Hex(built));
+					Dictionary<byte, OnboardCommand> defaults = DefaultCommands(p, built);
+					Assert.Equal(legacy, Hex(built.Where((OnboardCommand c) => !defaults.ContainsValue(c))));
 					Assert.Empty(problems);
-					Assert.All(built, (OnboardCommand c) => Assert.Null(c.Unverified));
+					Assert.All(built.Where((OnboardCommand c) => !defaults.ContainsValue(c)), (OnboardCommand c) => Assert.Null(c.Unverified));
 				}
 			}
 		}
@@ -148,6 +157,49 @@ public class OnboardMemoryTests
 	}
 
 	[Fact]
+	public void Unmapped_buttons_get_their_factory_function()
+	{
+		MouseProfile p = Profile(("Side1", "KEY_W", new string[0]), ("M1", "KEY_LEFT_SHIFT", new string[0]));
+		List<OnboardCommand> list = OnboardMemory.BuildCommands(2, p, out List<string> problems);
+		Assert.Empty(problems);
+		Dictionary<byte, OnboardCommand> buttons = ButtonCommands(list);
+		// Side1 keeps its remap; Side2..Side12 send 2..9, 0, -, = (HID usages 0x1F..0x27, 0x2D, 0x2E).
+		Assert.Equal(new byte[] { 2, 64, 0, 2, 2, 0, 0x1A }, buttons[64].Args);
+		byte[] usages = { 0x1F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x2D, 0x2E };
+		for (int n = 2; n <= 12; n++)
+		{
+			Assert.Equal(new byte[] { 2, (byte)(63 + n), 0, 2, 2, 0, usages[n - 2] }, buttons[(byte)(63 + n)].Args);
+			Assert.True(buttons[(byte)(63 + n)].Required);
+		}
+		// The wheel click becomes the middle button (not yet confirmed on the mouse, so a rejection is only reported).
+		Assert.Equal(new byte[] { 2, 3, 0, 1, 1, 3 }, buttons[3].Args);
+		Assert.False(buttons[3].Required);
+		// M1 keeps its remap; M2 and the tilts have no known factory code and are not written.
+		Assert.Equal(new byte[] { 2, 11, 0, 2, 2, 0, 0xE1 }, buttons[11].Args);
+		Assert.False(buttons.ContainsKey(12));
+		Assert.False(buttons.ContainsKey(52));
+		Assert.False(buttons.ContainsKey(53));
+		// A profile that remaps everything writes no defaults.
+		MouseProfile full = Profile();
+		foreach (var (id, _) in OnboardMemory.FactoryButtons)
+		{
+			full.Buttons[id] = new KeyTarget { Key = "KEY_A" };
+		}
+		Assert.Empty(DefaultCommands(full, OnboardMemory.BuildCommands(1, full)));
+	}
+
+	[Fact]
+	public void Resetting_a_remap_changes_what_is_written()
+	{
+		// Removing a remap writes the factory key instead of leaving the slot's old assignment.
+		MouseProfile p = Profile(("Side8", "KEY_W", new string[0]));
+		string remapped = OnboardSlots.ContentHash(p);
+		p.Buttons.Remove("Side8");
+		Assert.NotEqual(remapped, OnboardSlots.ContentHash(p));
+		Assert.Equal(new byte[] { 1, 71, 0, 2, 2, 0, 0x25 }, ButtonCommands(OnboardMemory.BuildCommands(1, p))[71].Args);
+	}
+
+	[Fact]
 	public void Button_actions_for_keys_disabled_and_middle_click()
 	{
 		MouseProfile p = Profile(("Side1", "KEY_W", new[] { "KEY_LEFT_CTRL", "KEY_LEFT_WIN" }), ("Side3", "DISABLED", new string[0]),
@@ -155,7 +207,8 @@ public class OnboardMemoryTests
 		List<OnboardCommand> list = OnboardMemory.BuildCommands(3, p, out List<string> problems);
 		Assert.Empty(problems);
 		Dictionary<byte, OnboardCommand> buttons = ButtonCommands(list);
-		Assert.Equal(4, buttons.Count);
+		// The four remaps, plus the factory keys of the other side buttons (Side2, Side5..Side12).
+		Assert.Equal(4 + 9, buttons.Count);
 		// Side1 = 64: keyboard type 2, length 2, {mods, usage}.
 		Assert.Equal(new byte[] { 3, 64, 0, 2, 2, 0x09, 0x1A }, buttons[64].Args);
 		Assert.True(buttons[64].Required);
@@ -182,7 +235,7 @@ public class OnboardMemoryTests
 		Assert.Equal(new byte[] { 2, 1, 0, 1, 1, 2 }, click[0].Args);
 		Assert.Equal(new byte[] { 2, 2, 0, 1, 1, 1 }, click[1].Args);
 		p.ClickSwap = false;
-		click = OnboardMemory.BuildCommands(2, p).Where((OnboardCommand c) => c.Class == 2 && c.Id == 12).ToList();
+		click = OnboardMemory.BuildCommands(2, p).Where((OnboardCommand c) => c.Class == 2 && c.Id == 12 && c.Args[1] <= 2).ToList();
 		Assert.Equal(new byte[] { 2, 1, 0, 1, 1, 1 }, click[0].Args);
 		Assert.Equal(new byte[] { 2, 2, 0, 1, 1, 2 }, click[1].Args);
 		Assert.Equal(2, click.Count);
@@ -275,8 +328,13 @@ public class OnboardMemoryTests
 		Assert.Contains(problems, (string s) => s.StartsWith("Side13:"));
 		Assert.Contains(problems, (string s) => s.StartsWith("Side5:") && s.Contains("KEY_LEFT_CTRL"));
 		Assert.Contains(problems, (string s) => s.StartsWith("Side6:"));
+		// Side13 does not exist; Side1 and Side6 cannot be written as set, so they get their factory key (1, 6), like
+		// the buttons the profile leaves alone. Nothing keeps the slot's old assignment.
 		Dictionary<byte, OnboardCommand> buttons = ButtonCommands(list);
-		Assert.Equal(new byte[] { 65, 68 }, buttons.Keys.OrderBy((byte b) => b));
+		Assert.Equal(new byte[] { 3, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75 }, buttons.Keys.OrderBy((byte b) => b));
+		Assert.Equal(new byte[] { 1, 64, 0, 2, 2, 0, 0x1E }, buttons[64].Args);
+		Assert.Equal(new byte[] { 1, 65, 0, 2, 2, 0, 0x05 }, buttons[65].Args);
+		Assert.Equal(new byte[] { 1, 69, 0, 2, 2, 0, 0x23 }, buttons[69].Args);
 		Assert.False(OnboardMemory.CanWrite(p.Buttons["Side1"]));
 		Assert.True(OnboardMemory.CanWrite(p.Buttons["Side2"]));
 		Assert.True(OnboardMemory.CanWrite(new KeyTarget { Key = "MOUSE_MIDDLE" }));

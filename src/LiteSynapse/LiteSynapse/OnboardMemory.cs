@@ -26,6 +26,18 @@ internal static class OnboardMemory
 {
 	public static readonly string[] SlotNames = new string[6] { "", "White", "Red", "Green", "Blue", "Cyan" };
 
+	// What a button does when the profile does not remap it: the Naga's factory function. Synapse's out-of-box
+	// profile has no mappings at all and names the side buttons by these keys (KEY_1 .. KEY_EQUAL). Written for every
+	// unmapped button, so a slot never keeps the previous profile's assignment. The tilts and the two top buttons
+	// are missing on purpose: their factory codes (horizontal scroll, DPI stage up/down) are not known, so an
+	// unmapped one is left as the slot has it.
+	public static readonly IReadOnlyList<(string Id, string Key)> FactoryButtons = new (string, string)[13]
+	{
+		("Side1", "KEY_1"), ("Side2", "KEY_2"), ("Side3", "KEY_3"), ("Side4", "KEY_4"), ("Side5", "KEY_5"),
+		("Side6", "KEY_6"), ("Side7", "KEY_7"), ("Side8", "KEY_8"), ("Side9", "KEY_9"), ("Side10", "KEY_0"),
+		("Side11", "KEY_HYPHEN"), ("Side12", "KEY_EQUAL"), ("Scroll", KeyTarget.MouseMiddle)
+	};
+
 	private static readonly Dictionary<string, int> Usages = BuildUsages();
 
 	internal static int ButtonCode(string id)
@@ -273,8 +285,17 @@ internal static class OnboardMemory
 		list.Add(new OnboardCommand(2, 12, 10, new byte[6] { S, 1, 0, 1, 1, leftSends }));
 		list.Add(new OnboardCommand(2, 12, 10, new byte[6] { S, 2, 0, 1, 1, rightSends }));
 		bool firstButton = true;
-		foreach (var (id, t) in p.Buttons ?? new Dictionary<string, KeyTarget>())
+		Dictionary<string, KeyTarget> mapped = p.Buttons ?? new Dictionary<string, KeyTarget>();
+		IEnumerable<(string, KeyTarget)> buttons = mapped.Select((KeyValuePair<string, KeyTarget> kv) => (kv.Key, kv.Value))
+			.Concat(from d in FactoryButtons
+				where !mapped.ContainsKey(d.Id)
+				select (d.Id, new KeyTarget
+				{
+					Key = d.Key
+				}));
+		foreach (var (id, target) in buttons)
 		{
+			KeyTarget t = target;
 			int code = ButtonCode(id);
 			if (code == 0)
 			{
@@ -285,7 +306,17 @@ internal static class OnboardMemory
 			if (action == null)
 			{
 				problems.Add(id + ": " + problem);
-				continue;
+				// Not writable: the button gets its factory function rather than keeping the slot's old one.
+				string factory = FactoryButtons.FirstOrDefault(((string Id, string Key) d) => d.Id == id).Key;
+				if (factory == null)
+				{
+					continue;
+				}
+				t = new KeyTarget
+				{
+					Key = factory
+				};
+				action = Action(t, out unverified, out _);
 			}
 			foreach (string mod in t.Mods ?? new List<string>())
 			{

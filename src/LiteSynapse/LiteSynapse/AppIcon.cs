@@ -7,113 +7,62 @@ using System.Linq;
 
 namespace LiteSynapse;
 
+// The app's logo: the round "RzR optimizer" badge, as PNG frames embedded from src/LiteSynapse/icon (built by
+// tools/icon/make-icon.py; app.ico holds the same frames for the exe, the tray and the installer). Small sizes are
+// a simplified drawing of the logo, 128 and 256 the original artwork.
 internal static class AppIcon
 {
+	public static readonly int[] Sizes = new int[9] { 16, 20, 24, 32, 40, 48, 64, 128, 256 };
+
+	// The logo at s x s pixels: the embedded frame of that size, or the next larger one scaled down.
 	public static Bitmap Make(int s)
 	{
-		//IL_0007: Unknown result type (might be due to invalid IL or missing references)
-		//IL_000d: Expected Obj, but got Unknown
-		//IL_002b: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0032: Expected Obj, but got Unknown
-		//IL_00e3: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00e8: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00ef: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00f8: Expected Obj, but got Unknown
-		Bitmap bmp = new Bitmap(s, s, (PixelFormat)2498570);
-		Graphics g = Graphics.FromImage((Image)(object)bmp);
-		try
+		int pick = Sizes.FirstOrDefault((int x) => x >= s);
+		if (pick == 0)
 		{
-			g.SmoothingMode = (SmoothingMode)4;
-			g.Clear(Color.Transparent);
-			SolidBrush b = new SolidBrush(Theme.Green);
-			try
-			{
-				g.FillEllipse((Brush)(object)b, 0.5f, 0.5f, (float)(s - 1), (float)(s - 1));
-			}
-			finally
-			{
-				((IDisposable)b)?.Dispose();
-			}
-			float c = (float)s / 2f;
-			float u = (float)s / 100f;
-			PointF center = new PointF(c, c + 2f * u);
-			PointF[] nodes = new PointF[3]
-			{
-				new PointF(c - 20f * u, c - 17f * u),
-				new PointF(c + 20f * u, c - 17f * u),
-				new PointF(c, c + 27f * u)
-			};
-			Pen pen = new Pen(Color.Black, 5.5f * u)
-			{
-				StartCap = (LineCap)2,
-				EndCap = (LineCap)2
-			};
-			try
-			{
-				PointF[] array = nodes;
-				foreach (PointF n in array)
-				{
-					g.DrawLine(pen, center, n);
-				}
-				g.FillEllipse(Brushes.Black, center.X - 10f * u, center.Y - 10f * u, 20f * u, 20f * u);
-				array = nodes;
-				for (int i = 0; i < array.Length; i++)
-				{
-					PointF n2 = array[i];
-					g.FillEllipse(Brushes.Black, n2.X - 7f * u, n2.Y - 7f * u, 14f * u, 14f * u);
-				}
-				return bmp;
-			}
-			finally
-			{
-				((IDisposable)pen)?.Dispose();
-			}
+			pick = Sizes[^1];
 		}
-		finally
+		using Stream stream = typeof(AppIcon).Assembly.GetManifestResourceStream($"LiteSynapse.icon-{pick}.png");
+		if (stream == null)
 		{
-			((IDisposable)g)?.Dispose();
+			return Draw(s);
 		}
+		using Bitmap frame = new Bitmap(stream);
+		Bitmap bmp = new Bitmap(s, s, PixelFormat.Format32bppArgb);
+		using Graphics g = Graphics.FromImage(bmp);
+		g.Clear(Color.Transparent);
+		g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+		g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+		g.CompositingQuality = CompositingQuality.HighQuality;
+		g.DrawImage(frame, 0, 0, s, s);
+		return bmp;
 	}
 
 	public static Icon Icon(int size = 32)
 	{
-		Bitmap b = Make(size);
-		try
-		{
-			return System.Drawing.Icon.FromHandle(b.GetHicon());
-		}
-		finally
-		{
-			((IDisposable)b)?.Dispose();
-		}
+		using Bitmap b = Make(size);
+		return System.Drawing.Icon.FromHandle(b.GetHicon());
 	}
 
+	// Writes app.ico from the embedded frames (PNG-compressed, Windows Vista and later).
 	public static void WriteIco(string path)
 	{
-		int[] sizes = new int[6] { 16, 24, 32, 48, 64, 256 };
-		byte[][] frames = sizes.Select((int sz) =>
+		byte[][] frames = Sizes.Select((int sz) =>
 		{
-			Bitmap val = Make(sz);
-			try
-			{
-				using MemoryStream memoryStream = new MemoryStream();
-				((Image)val).Save((Stream)memoryStream, ImageFormat.Png);
-				return memoryStream.ToArray();
-			}
-			finally
-			{
-				((IDisposable)val)?.Dispose();
-			}
+			using Bitmap b = Make(sz);
+			using MemoryStream ms = new MemoryStream();
+			b.Save(ms, ImageFormat.Png);
+			return ms.ToArray();
 		}).ToArray();
 		using BinaryWriter w = new BinaryWriter(File.Create(path));
 		w.Write((short)0);
 		w.Write((short)1);
-		w.Write((short)sizes.Length);
-		int offset = 6 + 16 * sizes.Length;
-		for (int i = 0; i < sizes.Length; i++)
+		w.Write((short)Sizes.Length);
+		int offset = 6 + 16 * Sizes.Length;
+		for (int i = 0; i < Sizes.Length; i++)
 		{
-			w.Write((byte)((sizes[i] < 256) ? ((uint)sizes[i]) : 0u));
-			w.Write((byte)((sizes[i] < 256) ? ((uint)sizes[i]) : 0u));
+			w.Write((byte)((Sizes[i] < 256) ? Sizes[i] : 0));
+			w.Write((byte)((Sizes[i] < 256) ? Sizes[i] : 0));
 			w.Write((byte)0);
 			w.Write((byte)0);
 			w.Write((short)1);
@@ -122,10 +71,39 @@ internal static class AppIcon
 			w.Write(offset);
 			offset += frames[i].Length;
 		}
-		byte[][] array = frames;
-		foreach (byte[] f in array)
+		foreach (byte[] f in frames)
 		{
 			w.Write(f);
 		}
+	}
+
+	// Fallback if the frames are missing from the build: the logo's look (dark disc, green ring, check mark).
+	private static Bitmap Draw(int s)
+	{
+		Bitmap bmp = new Bitmap(s, s, PixelFormat.Format32bppArgb);
+		using Graphics g = Graphics.FromImage(bmp);
+		g.SmoothingMode = SmoothingMode.AntiAlias;
+		g.Clear(Color.Transparent);
+		Color green = Color.FromArgb(0x70, 0xE0, 0x60);
+		using (SolidBrush disc = new SolidBrush(Color.FromArgb(0x21, 0x2A, 0x2E)))
+		{
+			g.FillEllipse(disc, 0.5f, 0.5f, s - 1f, s - 1f);
+		}
+		float u = s / 100f;
+		using Pen ring = new Pen(green, Math.Max(1f, 6f * u));
+		g.DrawEllipse(ring, 12f * u, 12f * u, 76f * u, 76f * u);
+		using Pen check = new Pen(green, Math.Max(1.2f, 8f * u))
+		{
+			StartCap = LineCap.Round,
+			EndCap = LineCap.Round,
+			LineJoin = LineJoin.Round
+		};
+		g.DrawLines(check, new PointF[3]
+		{
+			new PointF(33f * u, 51f * u),
+			new PointF(45f * u, 63f * u),
+			new PointF(68f * u, 39f * u)
+		});
+		return bmp;
 	}
 }

@@ -40,6 +40,8 @@
   <ItemGroup>
     <!-- The HTML window (WebWindow loads it with NavigateToString). -->
     <EmbeddedResource Include="ui\index.html" LogicalName="LiteSynapse.ui.index.html" Condition="Exists('ui\index.html')" />
+    <!-- The logo at each icon size (tools/icon/make-icon.py) for the window icons and the tray panel. -->
+    <EmbeddedResource Include="icon\icon-*.png" LogicalName="LiteSynapse.%(Filename).png" />
     <!-- Run elevated by the Razer clean-up (RazerLeftovers.FindDriverScript looks in tools\ next to the exe). -->
     <None Update="tools\remove-razer-filter-drivers.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

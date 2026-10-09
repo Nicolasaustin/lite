@@ -24,7 +24,7 @@ internal sealed class Bridge
 	private static readonly HashSet<string> ReadOnlyCommands = new HashSet<string>(StringComparer.Ordinal)
 	{
 		"getState", "getDeviceInfo", "runningApps", "getLog", "probeMouseLighting", "exportProfile", "calibrate",
-		"openConfigFolder", "openMouseProperties", "openClassicWindow", "runSelfTest"
+		"openConfigFolder", "openMouseProperties", "openClassicWindow", "runSelfTest", "exitApp"
 	};
 
 	private static readonly string AppVersion = ReadVersion();
@@ -116,12 +116,21 @@ internal sealed class Bridge
 			}),
 			["getLog"] = GetLog,
 			["setAccent"] = Now(SetAccent),
-			// Not in the v1.2 contract yet: "close this window when a game starts" (state.closeOnGame).
+			// "Close this window when a game starts" (state.closeOnGame).
 			["setCloseOnGame"] = Now(a =>
 			{
 				prefs.CloseOnGame = a.Bool("on");
 				prefs.Save();
 				return State();
+			}),
+			// Same as the tray menu's Exit: the tray loop ends and the service puts the mouse back on its own slot.
+			["exitApp"] = Now(_ =>
+			{
+				if (!TrayHost.RequestExit())
+				{
+					throw new BridgeException("LiteSynapse is not running in the tray, so there is nothing to exit.");
+				}
+				return null;
 			})
 		};
 	}

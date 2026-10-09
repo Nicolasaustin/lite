@@ -329,6 +329,7 @@
     reloadConfig: () => st,
     openMouseProperties: () => null,
     openClassicWindow: () => null,
+    exitApp: () => null,
     getLog: a => { const n = (a && a.lines) || 200; return logLines.slice(-n).join('\n'); },
     setAccent: a => { if (!ACCENTS.includes(a.accent)) fail(`Unknown accent "${a.accent}".`); st.accent = a.accent; return st; },
     setCloseOnGame: a => { st.closeOnGame = bool(a.on, 'on'); return st; }

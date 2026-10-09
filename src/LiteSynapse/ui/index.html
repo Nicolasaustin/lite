@@ -81,12 +81,9 @@ p { margin: 0; }
   background: var(--side); border-right: 1px solid var(--line);
 }
 .brand { display: flex; align-items: center; gap: 11px; padding: 2px 10px 22px; }
-.mark {
-  width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center;
-  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 78%, white) 0%, var(--accent) 42%, color-mix(in srgb, var(--accent) 62%, black) 100%);
-  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--accent) 55%, transparent), inset 0 1px 0 rgba(255, 255, 255, .35);
-}
-.mark.lg { width: 56px; height: 56px; border-radius: 16px; }
+.mark { width: 30px; height: 30px; flex: none; display: grid; place-items: center; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .45)); }
+.mark svg { display: block; }
+.mark.lg { width: 56px; height: 56px; }
 .brand-name { font-size: 15px; font-weight: 650; letter-spacing: -.01em; }
 .brand-sub { font-size: 11.5px; color: var(--faint); margin-top: 1px; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
@@ -110,6 +107,9 @@ p { margin: 0; }
 .dot.ok { background: var(--ok); }
 .dot.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); }
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+.foot-row { display: flex; align-items: center; gap: 8px; }
+.foot-row .version { flex: 1; min-width: 0; }
+.exit-btn { flex: none; }
 .auto-pill {
   display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 12px;
   background: var(--surface); border: 1px solid var(--line-2);
@@ -512,7 +512,6 @@ button.stat:hover .stat-ico { color: var(--accent); }
 .mz .co > text { font-size: 15.5px; font-weight: 600; fill: var(--text); }
 .mz .co.set > text { fill: var(--accent-text); }
 .mz .co.off > text { fill: var(--faint); text-decoration: line-through; }
-.mz .co.none > text { fill: var(--muted); font-weight: 500; font-style: italic; }
 .mz .co.fixed > text { fill: var(--muted); font-weight: 500; }
 .mz .ln { fill: none; stroke: rgba(255, 255, 255, .26); stroke-width: 1; pointer-events: none; }
 .mz .co.fixed .ln { stroke: rgba(255, 255, 255, .12); }
@@ -591,7 +590,7 @@ button.stat:hover .stat-ico { color: var(--accent); }
 .pkey.wide { padding: 0 12px; }
 .assign-f { display: flex; align-items: center; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
 
-/* ---- Mouse: performance, lighting, onboard, calibration -------------------------------------- */
+/* ---- Mouse: performance, lighting, onboard ---------------------------------------------------- */
 .dpi-row {
   display: grid; grid-template-columns: 30px 64px minmax(0, 1fr) 112px 30px; gap: 14px; align-items: center;
   padding: 10px 12px; border-radius: 12px; border: 1px solid transparent; transition: background var(--t), border-color var(--t);
@@ -660,10 +659,6 @@ details.adv summary:hover { color: var(--text); }
 .slot-c { font-size: 12px; color: var(--muted); }
 @media (max-width: 1100px) { .slot-row { grid-template-columns: 112px minmax(0, 1fr) 168px 124px; gap: 12px; } }
 
-.cal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.cal-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--line-2); min-width: 0; }
-.cal-item .nm { font-size: 12.5px; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-item.missing { border-style: dashed; background: transparent; }
 
 /* ---- Keyboard -------------------------------------------------------------------------------- */
 .mk-grid { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 28px; align-items: center; }
@@ -943,10 +938,35 @@ function svg(markup) {
   t.innerHTML = markup.trim();
   return t.content.firstChild;
 }
+// The app's logo (the round badge of app.ico), drawn like its small icon sizes: dark disc, green rings with nodes
+// and the rounded square with a check mark (tools/icon/small-icons.mjs draws the same).
+function logoSvg(S) {
+  const G = '#70E060', D = '#212A2E', c = S / 2, R = S / 2 - 0.5;
+  const f = v => Math.round(v * 100) / 100;
+  const pt = (k, deg) => [f(c + k * R * Math.cos(deg * Math.PI / 180)), f(c + k * R * Math.sin(deg * Math.PI / 180))];
+  const out = [`<circle cx="${c}" cy="${c}" r="${f(R)}" fill="${D}"/>`];
+  const ring = (k, w) => out.push(`<circle cx="${c}" cy="${c}" r="${f(k * R)}" fill="none" stroke="${G}" stroke-width="${w}"/>`);
+  const square = (side, rx, w) => out.push(`<rect x="${f(c - side / 2)}" y="${f(c - side / 2)}" width="${f(side)}" height="${f(side)}" rx="${f(rx)}" fill="none" stroke="${G}" stroke-width="${w}"/>`);
+  const check = w => {
+    const p = [[-0.17, 0.01], [-0.05, 0.13], [0.18, -0.11]].map(([x, y]) => `${f(c + x * R * 1.05)} ${f(c + y * R * 1.05)}`);
+    out.push(`<path d="M${p[0]}L${p[1]}L${p[2]}" fill="none" stroke="${G}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`);
+  };
+  if (S < 40) {
+    ring(0.89, 1.2); ring(0.7, 1.2); square(0.7 * R, 0.13 * R, 1.4); check(1.7);
+  } else {
+    const [x1, y1] = pt(0.89, -113), [x2, y2] = pt(0.89, -122), w = 1.4;
+    out.push(`<path d="M${x1} ${y1}A${f(0.89 * R)} ${f(0.89 * R)} 0 1 1 ${x2} ${y2}" fill="none" stroke="${G}" stroke-width="${w}"/>`);
+    ring(0.78, w); ring(0.7, w);
+    for (const [k, deg] of [[0.89, 180], [0.89, 0], [0.89, -113], [0.89, -122], [0.7, 180], [0.7, 0], [0.7, -90], [0.7, 90]]) {
+      const [x, y] = pt(k, deg);
+      out.push(`<circle cx="${x}" cy="${y}" r="2" fill="${D}" stroke="${G}" stroke-width="${w}"/>`);
+    }
+    square(0.69 * R, 0.11 * R, 1.8); check(2.1);
+  }
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${out.join('')}</svg>`;
+}
 function appMark(large) {
-  const s = large ? 30 : 18;
-  return h('div', { class: cx('mark', large && 'lg'), 'aria-hidden': 'true' },
-    svg(`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="#0A0C0F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4.5v15h10.5"/><path d="M11.5 14.5 16 10"/><circle cx="17" cy="8.5" r="2.4" fill="#0A0C0F" stroke="none"/></svg>`));
+  return h('div', { class: cx('mark', large && 'lg'), 'aria-hidden': 'true' }, svg(logoSvg(large ? 56 : 30)));
 }
 
 /* =============================================================================================
@@ -1159,7 +1179,6 @@ function normalize(s) {
   d.keyboardProfiles = (s.keyboardProfiles || []).map(p => Object.assign({ brightness: 100, snapTap: false, effect: 'static', effectSpeed: 2 }, p, { macroKeys: p.macroKeys || {} }));
   d.macros = (s.macros || []).map(m => ({ name: m.name, steps: m.steps || [] }));
   d.games = (s.games || []).map(g => ({ profile: g.profile, exes: g.exes || [], keyboardProfile: g.keyboardProfile || '' }));
-  d.calibration = s.calibration || {};
   d.buttonIds = (s.buttonIds && s.buttonIds.length) ? s.buttonIds : BUTTON_IDS;
   d.onboard = s.onboard || {};
   d.liveSlots = s.liveSlots || [];
@@ -1188,7 +1207,6 @@ const activeMouse = () => mouseByName(S.activeMouse);
 const activeKb = () => kbByName(S.activeKeyboard);
 const gameOf = name => S.games.find(g => g.profile === name) || null;
 const gameWithExe = exe => S.games.find(g => g.exes.some(e => eqi(e, exe))) || null;
-const calibratedCount = () => S.buttonIds.filter(id => S.calibration[id]).length;
 const isLeftovers = () => {
   const r = S.razer;
   return r.checked && (r.synapseInstalled || r.gmsService === 'running' || r.gmsService === 'stopped' || r.filterDrivers.length > 0 || r.rzCommon);
@@ -1280,11 +1298,11 @@ function showApp() {
 
 const PAGE_IDS = ['overview', 'mouse', 'keyboard', 'macros', 'games', 'settings'];
 const TABS = {
-  mouse: [['buttons', 'Buttons'], ['performance', 'Performance'], ['lighting', 'Lighting'], ['onboard', 'Onboard memory'], ['calibration', 'Calibration']],
+  mouse: [['buttons', 'Customize'], ['performance', 'Performance'], ['lighting', 'Lighting'], ['onboard', 'Onboard memory']],
   keyboard: [['macrokeys', 'Macro keys'], ['snaptap', 'Snap Tap'], ['lighting', 'Lighting']],
   settings: [['general', 'General'], ['gaming', 'Gaming'], ['performance', 'Performance'], ['appearance', 'Appearance'], ['maintenance', 'Maintenance'], ['log', 'Log']]
 };
-const TAB_ALIASES = { onboardmemory: 'onboard', memory: 'onboard', macros: 'macrokeys', keys: 'macrokeys', snap: 'snaptap', logs: 'log', logviewer: 'log', dpi: 'performance' };
+const TAB_ALIASES = { customize: 'buttons', onboardmemory: 'onboard', memory: 'onboard', macros: 'macrokeys', keys: 'macrokeys', snap: 'snaptap', logs: 'log', logviewer: 'log', dpi: 'performance' };
 
 function go(page, tab) {
   const p = String(page || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -1321,8 +1339,23 @@ function renderSidebar() {
           h('div', { class: 'lbl state' }, h('span', { class: cx('dot', S.auto ? 'ok' : 'off') }), 'Auto-switch'),
           h('div', { class: 'sub', title: autoSub }, autoSub)),
         toggle(S.auto, on => setAuto(on), 'Auto-switch', 'sw:auto-side')),
-      h('div', { class: 'version' }, 'LiteSynapse ' + (S.version ? 'v' + S.version : '')))
+      h('div', { class: 'foot-row' },
+        h('div', { class: 'version' }, 'LiteSynapse ' + (S.version ? 'v' + S.version : '')),
+        h('button', {
+          class: 'btn ghost sm exit-btn', 'data-fk': 'exit', title: 'Exit LiteSynapse: the mouse goes back to its own onboard slot',
+          onclick: exitApp
+        }, icon('power', 14), 'Exit')))
   );
+}
+// Like Synapse's Exit: closes the window and the tray app. The mouse goes back to its own onboard slot.
+async function exitApp() {
+  const ok = await confirmModal({
+    title: 'Exit LiteSynapse?', icon: 'power', ok: 'Exit',
+    body: h('div', { class: 'stack tight' },
+      h('div', null, 'The mouse goes back to its own onboard slot and keeps working from its memory.'),
+      h('div', { class: 'muted small' }, 'Macro keys, Snap Tap and automatic game switching stop until you start LiteSynapse again.'))
+  });
+  if (ok) act('exitApp', {});
 }
 function navTail(id) {
   if (id === 'mouse' && !S.mouse.connected) return h('span', { class: 'nav-tail', title: 'Not connected' }, h('span', { class: 'dot off' }));
@@ -1377,10 +1410,6 @@ function tabsBar(page) {
     }, label, tabBadge(page, id))));
 }
 function tabBadge(page, id) {
-  if (page === 'mouse' && id === 'calibration') {
-    const n = calibratedCount();
-    return h('span', { class: cx('badge', n < S.buttonIds.length && 'warn') }, `${n}/${S.buttonIds.length}`);
-  }
   if (page === 'settings' && id === 'performance' && isLeftovers()) return h('span', { class: 'dot warn' });
   return null;
 }
@@ -1669,7 +1698,7 @@ function avatar(name, p, large) {
 }
 
 /* =============================================================================================
-   Mouse buttons: names, calibrated defaults and what each button sends
+   Mouse buttons: names, factory defaults and what each button sends
    ============================================================================================= */
 const SIDE_IDS = Array.from({ length: 12 }, (_, i) => 'Side' + (i + 1));
 const TOP_IDS = ['Scroll', 'TiltL', 'TiltR', 'M1', 'M2'];
@@ -1680,38 +1709,21 @@ const MOUSE_TARGETS = [
   { name: 'DISABLED', label: 'Off', short: 'Off', group: 'Mouse', words: 'off disabled disable none nothing' }
 ];
 
-// Calibration labels are Windows key names (GetKeyNameText): "Shift", "Num 7", "Prnt Scrn". -> KEY_* name.
-const CAL_ALIASES = {
-  shift: 'KEY_LEFT_SHIFT', ctrl: 'KEY_LEFT_CTRL', alt: 'KEY_LEFT_ALT', 'right shift': 'KEY_RIGHT_SHIFT',
-  'right ctrl': 'KEY_RIGHT_CTRL', 'right alt': 'KEY_RIGHT_ALT', 'left windows': 'KEY_LEFT_WIN', 'right windows': 'KEY_RIGHT_WIN',
-  application: 'KEY_MENU', esc: 'KEY_ESCAPE', space: 'KEY_SPACEBAR', up: 'KEY_UP_ARROW', down: 'KEY_DOWN_ARROW',
-  left: 'KEY_LEFT_ARROW', right: 'KEY_RIGHT_ARROW', 'prnt scrn': 'KEY_PRINT_SCREEN', 'num *': 'KEY_NUMPAD_MULTIPLY',
-  'num -': 'KEY_NUMPAD_MINUS', 'num +': 'KEY_NUMPAD_PLUS', 'num /': 'KEY_NUMPAD_DIVIDE', 'num del': 'KEY_NUMPAD_PERIOD',
-  'num lock': 'KEY_NUM_LOCK'
+// What each button does when the profile does not remap it: the Naga's factory function (Synapse's out-of-box
+// profile has no mappings; side buttons 1..12 send 1..9, 0, -, =, the wheel click is the middle button). The tilts
+// and the two top buttons have no listed key: LiteSynapse leaves them as the mouse has them.
+const FACTORY = {
+  Side1: 'KEY_1', Side2: 'KEY_2', Side3: 'KEY_3', Side4: 'KEY_4', Side5: 'KEY_5', Side6: 'KEY_6', Side7: 'KEY_7', Side8: 'KEY_8',
+  Side9: 'KEY_9', Side10: 'KEY_0', Side11: 'KEY_HYPHEN', Side12: 'KEY_EQUAL', Scroll: 'MOUSE_MIDDLE'
 };
-const calKeyCache = new Map();
-function calKey(label) {
-  const l = String(label || '').trim().toLowerCase();
-  if (!l) return '';
-  if (calKeyCache.has(l)) return calKeyCache.get(l);
-  let name = CAL_ALIASES[l] || '';
-  const num = /^num (\d)$/.exec(l);
-  if (!name && num) name = 'KEY_NUMPAD_' + num[1];
-  if (!name) {
-    const k = KEYS.find(x => x.name && (x.label.toLowerCase() === l || x.short.toLowerCase() === l));
-    name = k ? k.name : '';
-  }
-  calKeyCache.set(l, name);
-  return name;
-}
 
-// What a button does in profile p: its explicit target (if any), its calibrated default and whether they differ.
+// What a button does in profile p: its remap (if any), its factory default and whether they differ.
 function buttonInfo(p, id) {
   const raw = p && p.buttons[id];
   const t = raw && raw.key ? { key: raw.key, mods: raw.key.startsWith('KEY_') ? (raw.mods || []) : [] } : null;
-  const cal = S.calibration[id] || '';
-  const sameAsDefault = !!t && !t.mods.length && t.key === calKey(cal);
-  return { t, cal, custom: !!t && !sameAsDefault, off: !!t && t.key === 'DISABLED' };
+  const def = FACTORY[id] || '';
+  const sameAsDefault = !!t && !t.mods.length && t.key === def;
+  return { t, def, defLabel: def ? keyLabel(def) : '', custom: !!t && !sameAsDefault, off: !!t && t.key === 'DISABLED' };
 }
 const MOD_SHORT = { KEY_LEFT_CTRL: 'Ctrl', KEY_LEFT_SHIFT: 'Shift', KEY_LEFT_ALT: 'Alt', KEY_LEFT_WIN: 'Win', KEY_RIGHT_CTRL: 'RCtrl', KEY_RIGHT_SHIFT: 'RShift', KEY_RIGHT_ALT: 'RAlt', KEY_RIGHT_WIN: 'RWin' };
 const modsPrefix = mods => sortMods(mods).map(m => MOD_SHORT[m] || prettyKeyName(m)).join('+');
@@ -2133,7 +2145,7 @@ function pageOverview() {
       h('dt', null, 'Lighting'), h('dd', null, kp ? effectName(kp.effect) : '—')));
 
   const linked = S.games.filter(g => g.exes.length).length;
-  const cal = calibratedCount();
+  const remapped = mp ? S.buttonIds.filter(id => buttonInfo(mp, id).t).length : 0;
   const stat = (v, small, label, ic, onclick, note) => h('button', { class: 'stat', onclick },
     h('div', { class: 'stat-top' }, h('span', { class: 'stat-ico' }, icon(ic, 16)), note ? h('span', { class: 'stat-note' }, note) : null),
     h('div', { class: 'stat-v' }, v, small ? h('small', null, small) : null),
@@ -2146,7 +2158,7 @@ function pageOverview() {
     ui.device.error ? h('div', { class: 'small muted row' }, icon('warn', 14), 'Could not read the devices: ' + ui.device.error) : null,
     h('div', { class: 'grid cols-4' },
       stat(linked, '/' + S.games.length, 'Games auto-switch', 'games', () => go('games'), linked < S.games.length ? `${S.games.length - linked} need a program` : ''),
-      stat(cal, '/' + S.buttonIds.length, 'Buttons calibrated', 'target', () => go('mouse', 'calibration'), cal < S.buttonIds.length ? 'Calibrate' : ''),
+      stat(remapped, '/' + S.buttonIds.length, 'Buttons remapped', 'target', () => go('mouse', 'buttons')),
       stat(S.macros.length, '', S.macros.length === 1 ? 'Macro' : 'Macros', 'macros', () => go('macros')),
       stat(S.mouseProfiles.length, '', 'Mouse profiles', 'layers', () => go('mouse'))));
 }
@@ -2161,7 +2173,7 @@ function pageMouse() {
       emptyBlock('mouse', 'No mouse profile is active', 'Pick one with the profile switcher above, or create a new one.',
         h('button', { class: 'btn primary', onclick: () => newProfile('mouse') }, icon('plus', 16), 'New profile'))));
   }
-  const tabs = { buttons: mouseButtons, performance: mousePerformance, lighting: mouseLighting, onboard: mouseOnboard, calibration: mouseCalibration };
+  const tabs = { buttons: mouseButtons, performance: mousePerformance, lighting: mouseLighting, onboard: mouseOnboard };
   return h('div', { class: 'stack' }, disconnectedBanner(S.mouse, 'mouse'), (tabs[ui.tabs.mouse] || mouseButtons)(p));
 }
 
@@ -2218,14 +2230,13 @@ function mzFit(s) {
   return t + '…';
 }
 
-// What a button's label says and how it is colored: set (this profile assigns it), def (the mouse's own default
-// key), off, none (not calibrated, so its default key is unknown).
+// What a button's label says and how it is colored: set (this profile remaps it), def (its factory function), off.
 function buttonValue(p, id) {
   const b = buttonInfo(p, id);
   if (b.off) return { text: 'Off', cls: 'off', desc: 'turned off' };
   if (b.t) return { text: (b.t.mods.length ? modsPrefix(b.t.mods) + '+' : '') + keyShort(b.t.key), cls: 'set', desc: targetLabel(b.t) };
-  if (b.cal) return { text: b.cal, cls: 'def', desc: b.cal + ', the mouse default' };
-  return { text: 'Default', cls: 'none', desc: 'its default (not calibrated)' };
+  if (b.defLabel) return { text: b.defLabel, cls: 'def', desc: b.defLabel + ', the factory default' };
+  return { text: 'Default', cls: 'def', desc: 'not remapped' };
 }
 
 // Paint for the lit parts of the drawing: the profile's lighting, or the accent when lighting is left as it is.
@@ -2388,13 +2399,13 @@ function assignPanel(p) {
     current = [];
     for (const m of sortMods(b.t.mods)) current.push(h('span', { class: 'kc lg' }, MOD_SHORT[m] || prettyKeyName(m)), h('span', { class: 'plus' }, '+'));
     current.push(h('span', { class: cx('kc lg', b.off ? 'off' : b.custom && 'accent') }, keyLabel(b.t.key)));
-    what = b.off ? 'Does nothing' : b.custom ? (b.cal ? `Remapped · default is ${b.cal}` : 'Remapped') : 'Same as its default key';
-  } else if (b.cal) {
-    current = [h('span', { class: 'kc lg dim' }, b.cal)];
-    what = 'Default key';
+    what = b.off ? 'Does nothing' : b.custom ? (b.defLabel ? `Remapped · default is ${b.defLabel}` : 'Remapped') : 'Same as its default';
+  } else if (b.defLabel) {
+    current = [h('span', { class: 'kc lg dim' }, b.defLabel)];
+    what = 'Factory default';
   } else {
-    current = [h('span', { class: 'kc lg off' }, '?')];
-    what = 'Not calibrated yet';
+    current = [h('span', { class: 'kc lg dim' }, 'Default')];
+    what = 'Not remapped';
   }
   const heldNow = capturing ? Array.from(ui.capture.held) : [];
   const capText = capturing
@@ -2432,7 +2443,7 @@ function assignPanel(p) {
     h('div', { class: 'assign-f' },
       h('button', {
         class: 'btn sm', disabled: !b.t, 'data-fk': 'btn-reset',
-        onclick: () => act('setButton', { id, key: '', mods: [] }, { ok: `${buttonName(id)} → default${b.cal ? ` (${b.cal})` : ''}`, key: 'button' })
+        onclick: () => act('setButton', { id, key: '', mods: [] }, { ok: `${buttonName(id)} → default${b.defLabel ? ` (${b.defLabel})` : ''}`, key: 'button' })
       }, icon('reset', 14), 'Reset to default'),
       h('span', { class: 'spacer' }),
       h('span', { class: 'small faint' }, `Saved to ${quote(p.name)}`)));
@@ -2604,6 +2615,11 @@ ${glow}
 <g fill="rgba(0,0,0,.42)">${[0, 1, 2, 3].map(r => [0, 1, 2].map(c => `<rect x="${114 + c * 5}" y="${100 + r * 15}" width="3.6" height="12" rx="1.4"/>`).join('')).join('')}</g>
 </svg>`;
 }
+// Synapse warns about this too: Windows Dynamic Lighting (or Synapse itself) can take over the lights.
+function lightingConflictHint() {
+  return h('div', { class: 'small faint row', style: 'gap:8px;margin-top:14px;align-items:flex-start' }, icon('info', 14),
+    h('span', null, 'Lights not changing? Quit Razer Synapse and turn off Windows Dynamic Lighting (Settings → Personalization → Dynamic Lighting → “Use Dynamic Lighting on my devices”). Either one can take over the lights.'));
+}
 function mouseLighting(p) {
   const d = lightDraft(p);
   const set = !!d.effect;
@@ -2661,7 +2677,8 @@ function mouseLighting(p) {
             h('div', { class: 'row' },
               rangeInput({ min: 0, max: 100, step: 1, value: d.brightness, 'aria-label': 'Brightness', disabled: !set || d.effect === 'off', 'data-fk': 'light:b' },
                 n => { editLight(p, x => { x.brightness = n; }); bright.textContent = n + '%'; paint(); }),
-              bright))))),
+              bright)))),
+      lightingConflictHint()),
     h('details', { class: 'card adv', open: !!ui.zones.list || ui.zones.loading || null },
       h('summary', null, icon('chevronRight', 16), 'Advanced'),
       h('div', { class: 'adv-body' },
@@ -2745,23 +2762,6 @@ function onProgress(op, text) {
     return;
   }
   if (text) toast(text, 'info', 'progress:' + op);
-}
-
-/* ---- Calibration ---------------------------------------------------------------------------- */
-function mouseCalibration() {
-  const n = calibratedCount(), total = S.buttonIds.length;
-  return h('div', { class: 'card' },
-    cardHead(['Calibration', h('span', { class: cx('badge', n < total ? 'warn' : 'ok') }, `${n}/${total}`)],
-      'Calibration records the key each button sends with the mouse’s own default mapping, so LiteSynapse can tell the buttons apart and show their default keys. Run it again after resetting the mouse.',
-      h('button', { class: 'btn primary', 'data-fk': 'calibrate', onclick: () => act('calibrate', {}, { ok: 'The calibration window is open' }) }, icon('target', 16), n ? 'Calibrate again' : 'Calibrate'),
-      'target'),
-    n < total ? banner('warn', 'warn', `${plural(total - n, 'button is', 'buttons are')} not calibrated`, 'LiteSynapse cannot remap those buttons in software until they are calibrated.') : null,
-    h('div', { class: 'cal-grid', style: n < total ? 'margin-top:14px' : null }, S.buttonIds.map(id => {
-      const lab = S.calibration[id];
-      return h('div', { class: cx('cal-item', !lab && 'missing') },
-        h('span', { class: 'nm' }, buttonName(id)),
-        lab ? h('span', { class: 'kc' }, lab) : h('span', { class: 'badge warn' }, 'Not set'));
-    })));
 }
 
 /* =============================================================================================
@@ -2897,7 +2897,8 @@ function kbLighting(kp) {
             class: 'choice', 'aria-pressed': String(kp.effect === id), 'data-fk': 'kbfx:' + id,
             onclick: () => { if (kp.effect !== id) act('setKbEffect', { effect: id, speed: kp.effectSpeed || 2 }, { ok: `Keyboard effect: ${label}`, key: 'kbfx' }); }
           }, icon(ic, 16), label))),
-          h('div', { class: 'small faint' }, 'These are the effects the BlackWidow Lite supports.')))));
+          h('div', { class: 'small faint' }, 'These are the effects the BlackWidow Lite supports.')))),
+    lightingConflictHint());
 }
 
 /* =============================================================================================
@@ -3440,7 +3441,7 @@ function setMaintenance() {
   return h('div', { class: 'card' },
     cardHead('Maintenance', 'Tools for when something looks wrong.', null, 'wrench'),
     h('div', { class: 'maint' },
-      item('folder', 'Open config folder', 'Profiles, games, calibration and the log.', () => act('openConfigFolder', {})),
+      item('folder', 'Open config folder', 'Profiles, games and the log.', () => act('openConfigFolder', {})),
       item('refresh', 'Reload config', 'Read the config files again after editing them by hand.', () => act('reloadConfig', {}, { ok: 'Config reloaded' })),
       item('mouse', 'Windows mouse settings', 'Pointer speed, acceleration and button swap.', () => act('openMouseProperties', {})),
       item('window', 'Open classic window', 'The previous LiteSynapse window.', () => act('openClassicWindow', {})),

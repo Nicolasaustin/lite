@@ -108,6 +108,19 @@ internal sealed class TrayHost
 
 	private nint hwnd;
 
+	// WM_APP + 3: another thread (the window's Exit) asks the tray loop to end; Program then shuts the service down,
+	// which puts the mouse back on its own slot.
+	private const uint MsgExit = 32771u;
+
+	private static nint current;
+
+	// Ends the app as the tray menu's Exit does. False when no tray loop is running.
+	public static bool RequestExit()
+	{
+		nint h = current;
+		return h != IntPtr.Zero && W32.PostMessage(h, MsgExit, IntPtr.Zero, IntPtr.Zero);
+	}
+
 	private nint icon;
 
 	private nint devNotify;
@@ -171,6 +184,7 @@ internal sealed class TrayHost
 		(nint, W32.WndProc) tuple = W32.CreateWindow(messageOnly: false, OnMessage);
 		hwnd = tuple.Item1;
 		keepAlive = tuple.Item2;
+		current = hwnd;
 		taskbarCreated = W32.RegisterWindowMessage("TaskbarCreated");
 		nint[] small = new nint[1];
 		ExtractIconEx(Environment.ProcessPath, 0, null, small, 1u);
@@ -186,6 +200,7 @@ internal sealed class TrayHost
 		svc.Changed += OnServiceChanged;
 		svc.Start();
 		W32.RunLoop();
+		current = IntPtr.Zero;
 		svc.Changed -= OnServiceChanged;
 		if (fgHook != IntPtr.Zero)
 		{
@@ -252,6 +267,10 @@ internal sealed class TrayHost
 			return IntPtr.Zero;
 		case 32770u:
 			ModifyTip();
+			return IntPtr.Zero;
+		case MsgExit:
+			Cfg.Log("exit requested from the window");
+			W32.PostQuitMessage(0);
 			return IntPtr.Zero;
 		default:
 			if (m == taskbarCreated && m != 0)

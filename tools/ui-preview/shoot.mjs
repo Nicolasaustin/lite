@@ -166,8 +166,6 @@ scenario('main', async browser => {
   await p.waitForSelector('[data-progress="onboard"]', { state: 'detached', timeout: 8000 });
   await settle(p);
   await closeToasts(p);
-  await tab(p, 'Calibration');
-  await shot(p, '18-mouse-calibration');
 
   // Keyboard
   await nav(p, 'Keyboard');
@@ -232,6 +230,9 @@ scenario('main', async browser => {
   await shot(p, '35-settings-maintenance');
   await tab(p, 'Log');
   await shot(p, '36-settings-log', 500);
+  await p.click('button[data-fk="exit"]');
+  await shot(p, '37a-exit-confirm');
+  await p.click('.modal .btn.ghost');
   await p.context().close();
 });
 
@@ -239,7 +240,7 @@ scenario('idle', async browser => {
   const p = await open(browser, { motion: 'no-preference' });
   await settle(p, 1200);                                  // device info read finishes
   await assertIdle(p, 'overview');
-  for (const [page, tabLabel] of [['Mouse', 'Buttons'], ['Mouse', 'Lighting'], ['Keyboard', 'Macro keys'], ['Macros', ''], ['Games', ''], ['Settings', 'Performance']]) {
+  for (const [page, tabLabel] of [['Mouse', 'Customize'], ['Mouse', 'Lighting'], ['Keyboard', 'Macro keys'], ['Macros', ''], ['Games', ''], ['Settings', 'Performance']]) {
     await nav(p, page);
     if (tabLabel) await tab(p, tabLabel);
     await assertIdle(p, (page + ' ' + tabLabel).trim().toLowerCase());
