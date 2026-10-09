@@ -28,8 +28,8 @@ const shots = [];
 // ---- Static checks ---------------------------------------------------------------------------------------
 const contract = readFileSync(join(repo, 'docs', 'bridge-api.md'), 'utf8');
 const contractCmds = [...contract.matchAll(/^\|\s*`([A-Za-z]+)`\s*\|/gm)].map(m => m[1]);
-// Commands the C# bridge implements beyond the v1.2 table (see Bridge.cs).
-const EXTRA_CMDS = ['setCloseOnGame'];
+// Commands the C# bridge implements beyond the contract table (none: setCloseOnGame is documented now).
+const EXTRA_CMDS = [];
 const html = readFileSync(pagePath, 'utf8');
 const sent = new Set([...html.matchAll(/\b(?:act|call)\('([A-Za-z]+)'/g)].map(m => m[1]));
 for (const c of sent) if (!contractCmds.includes(c) && !EXTRA_CMDS.includes(c)) problems.push(`page sends "${c}", which is not in docs/bridge-api.md`);

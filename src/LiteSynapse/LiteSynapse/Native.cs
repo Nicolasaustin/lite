@@ -168,6 +168,22 @@ internal static class Native
 		SendInput(1u, a, InputSize);
 	}
 
+	// Middle mouse button for remapped Naga buttons (software-remap mode only; onboard remaps need nothing).
+	public static void SendMiddleButton(bool down)
+	{
+		INPUT[] a = one ??= new INPUT[1];
+		a[0] = new INPUT
+		{
+			type = 0u
+		};
+		a[0].u.mi = new MOUSEINPUT
+		{
+			flags = (down ? 0x20u : 0x40u),
+			extra = MAGIC
+		};
+		SendInput(1u, a, InputSize);
+	}
+
 	// Sends several key events in one call so nothing else can land between them (e.g. jump + release attack).
 	public static void SendKeys(INPUT[] batch, int count)
 	{

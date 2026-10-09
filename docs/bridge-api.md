@@ -14,6 +14,10 @@ All JSON property names are camelCase.
 - C# → JS pushes (any time):
   - `{ "type": "state", "state": <State> }` — after every mutating command and whenever `Service.Changed` fires (debounced ~100 ms).
   - `{ "type": "progress", "op": "onboard", "text": "Writing buttons..." }` — during long operations.
+  - `{ "type": "navigate", "page": "settings", "tab": "general" }` — the app asks the page to show a page/tab
+    (tray "Settings", command line `--page/--tab/--mem`). Pages: overview, mouse, keyboard, macros, games, settings;
+    `tab` is optional (mouse: buttons, performance, lighting, onboard, calibration; keyboard: macrokeys, snaptap, lighting;
+    settings: general, gaming, performance, appearance, maintenance, log).
 - Replies are sent with `CoreWebView2.PostWebMessageAsJson`. JS listens with `window.chrome.webview.addEventListener('message', e => e.data)`.
 - When the page is opened outside WebView2 (no `window.chrome.webview`), it uses a mock bridge (`tools/ui-preview/mock-bridge.js`) for previews only.
 
@@ -52,6 +56,7 @@ All JSON property names are camelCase.
   "onboard": { "3": "CS2" },        // slot number (string) -> profile name last written there
   "liveSlots": [1, 2],              // slots LiteSynapse uses for live profiles ([] when liveWrite is off)
   "accent": "mint",                 // UI accent: mint | green | blue | violet | amber
+  "closeOnGame": true,              // close this window when a linked game comes to the front (data/ui.json)
   "competitiveSafe": false,         // when on: no Snap Tap, macros or software remaps in anti-cheat games
   "gameKeyboardDefault": "",        // keyboard profile used for games whose rule has none ("" = none)
   "lastGameExe": "cs2.exe",         // last foreground program that is not LiteSynapse/Explorer (for "link running game")
@@ -116,6 +121,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `openClassicWindow` | `{}` | `null` — opens the old WinForms window |
 | `getLog` | `{ lines: 200 }` | `string` |
 | `setAccent` | `{ accent }` | State |
+| `setCloseOnGame` | `{ on }` | State — saved in data/ui.json |
 
 Unknown commands reply `ok: false`.
 

@@ -692,6 +692,11 @@ internal class InputEngine : IDisposable
 		{
 			return;
 		}
+		if (t.Key == KeyTarget.MouseMiddle)
+		{
+			Native.SendMiddleButton(!up);
+			return;
+		}
 		int vk = Keys2.Vk(t.Key);
 		if (vk == 0)
 		{

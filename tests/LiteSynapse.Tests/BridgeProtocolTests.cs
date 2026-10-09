@@ -321,8 +321,9 @@ public class BridgeProtocolTests
 		SortedSet<string> handled = Matches(bridge, @"^\s*\[""([a-zA-Z]+)""\] = ");
 		Assert.True(contract.Count >= 40, "command table not found in docs/bridge-api.md");
 		Assert.Empty(contract.Except(handled));
-		// The only command beyond the contract: the "close this window when a game starts" setting.
-		Assert.Equal(new[] { "setCloseOnGame" }, handled.Except(contract).ToArray());
+		// No command beyond the contract (setCloseOnGame is documented there now).
+		Assert.Contains("setCloseOnGame", contract);
+		Assert.Empty(handled.Except(contract));
 		// Commands that skip the state push afterwards must exist and must not change anything.
 		Match readOnly = Regex.Match(bridge, @"ReadOnlyCommands = [^{]*\{([^}]*)\}");
 		Assert.True(readOnly.Success);
