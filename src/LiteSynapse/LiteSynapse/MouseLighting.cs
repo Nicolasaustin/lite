@@ -32,7 +32,8 @@ internal static class MouseLighting
 
 	internal readonly record struct Cmd(byte Led, string Zone, byte Class, byte Id, byte Size, byte[] Args);
 
-	// Read-only: asks each LED for its brightness (0F/84) and lists the ones the mouse answers for.
+	// Read-only: asks each LED for its brightness (0F/84) and lists the ones the mouse answers for. An LED the mouse
+	// does not have answers "failed", which is expected here, so nothing is logged for it.
 	public static List<(int Id, string Name)> Probe(RazerDevice mouse)
 	{
 		List<(int, string)> zones = new List<(int, string)>();
@@ -42,7 +43,7 @@ internal static class MouseLighting
 		}
 		foreach (var (led, name) in ProbeLeds)
 		{
-			if (mouse.Command(0x0F, 0x84, 3, VarStore, led) != null)
+			if (mouse.Send(0x0F, 0x84, 3, new byte[2] { VarStore, led }, new byte[80]) == RazerDevice.StatusOk)
 			{
 				zones.Add((led, name));
 			}

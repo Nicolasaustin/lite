@@ -35,6 +35,24 @@ internal class RazerDevice
 		return CommandReply(cls, id, args);
 	}
 
+	public const int StatusOk = 2;
+
+	// Status-returning command: 2 when CommandReply answers, 3 (failed) when it returns null.
+	public int Send(byte cls, byte id, byte size, byte[] args, byte[] reply = null)
+	{
+		Sent.Add((0, cls, id, size, (byte[])args.Clone()));
+		byte[] answer = CommandReply(cls, id, args);
+		if (answer == null)
+		{
+			return 3;
+		}
+		if (reply != null)
+		{
+			Array.Copy(answer, reply, Math.Min(answer.Length, reply.Length));
+		}
+		return StatusOk;
+	}
+
 	public int? GetBrightness()
 	{
 		return Brightness;

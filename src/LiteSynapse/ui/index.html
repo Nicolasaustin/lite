@@ -3406,7 +3406,7 @@ function setPerformance() {
     h('div', { class: 'card' },
       cardHead(['Razer leftovers', r.checked ? (isLeftovers() ? h('span', { class: 'badge warn' }, 'Found') : h('span', { class: 'badge ok' }, icon('check', 12), 'Clean')) : null],
         'Razer software that costs performance even when Synapse is closed.',
-        h('button', { class: cx('btn sm', busy === 'check' && 'busy'), onclick: recheck, 'data-fk': 'razer:check' }, spinOr('check', 'refresh'), r.checked ? 'Re-check' : 'Check now'), 'gauge'),
+        h('button', { class: cx('btn sm', busy === 'check' && 'busy'), disabled: !!busy, onclick: recheck, 'data-fk': 'razer:check' }, spinOr('check', 'refresh'), r.checked ? 'Re-check' : 'Check now'), 'gauge'),
       body,
       r.checked ? h('div', { class: 'row wrap', style: 'margin-top:16px;padding-top:16px;border-top:1px solid var(--line)' },
         h('button', { class: cx('btn', busy === 'disableGameManager' && 'busy'), disabled: !!busy || r.gmsService === 'absent' || r.gmsService === 'disabled', 'data-fk': 'razer:gms',
