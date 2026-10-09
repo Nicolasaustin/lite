@@ -103,20 +103,25 @@ scenario('main', async browser => {
 
   await shot(p, '01-overview', 900);                   // getDeviceInfo takes ~650 ms in the mock
 
-  // Mouse: buttons, key capture, picker, profile switcher and menu
+  // Mouse: buttons (top and side views), key capture, picker, profile switcher and menu
   await nav(p, 'Mouse');
-  await p.click('.ktile[data-fk="btn:Side8"]');
+  await p.click('[data-fk="mz:TiltL"] > text');
   await shot(p, '03-mouse-buttons');
+  await p.hover('[data-fk="mz:M1"] > text');
+  await shot(p, '03a-mouse-buttons-hover', 150);
+  await p.click('[data-fk="mzv:side"]');
+  await p.click('[data-fk="mz:Side8"] > text');
+  await shot(p, '03b-mouse-buttons-side');
   await p.click('.capture');
   await p.keyboard.down('Control');
   await shot(p, '04-mouse-buttons-capture', 150);
   await p.keyboard.press('KeyW');
   await p.keyboard.up('Control');
   await settle(p);
-  await p.click('.ktile[data-fk="btn:Side12"]');
+  await p.click('[data-fk="mz:Side12"] > text');
   await p.click('.pkey[data-fk="pick:k:DISABLED"]');
   await settle(p);
-  await p.click('.ktile[data-fk="btn:Side8"]');
+  await p.click('[data-fk="mz:Side8"] > text');
   await shot(p, '05-mouse-buttons-assigned');
   await p.fill('input[data-fk="pick:q"]', 'num');
   await shot(p, '06-mouse-key-search');
@@ -129,7 +134,7 @@ scenario('main', async browser => {
   await shot(p, '08-profile-switcher-search');
   await p.keyboard.press('Enter');                       // picks "Tarky" (turns auto-switch off)
   await settle(p);
-  await p.click('.ktile[data-fk="btn:Side4"]');
+  await p.click('.key[data-b="Side4"]');
   await shot(p, '09-mouse-buttons-tarky');
   await closeToasts(p);
 

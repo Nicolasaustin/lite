@@ -1,42 +1,51 @@
-# LiteSynapse 1.1 test build: what to try
+# LiteSynapse 1.1.1 test build 2: what to try
 
-This is the first test build. Everything was built and tested in the cloud (358 automated tests), but this is the first time it runs on Windows with your Naga and BlackWidow. Please go through this list and tell me what works and what doesn't.
+Test build 2 fixes what you found in build 1: remaps, DPI, polling and lighting now go to the mouse right away, the
+profile you click stays on the mouse until you exit LiteSynapse, keyboard macros work with a profile you picked, and the
+Buttons page now looks like Synapse's Customize page.
 
 ## Install
 
-1. Close the old LiteSynapse: tray icon → **Exit**. (The installer also closes it.)
-2. Recommended: quit Razer Synapse fully (tray icon → **Quit**) so it can't fight over the mouse.
-3. Run `LiteSynapse-Setup-1.1.0.exe`. It installs just for you, so there's no admin prompt.
-   - Windows SmartScreen will say "Windows protected your PC", because the app isn't code-signed. Click **More info → Run anyway**.
-   - If it asks for the .NET 10 Desktop Runtime or WebView2, click Yes. That opens Microsoft's download page.
-4. Leave "Start LiteSynapse with Windows" the way you want it, then click **Finish** with "Launch" ticked.
+1. Run `LiteSynapse-Setup-1.1.1.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
+   profiles, games and macros. No uninstall needed.
+   - SmartScreen says "Windows protected your PC" because the app isn't code-signed: **More info → Run anyway**.
+2. Quit Razer Synapse fully (tray icon → **Quit**) so it can't fight over the mouse and keyboard.
+3. Click **Finish** with "Launch" ticked.
 
-Your profiles, games and macros are copied from `Documents\LiteSynapse\data`. The old folder isn't touched.
+## What changed
+
+- **The mouse runs the profile LiteSynapse shows, all the time.** On the desktop that's your starting profile, in a
+  linked game the game's profile, and when you click a profile, that one. Your own onboard slot (3, green) comes
+  back only when you exit LiteSynapse (tray icon → Exit).
+- **Changes apply right away**: button remaps, DPI, polling rate and lighting. DPI and polling within a moment,
+  remaps and lighting about a second after your last change.
+- **A profile you click stays.** Clicking a profile turns auto-switch off. Its keyboard macros and Snap Tap then
+  work everywhere, except inside the LiteSynapse window. Turn auto-switch back on to follow your games again.
+- **Keyboard lighting**: Off, Static and Breathing only. Those are the only effects the BlackWidow Lite has, which
+  is why Reactive and Starlight did nothing. If you had picked one of them, it's now Static.
+- **Mouse → Buttons** now has a Synapse-style top view (lines to each button) and side view (the 12 numbered
+  buttons). Switch with the two thumbnails under the mouse. Click any key name to change it.
 
 ## Checklist
 
 | # | Try this | Expected |
 |---|---|---|
-| 1 | Open LiteSynapse from the Start menu | New dark window, no white flash. 47 mouse profiles, your keyboard profile, 2 macros, 47 games |
-| 2 | **Settings → Maintenance → Run self-test** | A console window runs checks. Send me a screenshot of the end |
-| 3 | **Mouse → Performance**: change DPI, then set it back | The mouse speed changes right away |
-| 4 | Start CS2 | Within about a second the mouse switches to your CS2 profile; Overview shows "In game" |
-| 5 | In CS2, alt-tab out and back quickly (under 3 s) | The mouse does **not** switch slots back and forth |
-| 6 | Leave CS2 for more than 3 seconds | The mouse goes back to slot 3 (Green) |
-| 7 | **Offline/practice server only:** hold A, press D, release D | Snap Tap: you move right, then left again |
-| 8 | **Offline/practice server only:** hold A, alt-tab out, release A, alt-tab back | Nothing stays stuck |
-| 9 | **Offline/practice server only:** press the arrow keys bound to Jumpthrow / W Jumpthrow | The macros fire |
-| 10 | **Keyboard → Lighting**: try Static, Breathing, Reactive, Starlight, Off and the brightness slider | The keyboard backlight follows |
-| 11 | **Mouse → Lighting** (experimental): pick a static color | Tell me which zones changed (scroll wheel, logo, side), or if nothing did |
-| 12 | **Mouse → Onboard memory**: write a profile to slot 4, then press the mouse's Cycle Profile button to slot 4 | The side buttons send that profile's keys |
-| 13 | **Settings → Performance** | Shows what Razer leftovers are on your PC. Don't run the driver removal yet; just tell me what it shows |
-| 14 | Close the LiteSynapse window, then open Task Manager | No `msedgewebview2.exe` processes left from LiteSynapse |
-| 15 | **Games**: start a game that isn't linked, switch to LiteSynapse, click "Link the game that's running" | The game gets added to that profile |
+| 1 | Open LiteSynapse | Overview shows your starting profile running on the mouse ("… is running on the mouse (slot 1 or 2)") |
+| 2 | **Mouse → Buttons**: click a key name, then pick a key | The label turns green. About a second later the button sends the new key (try it in Notepad) |
+| 3 | **Mouse → Buttons**: switch to the side view and change side button 1 | Same as above |
+| 4 | **Mouse → Performance**: change DPI | The mouse speed changes right away |
+| 5 | **Mouse → Performance**: change polling rate | Saved and applied, no error |
+| 6 | **Mouse → Lighting**: pick a static color | Scroll wheel, logo and side panel change color. Tell me which zones change |
+| 7 | **Keyboard → Lighting**: Off, Static, Breathing and the brightness slider | The backlight follows |
+| 8 | Click a keyboard profile in the profile switcher, then open Notepad and press an arrow key that has a macro | The macro runs (in Notepad, not in the LiteSynapse window) |
+| 9 | Turn auto-switch back on, start CS2 | Within about a second the mouse switches to your CS2 profile |
+| 10 | Alt-tab out of CS2 and back quickly (under 3 s) | The mouse doesn't switch back and forth |
+| 11 | Tray icon → **Exit** | The mouse goes back to its own slot 3 (green) |
 
-**Don't test Snap Tap or the macros in Valve matchmaking or FACEIT.** Valve kicks for Snap Tap-style input and one-key multi-action binds on its official servers. Use a practice or offline server.
+**Don't test Snap Tap or macros in Valve matchmaking or FACEIT.** Valve kicks for Snap Tap-style input and one-key
+multi-action binds on its official servers. Use a practice or offline server.
 
 ## If something goes wrong
 
-- **Settings → Open config folder** opens `%LOCALAPPDATA%\Programs\LiteSynapse\data`. Send me `log.txt` from there.
-- If the new window doesn't open, LiteSynapse falls back to the old window automatically. Tell me if that happens.
-- To go back: uninstall LiteSynapse (Settings → Apps; it keeps your profiles), then run the old `Documents\LiteSynapse\LiteSynapse.exe`.
+**Settings → Open config folder** opens `%LOCALAPPDATA%\Programs\LiteSynapse\data`. Send me `log.txt` from there.
+It shows each write to the mouse ("live slot …", "mouse lighting …", "mouse now: dpi …").
