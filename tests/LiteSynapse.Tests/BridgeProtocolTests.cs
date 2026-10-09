@@ -223,7 +223,7 @@ public class BridgeProtocolTests
 		};
 		Assert.Equal(contract.OrderBy(k => k, StringComparer.Ordinal).ToArray(), Keys(s));
 		Assert.Equal(new[] { "connected", "name" }, Keys(s["mouse"].AsObject()));
-		Assert.Equal(new[] { "checked", "filterDrivers", "gmsService", "rzCommon", "synapseInstalled" }, Keys(s["razer"].AsObject()));
+		Assert.Equal(new[] { "checked", "filterDrivers", "gmsService", "rzCommon", "synapseInstalled", "synapseRunning" }, Keys(s["razer"].AsObject()));
 		Assert.Equal("mint", (string)s["accent"]);
 	}
 

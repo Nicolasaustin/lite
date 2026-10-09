@@ -43,6 +43,22 @@ public class RazerLeftoversTests
 		Assert.Equal(expected, RazerLeftovers.IsSynapseEntry(name));
 	}
 
+	[Theory]
+	[InlineData("RazerAppEngine", true)]
+	[InlineData("razerappengine", true)]
+	[InlineData("RzEngineMon", true)]
+	[InlineData("Razer Synapse 3", true)]
+	[InlineData("Razer Synapse Service", true)]
+	[InlineData("GameManagerService3", false)]
+	[InlineData("LiteSynapse", false)]
+	[InlineData("msedgewebview2", false)]
+	[InlineData("", false)]
+	[InlineData(null, false)]
+	public void SynapseProcesses(string name, bool expected)
+	{
+		Assert.Equal(expected, RazerLeftovers.IsSynapseProcess(name));
+	}
+
 	[Fact]
 	public void MultiSzIsSplit()
 	{

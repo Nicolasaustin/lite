@@ -62,7 +62,7 @@ All JSON property names are camelCase.
   "lastGameExe": "cs2.exe",         // last foreground program that is not LiteSynapse/Explorer (for "link running game")
   "elevatedGame": false,            // the foreground game runs as admin and LiteSynapse does not (Snap Tap/macros can't reach it)
   "razer": {                        // leftovers of Razer software that cost performance
-    "checked": true, "synapseInstalled": false,
+    "checked": true, "synapseInstalled": false, "synapseRunning": false,   // running: it can override lights and slots
     "gmsService": "absent",         // absent | running | stopped | disabled
     "filterDrivers": ["RzDev_008d (Naga)", "RzDev_0235 (BlackWidow Lite)"], "rzCommon": false
   }
@@ -146,7 +146,7 @@ public RazerLeftovers Razer { get; }            public void RefreshRazer(); publ
 public string ApplyMouseLighting(MouseProfile p);   // null = ok; no-op if the mouse is disconnected
 public bool ApplyKbLighting(KbProfile p);
 public void OnSuspend(); public void OnResume(); public void OnSessionLock(); public void OnSessionUnlock();
-public class RazerLeftovers { bool Checked; bool SynapseInstalled; string GmsService; List<string> FilterDrivers; bool RzCommon; }
+public class RazerLeftovers { bool Checked; bool SynapseInstalled; bool SynapseRunning; string GmsService; List<string> FilterDrivers; bool RzCommon; }
 ```
 
 Lighting helpers (data/protocol work):

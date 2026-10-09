@@ -4657,6 +4657,7 @@
     "razer": {
       "checked": true,
       "synapseInstalled": false,
+      "synapseRunning": false,
       "gmsService": "running",
       "filterDrivers": [
         "RzDev_008d (Naga)",

@@ -405,9 +405,12 @@ internal sealed class Service
 			{
 				return;
 			}
-			bool dpiOk = m.SetDpi(mp.Dpi);
+			// DPI is stored per slot: while the mouse is still on one of the user's own slots, the live slot write
+			// that follows brings it instead.
+			bool toSlot = !LiveWrite || OnboardSlots.IsLiveSlot(m.ActiveStorage());
+			bool dpiOk = toSlot && m.SetDpi(mp.Dpi);
 			bool pollOk = m.SetPolling(mp.PollingRate);
-			Cfg.Log($"mouse now: dpi {mp.Dpi}:{dpiOk} poll {mp.PollingRate}:{pollOk}");
+			Cfg.Log(toSlot ? $"mouse now: dpi {mp.Dpi}:{dpiOk} poll {mp.PollingRate}:{pollOk}" : $"mouse now: poll {mp.PollingRate}:{pollOk}; dpi {mp.Dpi} comes with the live slot");
 		});
 	}
 
@@ -660,8 +663,16 @@ internal sealed class Service
 	public void RefreshRazer()
 	{
 		RazerLeftovers r = RazerLeftovers.Check();
+		string before = Razer?.ToString();
 		Razer = r;
-		Cfg.Log("razer software: " + r);
+		if (r.ToString() != before)
+		{
+			Cfg.Log("razer software: " + r);
+			if (r.SynapseRunning)
+			{
+				Cfg.Log("Razer Synapse is running: it can change the lighting and switch the mouse's slots behind LiteSynapse");
+			}
+		}
 		Notify();
 	}
 
@@ -1066,6 +1077,13 @@ internal sealed class Service
 	private void ApplyLighting(RazerDevice m, MouseLightingSettings s, bool force)
 	{
 		byte store = m.ActiveStorage();
+		if (LiveWrite && !OnboardSlots.IsLiveSlot(store))
+		{
+			// The mouse is still on one of the user's own slots (it moves to a live slot next): their slot keeps
+			// its lighting; the live slot write brings this one.
+			lastLighting = null;
+			return;
+		}
 		string key = $"{s.Effect}|{s.Color}|{s.Brightness}|{store}";
 		if (!force && key == lastLighting)
 		{

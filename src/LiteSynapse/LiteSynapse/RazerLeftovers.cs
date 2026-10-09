@@ -30,6 +30,15 @@ public class RazerLeftovers
 
 	public bool SynapseInstalled { get; set; }
 
+	// Razer Synapse is running now: it can change the lighting and switch the mouse's onboard slots.
+	public bool SynapseRunning { get; set; }
+
+	// Processes of Razer Synapse 4 (RazerAppEngine, its engine monitor) and Synapse 3 that drive the devices.
+	internal static readonly string[] SynapseProcesses = new string[6]
+	{
+		"RazerAppEngine", "RzEngineMon", "Razer Synapse 3", "Razer Synapse Service", "Razer Synapse", "RzSynapse"
+	};
+
 	// absent | running | stopped | disabled
 	public string GmsService { get; set; } = "absent";
 
@@ -73,6 +82,12 @@ public class RazerLeftovers
 		}
 	}
 
+	// True for a process name (without .exe) that belongs to Razer Synapse.
+	internal static bool IsSynapseProcess(string processName)
+	{
+		return !string.IsNullOrWhiteSpace(processName) && SynapseProcesses.Any((string p) => string.Equals(p, processName.Trim(), StringComparison.OrdinalIgnoreCase));
+	}
+
 	// True for the uninstall entries of Razer Synapse (3 or 4) and RazerAppEngine.
 	internal static bool IsSynapseEntry(string displayName)
 	{
@@ -108,7 +123,7 @@ public class RazerLeftovers
 		{
 			return "not checked";
 		}
-		return $"Synapse installed: {SynapseInstalled}; {GmsServiceName}: {GmsService}; filter drivers: {((FilterDrivers.Count == 0) ? "none" : string.Join(", ", FilterDrivers))}; RzCommon: {RzCommon}";
+		return $"Synapse installed: {SynapseInstalled}; Synapse running: {SynapseRunning}; {GmsServiceName}: {GmsService}; filter drivers: {((FilterDrivers.Count == 0) ? "none" : string.Join(", ", FilterDrivers))}; RzCommon: {RzCommon}";
 	}
 
 	// ---- Checking the PC (Windows) -------------------------------------------------------------------------
@@ -124,6 +139,14 @@ public class RazerLeftovers
 		catch (Exception ex)
 		{
 			Cfg.Log("razer check (apps): " + ex.Message);
+		}
+		try
+		{
+			r.SynapseRunning = Win.SynapseRunning();
+		}
+		catch (Exception exRun)
+		{
+			Cfg.Log("razer check (processes): " + exRun.Message);
 		}
 		try
 		{
@@ -380,6 +403,22 @@ public class RazerLeftovers
 		{
 			using RegistryKey k = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Services\\" + name);
 			return (k?.GetValue("Start") is int v) ? v : 0;
+		}
+
+		public static bool SynapseRunning()
+		{
+			bool found = false;
+			foreach (System.Diagnostics.Process p in System.Diagnostics.Process.GetProcesses())
+			{
+				using (p)
+				{
+					if (!found && IsSynapseProcess(p.ProcessName))
+					{
+						found = true;
+					}
+				}
+			}
+			return found;
 		}
 
 		public static bool SynapseInstalled()

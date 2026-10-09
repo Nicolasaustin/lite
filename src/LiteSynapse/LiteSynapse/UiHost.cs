@@ -184,6 +184,11 @@ internal static class UiHost
 			(string pageName, string tabName) = WebProtocol.PageFor(page, tab, mem);
 			web.NavigateTo(pageName, tabName);
 			web.ShowAndActivate();
+			// The two main windows take turns: this one replaces the classic window.
+			if (main != null && !main.IsDisposed)
+			{
+				main.Close();
+			}
 		});
 	}
 
@@ -218,6 +223,12 @@ internal static class UiHost
 			main.WindowState = FormWindowState.Normal;
 		}
 		main.Activate();
+		// The two main windows take turns: the classic window replaces the new one (Settings › Maintenance and the
+		// tray's "Classic window"); the tray's "LiteSynapse" switches back.
+		if (web != null && !web.IsDisposed)
+		{
+			web.Close();
+		}
 	}
 
 	// Checked once per session: a missing runtime (or WebView2Loader.dll) means the classic window.

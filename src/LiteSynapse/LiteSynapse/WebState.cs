@@ -147,6 +147,8 @@ internal sealed class RazerDto
 
 	public bool SynapseInstalled { get; set; }
 
+	public bool SynapseRunning { get; set; }
+
 	// absent | running | stopped | disabled
 	public string GmsService { get; set; } = "absent";
 

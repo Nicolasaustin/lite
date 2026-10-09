@@ -118,9 +118,22 @@ public class OnboardSlotsTests
 		OnboardSlots t = new OnboardSlots();
 		t.Set(1, "CS2", "H");
 		Assert.Equal(new SlotPlan(SlotAction.None, 1), t.PlanApply(1, "H", NoUse));
-		// Also a user slot written by LiteSynapse with the same content.
+	}
+
+	[Fact]
+	public void AUserSlotWithTheSameProfileIsLeftForALiveSlot()
+	{
+		// The user wrote CS2 to slot 3 and the mouse is on it: LiteSynapse still moves to a live slot, so changes made
+		// while it runs (lighting, DPI) never land in the user's own slot.
+		OnboardSlots t = new OnboardSlots();
 		t.Set(3, "CS2", "H");
-		Assert.Equal(new SlotPlan(SlotAction.None, 3), t.PlanApply(3, "H", NoUse));
+		Assert.Equal(new SlotPlan(SlotAction.Write, 1), t.PlanApply(3, "H", NoUse));
+		t.Set(2, "CS2", "H");
+		Assert.Equal(new SlotPlan(SlotAction.Switch, 2), t.PlanApply(3, "H", NoUse));
+		// Pre-writing does not count the user's slot either.
+		OnboardSlots u = new OnboardSlots();
+		u.Set(3, "CS2", "H");
+		Assert.Equal(new SlotPlan(SlotAction.Write, 1), u.PlanPrewrite(3, "H", NoUse));
 	}
 
 	[Fact]

@@ -250,7 +250,8 @@ scenario('idle', async browser => {
 
 scenario('alerts', async browser => {
   const p = await open(browser, {
-    opts: { state: { elevatedGame: true, inGame: true, liveStatus: '"CS2" is running on the mouse (slot 1, White)', lastGameExe: 'cs2.exe' } }
+    opts: { state: { elevatedGame: true, inGame: true, liveStatus: '"CS2" is running on the mouse (slot 1, White)', lastGameExe: 'cs2.exe',
+      razer: { checked: true, synapseInstalled: true, synapseRunning: true, gmsService: 'disabled', filterDrivers: ['RzDev_008d (Naga)'], rzCommon: true } } }
   });
   await shot(p, '02-overview-in-game-alerts', 900);
   await p.context().close();

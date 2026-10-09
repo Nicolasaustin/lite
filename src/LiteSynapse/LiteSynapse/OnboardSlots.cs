@@ -103,7 +103,10 @@ internal sealed class OnboardSlots
 	// were last written or switched to (bigger = more recent); the least recently used one is overwritten.
 	public SlotPlan PlanApply(int active, string hash, IReadOnlyList<long> lastUse)
 	{
-		if (hash != null && HashOf(active) == hash)
+		// Nothing to send when the active live slot already holds the profile. A user slot (3..5) never counts,
+		// even with the same content: while LiteSynapse runs the mouse runs from a live slot, so changes made in
+		// LiteSynapse never touch the user's own slots.
+		if (hash != null && IsLiveSlot(active) && HashOf(active) == hash)
 		{
 			return new SlotPlan(SlotAction.None, active);
 		}
@@ -123,7 +126,7 @@ internal sealed class OnboardSlots
 	// What to do to have the profile ready in a live slot without switching to it (while no game is in front).
 	public SlotPlan PlanPrewrite(int active, string hash, IReadOnlyList<long> lastUse)
 	{
-		if (hash != null && (HashOf(active) == hash || LiveSlots.Any((int s) => HashOf(s) == hash)))
+		if (hash != null && LiveSlots.Any((int s) => HashOf(s) == hash))
 		{
 			return new SlotPlan(SlotAction.None, active);
 		}

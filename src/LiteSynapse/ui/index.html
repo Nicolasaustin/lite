@@ -1182,7 +1182,7 @@ function normalize(s) {
   d.buttonIds = (s.buttonIds && s.buttonIds.length) ? s.buttonIds : BUTTON_IDS;
   d.onboard = s.onboard || {};
   d.liveSlots = s.liveSlots || [];
-  d.razer = Object.assign({ checked: false, synapseInstalled: false, gmsService: 'absent', filterDrivers: [], rzCommon: false }, s.razer || {});
+  d.razer = Object.assign({ checked: false, synapseInstalled: false, synapseRunning: false, gmsService: 'absent', filterDrivers: [], rzCommon: false }, s.razer || {});
   d.razer.filterDrivers = d.razer.filterDrivers || [];
   return d;
 }
@@ -2058,6 +2058,12 @@ function leftoversBanner() {
   return banner('warn', 'warn', 'Razer leftovers found', leftoversSummary() + '. They cost CPU time and add a layer to every mouse and keyboard report.',
     h('button', { class: 'btn sm', onclick: () => go('settings', 'performance') }, 'Review', icon('chevronRight', 14)));
 }
+// Synapse running next to LiteSynapse changes lights and slots behind its back: say so wherever that shows.
+function synapseBanner() {
+  if (!S.razer.synapseRunning) return null;
+  return banner('warn', 'warn', 'Razer Synapse is running',
+    'It can change the lighting and switch the mouse’s onboard slots behind LiteSynapse’s back, so your changes may not show. Quit it from its tray icon (right-click → Exit) while you use LiteSynapse.');
+}
 function disconnectedBanner(dev, what) {
   if (dev.connected) return null;
   return banner('info', 'info', `${dev.name} is not connected`,
@@ -2152,7 +2158,7 @@ function pageOverview() {
     h('div', { class: 'stat-l' }, label));
 
   return h('div', { class: 'stack' },
-    elevatedBanner(), leftoversBanner(), disconnectedBanner(S.mouse, 'mouse'), disconnectedBanner(S.keyboard, 'keyboard'),
+    synapseBanner(), elevatedBanner(), leftoversBanner(), disconnectedBanner(S.mouse, 'mouse'), disconnectedBanner(S.keyboard, 'keyboard'),
     hero,
     h('div', { class: 'grid cols-2' }, mouseCard, kbCard),
     ui.device.error ? h('div', { class: 'small muted row' }, icon('warn', 14), 'Could not read the devices: ' + ui.device.error) : null,
@@ -2174,7 +2180,7 @@ function pageMouse() {
         h('button', { class: 'btn primary', onclick: () => newProfile('mouse') }, icon('plus', 16), 'New profile'))));
   }
   const tabs = { buttons: mouseButtons, performance: mousePerformance, lighting: mouseLighting, onboard: mouseOnboard };
-  return h('div', { class: 'stack' }, disconnectedBanner(S.mouse, 'mouse'), (tabs[ui.tabs.mouse] || mouseButtons)(p));
+  return h('div', { class: 'stack' }, synapseBanner(), disconnectedBanner(S.mouse, 'mouse'), (tabs[ui.tabs.mouse] || mouseButtons)(p));
 }
 
 /* ---- Buttons: Synapse-style top and side views ------------------------------------------------
@@ -2781,7 +2787,7 @@ function pageKeyboard() {
         h('button', { class: 'btn primary', onclick: () => newProfile('keyboard') }, icon('plus', 16), 'New profile'))));
   }
   const tabs = { macrokeys: kbMacroKeys, snaptap: kbSnapTap, lighting: kbLighting };
-  return h('div', { class: 'stack' }, disconnectedBanner(S.keyboard, 'keyboard'), (tabs[ui.tabs.keyboard] || kbMacroKeys)(kp));
+  return h('div', { class: 'stack' }, synapseBanner(), disconnectedBanner(S.keyboard, 'keyboard'), (tabs[ui.tabs.keyboard] || kbMacroKeys)(kp));
 }
 function shortList(names, max) {
   return names.length <= max ? names.join(', ') : `${names.slice(0, max).join(', ')} +${names.length - max}`;
@@ -3398,7 +3404,7 @@ function setPerformance() {
   const body = !r.checked
     ? emptyBlock('refresh', 'Not checked yet', 'LiteSynapse looks for Razer software that is still on this PC: registry and driver lists only, nothing is changed.')
     : h('div', null,
-      leftRow('window', 'Razer Synapse', r.synapseInstalled ? 'Installed. It reinstalls its drivers and services, so uninstall it in Windows Settings › Apps first.' : 'Not installed.', state(!r.synapseInstalled, 'Not installed', 'Installed')),
+      leftRow('window', 'Razer Synapse', r.synapseRunning ? 'Running now. It can change the lighting and switch the mouse’s slots behind LiteSynapse: quit it from its tray icon. Uninstall it in Windows Settings › Apps to stop it for good.' : r.synapseInstalled ? 'Installed. It reinstalls its drivers and services, so uninstall it in Windows Settings › Apps first.' : 'Not installed.', state(!r.synapseInstalled, 'Not installed', r.synapseRunning ? 'Running' : 'Installed')),
       leftRow('power', 'Razer Game Manager Service 3', 'Starts with Windows, runs with full system rights and watches every program that starts. LiteSynapse does not need it.', state(gms[0], gms[1], gms[1])),
       leftRow('layers', 'Filter drivers', r.filterDrivers.length ? `In the input path of: ${r.filterDrivers.join(', ')}. Every mouse and keyboard report passes through them.` : 'No Razer filter on the Naga or the BlackWidow Lite.', state(!r.filterDrivers.length, 'None', plural(r.filterDrivers.length, 'driver'))),
       leftRow('chip', 'RzCommon driver', r.rzCommon ? 'Installed. It sits in every mouse and keyboard report, even when no Razer app is running.' : 'Not installed.', state(!r.rzCommon, 'Not installed', 'Installed')));

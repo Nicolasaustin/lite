@@ -133,6 +133,9 @@ internal sealed class Bridge
 				return null;
 			})
 		};
+		// Synapse may have been started or quit since the last check: look again whenever the window opens
+		// (registry, services and the process list; a few milliseconds, off the UI thread).
+		Task.Run(svc.RefreshRazer);
 	}
 
 	private static Func<WebArgs, Task<object>> Now(Func<WebArgs, object> command)
@@ -260,6 +263,7 @@ internal sealed class Bridge
 		{
 			Checked = r.Checked,
 			SynapseInstalled = r.SynapseInstalled,
+			SynapseRunning = r.SynapseRunning,
 			GmsService = string.IsNullOrEmpty(r.GmsService) ? "absent" : r.GmsService,
 			FilterDrivers = (r.FilterDrivers ?? new List<string>()).ToList(),
 			RzCommon = r.RzCommon

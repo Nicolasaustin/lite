@@ -1,12 +1,21 @@
-# LiteSynapse 1.1.2 test build 3: what to try
+# LiteSynapse 1.1.3 test build 4: what to try
 
-Test build 3 adds what you asked for after build 2. Buttons work the way Synapse does it (factory default unless
-you remap, no button calibration). There's an Exit button in the window, and the app uses your new round logo. It
-also includes everything from build 2.
+Build 4 fixes what your build 2 and 3 logs showed:
+
+- **Your own slots stay untouched.** Build 3 kept running from slot 3 when it held the same profile, and color
+  clicks were saved into it. Now LiteSynapse always runs from its own slots 1 and 2 and puts the mouse back on
+  your slot when you exit.
+- **Warns when Razer Synapse is running.** Synapse can change the lights and switch slots behind LiteSynapse's
+  back. If it's running, a yellow banner says so on Overview, Mouse and Keyboard. Quit it from its tray icon.
+- **Classic window switches instead of stacking.** Opening the classic window closes the new one, and the tray's
+  "LiteSynapse" switches back.
+- Quieter log: no "0F/84 failed" lines from Detect zones, Razer checks logged only when something changed.
+
+Everything from build 3 below still applies.
 
 ## Install
 
-1. Run `LiteSynapse-Setup-1.1.2.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
+1. Run `LiteSynapse-Setup-1.1.3.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
    profiles, games and macros. No uninstall needed.
    - SmartScreen says "Windows protected your PC" because the app isn't code-signed: **More info → Run anyway**.
 2. Quit Razer Synapse fully (tray icon → **Quit**) so it can't fight over the mouse and keyboard.
