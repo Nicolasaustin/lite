@@ -2050,7 +2050,7 @@ function liveText() {
   const nice = t.replace(/"([^"]*)"/g, '\u201C$1\u201D');
   return nice.charAt(0).toUpperCase() + nice.slice(1);
 }
-function effectName(e) { return { off: 'Off', static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum', reactive: 'Reactive', starlight: 'Starlight' }[e] || e; }
+function effectName(e) { return { off: 'Off', static: 'Static', breathing: 'Breathing', spectrum: 'Spectrum' }[e] || e; }
 
 /* =============================================================================================
    Page: Overview
@@ -2062,8 +2062,8 @@ function pageOverview() {
   const desc = mode === 'game'
     ? 'A linked game is in front: its profiles are active, and Snap Tap and macro keys work while it has focus.'
     : mode === 'manual'
-      ? 'Auto-switch is off, so these profiles stay active until you pick others or turn auto-switch back on.'
-      : 'The keyboard hook is off on the desktop, so typing gets zero added latency. Profiles switch the moment a linked game comes to the front.';
+      ? 'Auto-switch is off, so these profiles stay active everywhere, macro keys and Snap Tap included, until you pick others or turn auto-switch back on.'
+      : 'The mouse runs your starting profile. The keyboard hook is off on the desktop, so typing gets zero added latency. Profiles switch the moment a linked game comes to the front.';
   const live = liveText();
   const hero = h('div', { class: 'card hero' },
     h('div', { class: cx('orb', mode !== 'game' && 'idle') }, icon(mode === 'game' ? 'games' : mode === 'manual' ? 'mouse' : 'monitor', 28)),
@@ -2643,7 +2643,7 @@ function kbMacroKeys(kp) {
     elevatedBanner(),
     antiCheatBanner(kp, 'the macro keys'),
     h('div', { class: 'card' },
-      cardHead('Macro keys', 'An arrow key with a macro runs it instead of moving while a linked game is in front. On the desktop the arrows work as usual. ' + usedByLine(kp), null, 'macros'),
+      cardHead('Macro keys', 'An arrow key with a macro runs it instead of moving while a linked game is in front, or everywhere while you picked this profile yourself (auto-switch off). In the LiteSynapse window the arrows always work as usual. ' + usedByLine(kp), null, 'macros'),
       S.macros.length
         ? h('div', { class: 'mk-grid' }, cluster, h('div', null, rows))
         : emptyBlock('macros', 'No macros yet', 'Record a macro first, then give it an arrow key here.',
@@ -2668,10 +2668,11 @@ function kbSnapTap(kp) {
         step(2, 'Press D, keep holding A', [k('A', 'ghosted'), k('D', 'held')], 'The game sees A let go at once, so you move right with no dead stop.'),
         step(3, 'Let go of D', [k('A', 'held'), k('D', 'ghosted')], 'A is pressed again for you, so you keep moving left.')),
       h('div', { class: 'small muted', style: 'margin-top:16px;max-width:760px' },
-        'Your real key presses always pass through untouched; LiteSynapse only adds the release and re-press of the other key. It works while a linked game is in front. On the desktop the keyboard hook is off. ' + usedByLine(kp))));
+        'Your real key presses always pass through untouched; LiteSynapse only adds the release and re-press of the other key. It works while a linked game is in front, or everywhere while you picked this profile yourself (auto-switch off), but never in the LiteSynapse window. ' + usedByLine(kp))));
 }
 
-const KB_EFFECTS = [['off', 'Off', 'power'], ['static', 'Static', 'sun'], ['breathing', 'Breathing', 'pulse'], ['reactive', 'Reactive', 'zap'], ['starlight', 'Starlight', 'star']];
+// The BlackWidow Lite has only these (no reactive, starlight or speed setting).
+const KB_EFFECTS = [['off', 'Off', 'power'], ['static', 'Static', 'sun'], ['breathing', 'Breathing', 'pulse']];
 const saveKbBright = debounce(() => {
   const d = ui.kbBright;
   if (!d) return;
@@ -2682,10 +2683,8 @@ const saveKbBright = debounce(() => {
 }, 300);
 function kbPreview(effect, brightness) {
   const g = effect === 'off' ? 0 : Math.max(0.06, brightness / 100);
-  const lit = (r, c) => effect === 'reactive' ? (r === 1 && (c === 1 || c === 2)) || (r === 2 && c === 3)
-    : effect === 'starlight' ? (r * 7 + c * 3) % 5 === 0 : true;
-  const rows = [12, 11, 10].map((n, r) => h('div', { class: 'kbp-row' },
-    Array.from({ length: n }, (_, c) => h('i', { class: lit(r, c) ? 'lit' : null }))));
+  const rows = [12, 11, 10].map(n => h('div', { class: 'kbp-row' },
+    Array.from({ length: n }, () => h('i', { class: 'lit' }))));
   return h('div', { class: 'kbp', style: `--g:${(effect === 'breathing' ? g * 0.7 : g).toFixed(2)}`, 'aria-hidden': 'true' }, rows,
     h('div', { class: 'kbp-row' }, h('i', { class: 'lit', style: 'flex:6' })));
 }
@@ -2693,7 +2692,6 @@ function kbLighting(kp) {
   const d = ui.kbBright && ui.kbBright.profile === kp.name ? ui.kbBright : { profile: kp.name, value: kp.brightness, rev: 0 };
   const val = h('span', { class: 'big-val' }, String(d.value), h('small', null, '%'));
   const prevBox = h('div', { style: 'width:100%;display:flex;justify-content:center' }, kbPreview(kp.effect, d.value));
-  const speedOn = ['breathing', 'reactive', 'starlight'].includes(kp.effect);
   return h('div', { class: 'card' },
     cardHead('Backlight', 'The BlackWidow Lite has a single-color white backlight. Saved with this keyboard profile.', val, 'sun'),
     h('div', { class: 'light-grid' },
@@ -2712,15 +2710,8 @@ function kbLighting(kp) {
           h('div', { class: 'choices' }, KB_EFFECTS.map(([id, label, ic]) => h('button', {
             class: 'choice', 'aria-pressed': String(kp.effect === id), 'data-fk': 'kbfx:' + id,
             onclick: () => { if (kp.effect !== id) act('setKbEffect', { effect: id, speed: kp.effectSpeed || 2 }, { ok: `Keyboard effect: ${label}`, key: 'kbfx' }); }
-          }, icon(ic, 16), label)))),
-        h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Speed'),
-          h('div', { class: 'row wrap' },
-            h('div', { class: 'seg', role: 'group', 'aria-label': 'Effect speed', 'aria-disabled': String(!speedOn) },
-              [[1, 'Slow'], [2, 'Medium'], [3, 'Fast']].map(([sp, label]) => h('button', {
-                'aria-pressed': String((kp.effectSpeed || 2) === sp), disabled: !speedOn, 'data-fk': 'kbsp:' + sp,
-                onclick: () => { if ((kp.effectSpeed || 2) !== sp) act('setKbEffect', { effect: kp.effect, speed: sp }, { ok: `Effect speed: ${label}`, key: 'kbfx' }); }
-              }, label))),
-            h('span', { class: 'small faint' }, 'For Breathing, Reactive and Starlight.'))))));
+          }, icon(ic, 16), label))),
+          h('div', { class: 'small faint' }, 'These are the effects the BlackWidow Lite supports.')))));
 }
 
 /* =============================================================================================

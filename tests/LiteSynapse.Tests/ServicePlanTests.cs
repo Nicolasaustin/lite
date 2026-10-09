@@ -14,10 +14,31 @@ public class ServicePlanTests
 	[Fact]
 	public void NothingRunsWithoutALinkedGameInFront()
 	{
-		// A profile picked by hand changes the devices, but Snap Tap/macros/remaps wait for a game (P1-9).
+		// Automatic switching on the desktop: Snap Tap/macros/remaps wait for a game (P1-9).
 		EngineInputs e = ServicePlan.Engine(Cs2, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null, suspended: false);
 		Assert.Equal(EngineInputs.Off, e);
 		Assert.True(e.IsOff);
+	}
+
+	[Fact]
+	public void AProfilePickedByHandRunsEverywhere()
+	{
+		// "Use whatever profile I click": its macros and Snap Tap work without a linked game in front.
+		EngineInputs e = ServicePlan.Engine(Cs2, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: false, null, suspended: false, pickedByHand: true);
+		Assert.Same(Gamer, e.Keyboard);
+		Assert.Null(e.Mouse);
+		Assert.True(e.InGame);
+		Assert.False(e.IsOff);
+		// Sleep and lock still remove the hook.
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Cs2, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: false, null, suspended: true, pickedByHand: true));
+	}
+
+	[Fact]
+	public void CompetitiveSafeOnlyBlocksAnAntiCheatGameInFront()
+	{
+		// On the desktop a profile picked by hand is not blocked, even if it is named after an anti-cheat game.
+		Assert.Same(Gamer, ServicePlan.Engine(Cs2, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: true, null, suspended: false, pickedByHand: true).Keyboard);
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Cs2, Gamer, gameInFront: true, mouseOnboard: true, competitiveSafe: true, "CS2", suspended: false, pickedByHand: true));
 	}
 
 	[Fact]
@@ -94,12 +115,12 @@ public class ServicePlanTests
 	[Fact]
 	public void OnlyLeavingAGameWaitsBeforeTheMouseFollows()
 	{
-		Assert.Equal(ServicePlan.RestoreDelayMs, ServicePlan.MouseDelay(wasLive: true, nowLive: false, debounce: true));
-		Assert.Equal(0, ServicePlan.MouseDelay(wasLive: false, nowLive: true, debounce: true));
-		Assert.Equal(0, ServicePlan.MouseDelay(wasLive: true, nowLive: true, debounce: true));
-		Assert.Equal(0, ServicePlan.MouseDelay(wasLive: false, nowLive: false, debounce: true));
+		Assert.Equal(ServicePlan.RestoreDelayMs, ServicePlan.MouseDelay(wasGame: true, nowGame: false, debounce: true));
+		Assert.Equal(0, ServicePlan.MouseDelay(wasGame: false, nowGame: true, debounce: true));
+		Assert.Equal(0, ServicePlan.MouseDelay(wasGame: true, nowGame: true, debounce: true));
+		Assert.Equal(0, ServicePlan.MouseDelay(wasGame: false, nowGame: false, debounce: true));
 		// A choice made in the UI is applied right away.
-		Assert.Equal(0, ServicePlan.MouseDelay(wasLive: true, nowLive: false, debounce: false));
+		Assert.Equal(0, ServicePlan.MouseDelay(wasGame: true, nowGame: false, debounce: false));
 		Assert.InRange(ServicePlan.RestoreDelayMs, 2500, 3500);
 	}
 

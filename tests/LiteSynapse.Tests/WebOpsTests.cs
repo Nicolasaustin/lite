@@ -291,10 +291,13 @@ public class WebOpsTests
 	public void KeyboardEffects()
 	{
 		KbProfile p = new KbProfile();
-		WebOps.SetKbEffect(p, "Starlight", 3);
-		Assert.Equal("starlight", p.Effect);
+		WebOps.SetKbEffect(p, "Breathing", 3);
+		Assert.Equal("breathing", p.Effect);
 		Assert.Equal(3, p.EffectSpeed);
 		Assert.Throws<BridgeException>(() => WebOps.SetKbEffect(p, "wave", 2));
+		// The BlackWidow Lite has no reactive or starlight effect.
+		Assert.Throws<BridgeException>(() => WebOps.SetKbEffect(p, "starlight", 2));
+		Assert.Throws<BridgeException>(() => WebOps.SetKbEffect(p, "reactive", 2));
 		Assert.Throws<BridgeException>(() => WebOps.SetKbEffect(p, "static", 4));
 	}
 

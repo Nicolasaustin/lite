@@ -11,11 +11,7 @@ public class KbLightingTests
 	[InlineData("off", 2, 6, "010500")]
 	[InlineData("static", 2, 9, "010501000001FFFFFF")]
 	[InlineData("breathing", 2, 9, "010502010001FFFFFF")]
-	[InlineData("reactive", 1, 9, "010505000101FFFFFF")]
-	[InlineData("reactive", 2, 9, "010505000201FFFFFF")]
-	[InlineData("reactive", 3, 9, "010505000401FFFFFF")]
-	[InlineData("starlight", 1, 9, "010507000101FFFFFF")]
-	[InlineData("starlight", 3, 9, "010507000301FFFFFF")]
+	[InlineData("breathing", 3, 9, "010502010001FFFFFF")]
 	[InlineData("STATIC", 2, 9, "010501000001FFFFFF")]
 	public void Effect_arguments(string effect, int speed, int size, string args)
 	{
@@ -26,33 +22,39 @@ public class KbLightingTests
 	}
 
 	[Fact]
-	public void Speed_is_clamped_to_one_to_three()
-	{
-		Assert.Equal(1, KbLighting.EffectCommand("starlight", 0).Value.Args[4]);
-		Assert.Equal(3, KbLighting.EffectCommand("starlight", 9).Value.Args[4]);
-		Assert.Equal(4, KbLighting.EffectCommand("reactive", 9).Value.Args[4]);
-		Assert.Equal(1, KbLighting.EffectCommand("reactive", -1).Value.Args[4]);
-	}
-
-	[Fact]
 	public void Every_listed_effect_has_a_command_and_unknown_ones_do_not()
 	{
-		Assert.Equal(new[] { "off", "static", "breathing", "reactive", "starlight" }, KbLighting.Effects);
+		// OpenRazer gives the BlackWidow Lite only none, static and breathing.
+		Assert.Equal(new[] { "off", "static", "breathing" }, KbLighting.Effects);
 		Assert.All(KbLighting.Effects, (string e) => Assert.NotNull(KbLighting.EffectCommand(e, 2)));
+		Assert.Null(KbLighting.EffectCommand("reactive", 2));
+		Assert.Null(KbLighting.EffectCommand("starlight", 2));
 		Assert.Null(KbLighting.EffectCommand("spectrum", 2));
 		Assert.Null(KbLighting.EffectCommand(null, 2));
+	}
+
+	[Theory]
+	[InlineData("off", "off")]
+	[InlineData("Breathing", "breathing")]
+	[InlineData("reactive", "static")]
+	[InlineData("starlight", "static")]
+	[InlineData("", "static")]
+	[InlineData(null, "static")]
+	public void Effects_the_keyboard_lacks_become_static(string saved, string expected)
+	{
+		Assert.Equal(expected, KbLighting.Normalize(saved));
 	}
 
 	[Fact]
 	public void Apply_sends_the_effect_then_the_brightness()
 	{
 		RazerDevice kb = new RazerDevice();
-		Assert.True(KbLighting.Apply(kb, "reactive", 3, 40));
+		Assert.True(KbLighting.Apply(kb, "breathing", 3, 40));
 		var sent = Assert.Single(kb.Sent);
 		Assert.Equal(0x0F, sent.Class);
 		Assert.Equal(0x02, sent.Id);
 		Assert.Equal(9, sent.Size);
-		Assert.Equal("010505000401FFFFFF", Convert.ToHexString(sent.Args));
+		Assert.Equal("010502010001FFFFFF", Convert.ToHexString(sent.Args));
 		Assert.Equal(new[] { 40 }, kb.BrightnessWrites);
 		KbLighting.Apply(kb, "off", 2, 150);
 		Assert.Equal(100, kb.BrightnessWrites.Last());

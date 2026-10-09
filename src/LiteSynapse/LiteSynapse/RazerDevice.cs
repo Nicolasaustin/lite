@@ -481,12 +481,42 @@ internal sealed class RazerDevice : IDisposable
 		return reply;
 	}
 
+	// The storage byte that addresses the profile the mouse is running now. On the Naga it is the on-board slot
+	// number (Synapse writes each slot's DPI and lighting with its slot number); 0x01 (VARSTORE) only reaches
+	// slot 1. Asks the mouse for its slot when it is not known yet; 0x01 if it does not say.
+	public byte ActiveStorage()
+	{
+		lock (gate)
+		{
+			return ActiveStorageLocked();
+		}
+	}
+
+	private byte ActiveStorageLocked()
+	{
+		if (!slot.HasValue)
+		{
+			byte[] a = new byte[RazerReport.ArgsLength];
+			if (TransactAuto(5, 132, 1, ReadOnlySpan<byte>.Empty, a) == StatusOk)
+			{
+				slot = a[0];
+			}
+		}
+		return (slot.HasValue && slot.Value >= 1 && slot.Value <= 5) ? (byte)slot.Value : (byte)1;
+	}
+
 	public (int x, int y)? GetDpi(int? slot = null)
 	{
 		lock (gate)
 		{
 			byte[] a = new byte[80];
-			if (TransactAuto(4, 133, 7, stackalloc byte[1] { 1 }, a) != StatusOk)
+			byte store = ActiveStorageLocked();
+			int st = TransactAuto(4, 133, 7, stackalloc byte[1] { store }, a);
+			if (st != StatusOk && store != 1)
+			{
+				st = TransactAuto(4, 133, 7, stackalloc byte[1] { 1 }, a);
+			}
+			if (st != StatusOk)
 			{
 				dpi = null;
 				return null;
@@ -506,14 +536,28 @@ internal sealed class RazerDevice : IDisposable
 			{
 				return true;
 			}
+			// To the profile the mouse is running now (its slot), falling back to 0x01 if the mouse refuses that.
+			byte store = ActiveStorageLocked();
 			int s = TransactAuto(4, 5, 7, stackalloc byte[5]
 			{
-				1,
+				store,
 				(byte)(dpi >> 8),
 				(byte)dpi,
 				(byte)(dpi >> 8),
 				(byte)dpi
 			}, null);
+			if (s != StatusOk && store != 1)
+			{
+				Cfg.Log($"{Name}: DPI for slot {store} refused (status {s}), using 0x01");
+				s = TransactAuto(4, 5, 7, stackalloc byte[5]
+				{
+					1,
+					(byte)(dpi >> 8),
+					(byte)dpi,
+					(byte)(dpi >> 8),
+					(byte)dpi
+				}, null);
+			}
 			this.dpi = (s == StatusOk) ? dpi : null;
 			return s == StatusOk;
 		}

@@ -66,12 +66,16 @@ internal sealed class Service
 	private string currentKey = "\0";
 
 	// ---- Target state (stateLock) ----
+	//
+	// While LiteSynapse runs (and live profiles are on) the mouse always runs ActiveMouse from a live slot: the
+	// desktop profile, a game's profile or one picked by hand. Only exiting puts it back on the user's own slot.
 
-	// The mouse runs ActiveMouse as a live profile (a game, or a profile picked by hand) instead of the desktop.
-	private bool deviceLive;
+	// The last mouse request was for a game's profile, to know when going back to the desktop profile should wait.
+	private bool mouseShownGame;
 
-	// What the last mouse request asked for, to know when the desktop restore should wait.
-	private bool mouseShownLive;
+	// LiteSynapse's own window is in front: the keyboard hook leaves keys alone, so typing, key capture and macro
+	// recording see the real keys.
+	private bool selfInFront;
 
 	// The live write failed: the keyboard hook remaps the mouse buttons in software instead.
 	private bool liveFailed;
@@ -108,7 +112,8 @@ internal sealed class Service
 
 	public string ActiveKeyboard = "";
 
-	// A linked game is in front (Snap Tap, macros and remaps are on only then).
+	// A linked game is in front. Snap Tap, macros and software remaps are on then, and everywhere (except in
+	// LiteSynapse's own window) while a profile picked by hand is active.
 	public bool InGame;
 
 	public string LiveStatus = "";
@@ -301,6 +306,22 @@ internal sealed class Service
 				rule.KeyboardProfile = "";
 			}
 		}
+		// Test build 1 offered reactive and starlight, which the BlackWidow Lite does not have: show static instead.
+		bool effectsFixed = false;
+		foreach (KbProfile kb in s.Keyboard)
+		{
+			string effect = KbLighting.Normalize(kb?.Effect);
+			if (kb != null && kb.Effect != effect)
+			{
+				Cfg.Log($"keyboard profile \"{kb.Name}\": effect \"{kb.Effect}\" -> \"{effect}\"");
+				kb.Effect = effect;
+				effectsFixed = true;
+			}
+		}
+		if (effectsFixed)
+		{
+			Cfg.Save(Cfg.Profiles, s);
+		}
 		Dictionary<string, BaseKey> calibration = Cfg.Load<Dictionary<string, BaseKey>>(Cfg.Calib);
 		lock (stateLock)
 		{
@@ -345,11 +366,9 @@ internal sealed class Service
 			return;
 		}
 		bool active;
-		bool live;
 		lock (stateLock)
 		{
 			active = changedMouseProfile == ActiveMouse;
-			live = deviceLive;
 			if (active)
 			{
 				UpdateEngineLocked(force: true);
@@ -360,10 +379,36 @@ internal sealed class Service
 			// A short delay folds several quick edits into one write.
 			RequestMouse(1000);
 		}
-		if (!active || !live)
+		else
 		{
 			SchedulePrewrite(changedMouseProfile);
 		}
+	}
+
+	// Sends the active profile's DPI and polling rate to the mouse now, so a change is felt right away; the slot
+	// write that SaveProfiles asks for keeps them on the mouse.
+	public void ApplyMousePerformance()
+	{
+		if (DryRun || mouse == null)
+		{
+			return;
+		}
+		worker.Post("mousePerformance", () =>
+		{
+			RazerDevice m = mouse;
+			MouseProfile mp;
+			lock (stateLock)
+			{
+				mp = FindMouse(ActiveMouse);
+			}
+			if (m == null || mp == null)
+			{
+				return;
+			}
+			bool dpiOk = m.SetDpi(mp.Dpi);
+			bool pollOk = m.SetPolling(mp.PollingRate);
+			Cfg.Log($"mouse now: dpi {mp.Dpi}:{dpiOk} poll {mp.PollingRate}:{pollOk}");
+		});
 	}
 
 	public void SetCalibration(Dictionary<string, BaseKey> learned)
@@ -556,11 +601,9 @@ internal sealed class Service
 			return null;
 		}
 		bool active;
-		bool live;
 		lock (stateLock)
 		{
 			active = p.Name == ActiveMouse;
-			live = deviceLive;
 		}
 		if (!active)
 		{
@@ -580,7 +623,7 @@ internal sealed class Service
 				ApplyLighting(m, s, force: true);
 			}
 		});
-		if (live && LiveWrite)
+		if (LiveWrite)
 		{
 			// The live slot stores the lighting too: write it again once the user stops changing it.
 			RequestMouse(1500);
@@ -592,7 +635,7 @@ internal sealed class Service
 	// is not connected or the effect is unknown.
 	public bool ApplyKbLighting(KbProfile p)
 	{
-		if (p == null || KbLighting.EffectCommand(p.Effect, p.EffectSpeed) == null)
+		if (p == null)
 		{
 			return false;
 		}
@@ -684,8 +727,17 @@ internal sealed class Service
 			string exe = Path.GetFileName(path);
 			if (string.Equals(exe, selfExe, StringComparison.OrdinalIgnoreCase))
 			{
-				// LiteSynapse's own window: keep the game's state, but no game is in front now.
+				// LiteSynapse's own window: keep the game's state, but no game is in front now and the keyboard
+				// hook leaves keys alone.
 				gameInFront = false;
+				lock (stateLock)
+				{
+					if (!selfInFront)
+					{
+						selfInFront = true;
+						UpdateEngineLocked(force: false);
+					}
+				}
 				return;
 			}
 			GameRule rule;
@@ -715,6 +767,8 @@ internal sealed class Service
 				fgPath = path;
 				fgPid = pid;
 				fgRule = rule;
+				// Evaluate below gives the keyboard hook its keys back.
+				selfInFront = false;
 				if (!ServicePlan.IsShellOrSelf(exe, selfExe))
 				{
 					LastGameExe = exe;
@@ -733,7 +787,7 @@ internal sealed class Service
 	}
 
 	// Applies the last foreground program's rule. In automatic mode the profiles follow it; when the user picked
-	// a profile by hand only the keyboard hook's "in game" state follows it. Returns true if Changed was raised.
+	// a profile by hand the profiles stay and only "in game" follows it. Returns true if Changed was raised.
 	private bool Evaluate(bool force)
 	{
 		bool changed = false;
@@ -792,15 +846,14 @@ internal sealed class Service
 		}
 	}
 
-	// Makes these profiles active. inGame (or forceLive) puts the mouse on the profile itself (live slot) instead
-	// of the desktop; the keyboard hook treats it as "in game" only while a linked game is in front (in automatic
-	// mode the caller's inGame says that).
-	public void ApplyNames(string mouseName, string kbName, bool inGame, bool forceLive = false)
+	// Makes these profiles active; the mouse runs mouseName from a live slot right away. In automatic mode inGame
+	// says whether a linked game is in front; with a profile picked by hand that follows the foreground program.
+	public void ApplyNames(string mouseName, string kbName, bool inGame)
 	{
 		lock (stateLock)
 		{
 			InGame = Auto ? inGame : (fgRule != null);
-			ApplyLocked(mouseName, kbName, inGame || forceLive, debounce: false);
+			ApplyLocked(mouseName, kbName, InGame, debounce: false);
 		}
 		Notify();
 	}
@@ -815,7 +868,7 @@ internal sealed class Service
 		}
 		lock (stateLock)
 		{
-			ApplyLocked(ActiveMouse, ActiveKeyboard, deviceLive, debounce: false);
+			ApplyLocked(ActiveMouse, ActiveKeyboard, mouseShownGame, debounce: false);
 		}
 		Notify();
 	}
@@ -827,19 +880,19 @@ internal sealed class Service
 			LiveWrite = on;
 			settings.LiveWrite = on;
 			SaveSettings();
-			ApplyLocked(ActiveMouse, ActiveKeyboard, deviceLive, debounce: false);
+			ApplyLocked(ActiveMouse, ActiveKeyboard, mouseShownGame, debounce: false);
 		}
 		Notify();
 	}
 
 	// Caller holds stateLock. Sets the target, updates the keyboard hook right away and asks the worker to bring
-	// the devices there. debounce: a return to the desktop waits ServicePlan.RestoreDelayMs (cancelled if a game
-	// comes back first).
-	private void ApplyLocked(string mouseName, string kbName, bool live, bool debounce)
+	// the devices there. game: mouseName is a game's profile. debounce: going from a game's profile back to the
+	// desktop profile waits ServicePlan.RestoreDelayMs (cancelled if a game comes back first), so a quick alt-tab
+	// does not switch slots twice.
+	private void ApplyLocked(string mouseName, string kbName, bool game, bool debounce)
 	{
 		ActiveMouse = mouseName ?? "";
 		ActiveKeyboard = kbName ?? "";
-		deviceLive = live;
 		liveFailed = false;
 		generation++;
 		string t = "LiteSynapse - " + ActiveMouse;
@@ -850,8 +903,8 @@ internal sealed class Service
 			return;
 		}
 		UpdateEngineLocked(force: true);
-		int delay = ServicePlan.MouseDelay(mouseShownLive, live, debounce);
-		mouseShownLive = live;
+		int delay = ServicePlan.MouseDelay(mouseShownGame, game, debounce);
+		mouseShownGame = game;
 		RequestMouse(delay);
 		RequestKeyboard(forceLighting: false);
 	}
@@ -866,13 +919,14 @@ internal sealed class Service
 		}
 		MouseProfile mp = FindMouse(ActiveMouse);
 		KbProfile kp = FindKeyboard(ActiveKeyboard);
-		bool onboard = LiveWrite && mouse != null && mp != null && deviceLive && !liveFailed;
-		EngineInputs e = ServicePlan.Engine(mp, kp, InGame, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked);
+		bool onboard = LiveWrite && mouse != null && mp != null && !liveFailed;
+		bool game = InGame && !selfInFront;
+		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront);
 		if (!force && engineSet && e == engineInputs)
 		{
 			return;
 		}
-		bool blocked = !sleeping && !locked && ServicePlan.BlockedByCompetitiveSafe(settings.CompetitiveSafe, InGame, fgRule?.Profile, mp?.Name);
+		bool blocked = !sleeping && !locked && ServicePlan.BlockedByCompetitiveSafe(settings.CompetitiveSafe, game, fgRule?.Profile, mp?.Name);
 		if (blocked && !competitiveBlocked)
 		{
 			Cfg.Log("competitive-safe: \"" + (fgRule?.Profile ?? ActiveMouse) + "\" is anti-cheat protected, so no Snap Tap, macros or remaps");
@@ -922,17 +976,16 @@ internal sealed class Service
 		worker.Post("prewrite", () => Prewrite(profile), 2000);
 	}
 
-	// Brings the mouse to the current target: the live profile (game or picked by hand) or the desktop.
+	// Brings the mouse to the active profile: it runs it from a live slot (with live profiles off: DPI and polling
+	// are sent to the slot the user picked on the mouse).
 	private void SyncMouse()
 	{
 		MouseProfile mp;
-		bool live;
 		bool useSlots;
 		int gen;
 		lock (stateLock)
 		{
 			mp = FindMouse(ActiveMouse);
-			live = deviceLive;
 			useSlots = LiveWrite;
 			gen = generation;
 		}
@@ -950,7 +1003,7 @@ internal sealed class Service
 		string status = "";
 		if (useSlots)
 		{
-			string err = live ? liveProfile.Apply(m, mp) : liveProfile.Restore(m);
+			string err = liveProfile.Apply(m, mp);
 			switched = liveProfile.Switched;
 			if (err != null)
 			{
@@ -960,9 +1013,9 @@ internal sealed class Service
 			else
 			{
 				status = liveProfile.Status;
-				Cfg.Log("live: " + ((status.Length > 0) ? status : "desktop"));
+				Cfg.Log("live: " + status);
 			}
-			bool failed = live && err != null;
+			bool failed = err != null;
 			lock (stateLock)
 			{
 				if (gen == generation && failed != liveFailed)
@@ -972,18 +1025,20 @@ internal sealed class Service
 					UpdateEngineLocked(force: true);
 				}
 			}
-			if (!live)
-			{
-				m.SetPolling(mp.PollingRate);
-			}
 		}
 		else
 		{
-			if (liveProfile.LiveSlot > 0)
+			// Live profiles are off: leave a live slot the mouse may still be on (also after a restart or a
+			// reconnect, when LiveSlot is not known). Costs one read when the mouse is already on its own slot.
+			string err = liveProfile.Restore(m);
+			switched = liveProfile.Switched;
+			if (err != null)
 			{
-				// Live profiles were just turned off: leave the live slot first.
-				liveProfile.Restore(m);
-				switched = liveProfile.Switched;
+				Cfg.Log("leaving the live slot failed: " + err);
+			}
+			else if (switched)
+			{
+				Cfg.Log("live profiles off: " + liveProfile.Status);
 			}
 			if (mp.Name != lastMouseName)
 			{
@@ -1006,17 +1061,24 @@ internal sealed class Service
 		}
 	}
 
-	// Per-profile mouse lighting, as the current setting (VARSTORE). Skipped when it is already showing.
+	// Per-profile mouse lighting, written to the slot the mouse is running (its storage byte is the slot number;
+	// 0x01 only reaches slot 1), falling back to 0x01 if the mouse refuses that. Skipped when it is already showing.
 	private void ApplyLighting(RazerDevice m, MouseLightingSettings s, bool force)
 	{
-		string key = $"{s.Effect}|{s.Color}|{s.Brightness}";
+		byte store = m.ActiveStorage();
+		string key = $"{s.Effect}|{s.Color}|{s.Brightness}|{store}";
 		if (!force && key == lastLighting)
 		{
 			return;
 		}
-		string err = MouseLighting.Apply(m, s, MouseLighting.VarStore);
+		string err = MouseLighting.Apply(m, s, store);
+		if (err != null && store != MouseLighting.VarStore)
+		{
+			Cfg.Log($"mouse lighting for slot {store}: {err}; trying 0x01");
+			err = MouseLighting.Apply(m, s, MouseLighting.VarStore);
+		}
 		lastLighting = (err == null) ? key : null;
-		Cfg.Log("mouse lighting " + s.Effect + " " + s.Color + " " + s.Brightness + "%: " + (err ?? "ok"));
+		Cfg.Log($"mouse lighting {s.Effect} {s.Color} {s.Brightness}% (slot {store}): {err ?? "ok"}");
 	}
 
 	private void SyncKeyboard()
@@ -1040,12 +1102,13 @@ internal sealed class Service
 			lastKbEffect = null;
 			lastKbName = kp.Name;
 		}
-		string effect = kp.Effect + "|" + kp.EffectSpeed;
+		string name = KbLighting.Normalize(kp.Effect);
+		string effect = name + "|" + kp.EffectSpeed;
 		if (force || effect != lastKbEffect)
 		{
-			bool ok = KbLighting.Apply(k, kp.Effect, kp.EffectSpeed, kp.Brightness);
+			bool ok = KbLighting.Apply(k, name, kp.EffectSpeed, kp.Brightness);
 			lastKbEffect = ok ? effect : null;
-			Cfg.Log($"kb brightness {kp.Brightness}:{ok} effect {kp.Effect}");
+			Cfg.Log($"kb brightness {kp.Brightness}:{ok} effect {name}");
 		}
 		else
 		{
@@ -1064,7 +1127,7 @@ internal sealed class Service
 		lock (stateLock)
 		{
 			mp = FindMouse(profile);
-			skip = !LiveWrite || (deviceLive && ActiveMouse == profile);
+			skip = !LiveWrite || ActiveMouse == profile;
 		}
 		RazerDevice m = mouse;
 		if (mp == null || skip || m == null)

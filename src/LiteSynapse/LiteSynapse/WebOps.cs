@@ -386,7 +386,7 @@ internal static class WebOps
 	public static void SetKbEffect(KbProfile p, string effect, int speed)
 	{
 		string e = KbLighting.Effects.FirstOrDefault(x => string.Equals(x, effect, StringComparison.OrdinalIgnoreCase))
-			?? throw new BridgeException($"Unknown keyboard effect \"{effect}\".");
+			?? throw new BridgeException($"The BlackWidow Lite has no \"{effect}\" effect. Use off, static or breathing.");
 		if (speed < 1 || speed > 3)
 		{
 			throw new BridgeException("Effect speed must be 1, 2 or 3.");

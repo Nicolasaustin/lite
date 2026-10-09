@@ -2385,7 +2385,7 @@ internal class MainForm : Form
 				};
 			}
 			SaveProfiles();
-			app.ApplyNames(app.ActiveMouse, app.ActiveKeyboard, app.InGame, forceLive: true);
+			app.ApplyNames(app.ActiveMouse, app.ActiveKeyboard, app.InGame);
 			LoadAll();
 		}
 	}

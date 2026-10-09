@@ -17,7 +17,7 @@ public class KbProfile
 	// One of KbLighting.Effects.
 	public string Effect { get; set; } = "static";
 
-	// 1 (slow) .. 3 (fast); used by reactive and starlight.
+	// 1 (slow) .. 3 (fast). Kept for the bridge contract; none of the BlackWidow Lite's effects uses it.
 	public int EffectSpeed { get; set; } = 2;
 
 	[JsonExtensionData]

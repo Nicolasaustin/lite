@@ -333,6 +333,7 @@ internal sealed class Bridge
 		int active = a.Int("active", 1, WebOps.MaxDpiStages);
 		WebOps.SetDpiStages(p, stages, active);
 		svc.SaveProfiles(p.Name);
+		svc.ApplyMousePerformance();
 		return State();
 	}
 
@@ -341,6 +342,7 @@ internal sealed class Bridge
 		MouseProfile p = ActiveMouseProfile();
 		WebOps.SetPolling(p, a.Int("hz", 125, 1000));
 		svc.SaveProfiles(p.Name);
+		svc.ApplyMousePerformance();
 		return State();
 	}
 

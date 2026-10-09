@@ -28,7 +28,7 @@
   const SLOT_NAMES = ['', 'White', 'Red', 'Green', 'Blue', 'Cyan'];
   const MACRO_KEYS = ['KEY_UP_ARROW', 'KEY_DOWN_ARROW', 'KEY_LEFT_ARROW', 'KEY_RIGHT_ARROW'];
   const ACCENTS = ['mint', 'green', 'blue', 'violet', 'amber'];
-  const KB_EFFECTS = ['off', 'static', 'breathing', 'reactive', 'starlight'];
+  const KB_EFFECTS = ['off', 'static', 'breathing'];
   const MOUSE_EFFECTS = ['off', 'static', 'breathing', 'spectrum'];
   const ANTI_CHEAT = ['APEXLEGENDS', 'BF', 'Call of Duty', 'CS2', 'fortnite', 'h1z1', 'Halo', 'MarvelRivals',
     'new world', 'PUBG', 'rogue', 'rust', 'splitgate', 'SIEGE', 'Tarky', 'Valorant'].map(s => s.toLowerCase());

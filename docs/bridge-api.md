@@ -87,7 +87,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `setPolling` | `{ hz: 125\|500\|1000 }` | State |
 | `setButton` | `{ id, key, mods: string[] }` | State — `key: ""` removes the remap (button sends its default) |
 | `setKbBrightness` | `{ value: 0..100 }` | State |
-| `setKbEffect` | `{ effect: "off"\|"static"\|"breathing"\|"reactive"\|"starlight", speed: 1..3 }` | State |
+| `setKbEffect` | `{ effect: "off"\|"static"\|"breathing", speed: 1..3 }` | State — the BlackWidow Lite has only these three; `speed` is kept but unused |
 | `setSnapTap` | `{ on }` | State |
 | `setMacroKey` | `{ key: "KEY_UP_ARROW"\|"KEY_DOWN_ARROW"\|"KEY_LEFT_ARROW"\|"KEY_RIGHT_ARROW", macro: name\|"" }` | State |
 | `addProfile` | `{ kind, name }` | State |
@@ -152,7 +152,8 @@ Lighting helpers (data/protocol work):
 
 ```csharp
 internal static class KbLighting {
-    public static readonly string[] Effects;            // "off","static","breathing","reactive","starlight"
+    public static readonly string[] Effects;            // "off","static","breathing" (all the BlackWidow Lite has)
+    public static string Normalize(string effect);      // effect if supported, else "static"
     public static bool Apply(RazerDevice kb, string effect, int speed, int brightness); // brightness 0..100
 }
 internal static class MouseLighting {

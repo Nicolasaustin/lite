@@ -15,7 +15,7 @@ internal readonly record struct EngineInputs(MouseProfile Mouse, KbProfile Keybo
 // Decisions the Service makes on every foreground change, kept free of Windows calls so they can be tested.
 internal static class ServicePlan
 {
-	// How long the game has to stay out of the foreground before the mouse goes back to the desktop slot.
+	// How long the game has to stay out of the foreground before the mouse goes back to the desktop profile.
 	public const int RestoreDelayMs = 3000;
 
 	// Programs that are LiteSynapse itself or part of the Windows shell: never "the game that is running".
@@ -72,13 +72,14 @@ internal static class ServicePlan
 	}
 
 	// What the keyboard hook gets.
-	//  - gameInFront: a linked game is in front (Snap Tap, macros and remaps only work then; a profile picked by
-	//    hand changes the devices, not this);
+	//  - gameInFront: a linked game is in front;
+	//  - pickedByHand: the user picked the profiles by hand (automatic switching off) and LiteSynapse's own window
+	//    is not in front. Snap Tap, macros and remaps work only in a linked game or with a profile picked by hand;
 	//  - mouseOnboard: the mouse runs the profile from its own memory, so no software remap is needed;
 	//  - suspended: sleeping or locked: nothing at all, the hook is removed.
-	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended)
+	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false)
 	{
-		if (suspended || !gameInFront)
+		if (suspended || !(gameInFront || pickedByHand))
 		{
 			return EngineInputs.Off;
 		}
@@ -89,11 +90,11 @@ internal static class ServicePlan
 		return new EngineInputs(mouseOnboard ? null : mp, kp, InGame: true);
 	}
 
-	// Delay before the mouse follows a new target: going from a game (live) back to the desktop waits, so a quick
-	// alt-tab does not switch slots twice; everything else is immediate.
-	public static int MouseDelay(bool wasLive, bool nowLive, bool debounce)
+	// Delay before the mouse follows a new target: going from a game's profile back to the desktop profile waits,
+	// so a quick alt-tab does not switch slots twice; everything else is immediate.
+	public static int MouseDelay(bool wasGame, bool nowGame, bool debounce)
 	{
-		if (debounce && wasLive && !nowLive)
+		if (debounce && wasGame && !nowGame)
 		{
 			return RestoreDelayMs;
 		}
