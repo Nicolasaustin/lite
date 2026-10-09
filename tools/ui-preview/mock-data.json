@@ -4663,7 +4663,32 @@
         "RzDev_008d (Naga)",
         "RzDev_0235 (BlackWidow Lite)"
       ],
-      "rzCommon": false
+      "rzCommon": false,
+      "autostart": [
+        "RazerAppEngine"
+      ],
+      "services": [
+        {
+          "name": "cpuz165",
+          "label": "CPUID driver (cpuz165)",
+          "state": "manual",
+          "driver": true
+        },
+        {
+          "name": "Razer Chroma SDK Server",
+          "label": "Razer Chroma SDK Server",
+          "state": "running",
+          "driver": false
+        },
+        {
+          "name": "razer_elevation_service",
+          "label": "Razer Elevation Service",
+          "state": "manual",
+          "driver": false
+        }
+      ],
+      "upgradeTask": "ready",
+      "runOnce": []
     },
     "closeOnGame": true
   },

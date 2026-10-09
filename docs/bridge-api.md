@@ -65,7 +65,13 @@ All JSON property names are camelCase.
   "razer": {                        // leftovers of Razer software that cost performance
     "checked": true, "synapseInstalled": false, "synapseRunning": false,   // running: it can override lights and slots
     "gmsService": "absent",         // absent | running | stopped | disabled
-    "filterDrivers": ["RzDev_008d (Naga)", "RzDev_0235 (BlackWidow Lite)"], "rzCommon": false
+    "filterDrivers": ["RzDev_008d (Naga)", "RzDev_0235 (BlackWidow Lite)"], "rzCommon": false,
+    "autostart": ["RazerAppEngine"],  // HKCU Run values that start Razer software at sign-in and are on
+    "services": [                     // other Razer services (program in a Razer folder) and the CPUID driver
+      { "name": "cpuz165", "label": "CPUID driver (cpuz165)", "state": "manual", "driver": true }
+    ],                                // state: running | auto | manual | disabled | removing
+    "upgradeTask": "ready",           // scheduled task "Razer Upgrade Elevation Service": absent | ready | disabled
+    "runOnce": []                     // cpuz installer/uninstaller values waiting in HKLM RunOnce
   }
 }
 ```
@@ -114,7 +120,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `setGameKeyboardDefault` | `{ keyboardProfile }` (`""` = none) | State |
 | `linkRunningGame` | `{ profile }` | `{ exe: string\|null }` — adds `state.lastGameExe` to that profile's game rule (creates the rule if missing) |
 | `razerCheck` | `{}` | State (refreshes `state.razer`) |
-| `razerCleanup` | `{ action: "disableGameManager"\|"driverGuide" }` | `{ message }` — runs the elevated step with a UAC prompt |
+| `razerCleanup` | `{ action: "disableServices"\|"disableGameManager"\|"driverGuide" }` | `{ message }` — `disableServices` turns off the sign-in autostart (no UAC), then with one UAC prompt sets Game Manager and the other Razer services to Disabled and stops them, deletes the CPUID driver service, disables the upgrade task and deletes the cpuz RunOnce values; never Audiosrv, VSSrv or XTU3SERVICE |
 | `runSelfTest` | `{}` | `null` — opens a console window running `LiteSynapse.exe testall` |
 | `openConfigFolder` | `{}` | `null` |
 | `reloadConfig` | `{}` | State |
@@ -148,7 +154,8 @@ public RazerLeftovers Razer { get; }            public void RefreshRazer(); publ
 public string ApplyMouseLighting(MouseProfile p);   // null = ok; no-op if the mouse is disconnected
 public bool ApplyKbLighting(KbProfile p);
 public void OnSuspend(); public void OnResume(); public void OnSessionLock(); public void OnSessionUnlock();
-public class RazerLeftovers { bool Checked; bool SynapseInstalled; bool SynapseRunning; string GmsService; List<string> FilterDrivers; bool RzCommon; }
+public class RazerLeftovers { bool Checked; bool SynapseInstalled; bool SynapseRunning; string GmsService; List<string> FilterDrivers; bool RzCommon;
+                             List<string> Autostart; List<RazerService> Services; string UpgradeTask; List<string> RunOnce; }
 ```
 
 Lighting helpers (data/protocol work):

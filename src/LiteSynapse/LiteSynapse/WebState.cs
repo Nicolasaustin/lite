@@ -159,6 +159,30 @@ internal sealed class RazerDto
 	public List<string> FilterDrivers { get; set; } = new List<string>();
 
 	public bool RzCommon { get; set; }
+
+	// HKCU Run values that start Razer software at sign-in and are on.
+	public List<string> Autostart { get; set; } = new List<string>();
+
+	// Razer background services besides Game Manager, and the CPUID driver.
+	public List<RazerServiceDto> Services { get; set; } = new List<RazerServiceDto>();
+
+	// absent | ready | disabled
+	public string UpgradeTask { get; set; } = "absent";
+
+	// cpuz install/uninstall values waiting in HKLM RunOnce.
+	public List<string> RunOnce { get; set; } = new List<string>();
+}
+
+internal sealed class RazerServiceDto
+{
+	public string Name { get; set; } = "";
+
+	public string Label { get; set; } = "";
+
+	// running | auto | manual | disabled | removing
+	public string State { get; set; } = "auto";
+
+	public bool Driver { get; set; }
 }
 
 // getDeviceInfo

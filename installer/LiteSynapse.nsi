@@ -24,6 +24,8 @@ CRCCheck on
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\LiteSynapse"
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 !define RUN_VALUE "LiteSynapse"
+; Task Manager's "Startup apps" switch for each HKCU Run value (REG_BINARY; odd first byte = turned off).
+!define APPROVED_KEY "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
 ; The app holds this mutex while it runs (Program.cs).
 !define APP_MUTEX "LiteSynapse.single"
 ; Edge WebView2 Runtime client id (Microsoft's documented detection key).
@@ -458,6 +460,24 @@ FunctionEnd
 
 ; ---- Installer callbacks ---------------------------------------------------------------------------------
 
+; $0 = 1 when Task Manager's Startup apps has turned the LiteSynapse Run value off (the value stays, Windows
+; skips it at sign-in), otherwise 0.
+Function StartupTurnedOff
+  Push $1
+  Push $2
+  StrCpy $0 0
+  System::Call '*(l 0, l 0) p.r1'
+  ; HKEY_CURRENT_USER, RRF_RT_REG_BINARY, 16-byte buffer.
+  System::Call 'advapi32::RegGetValueW(p -2147483647, w "${APPROVED_KEY}", w "${RUN_VALUE}", i 0x8, p 0, p r1, *i 16) i.r2'
+  ${If} $2 = 0
+    System::Call '*$1(&i1 .r0)'
+    IntOp $0 $0 & 1
+  ${EndIf}
+  System::Free $1
+  Pop $2
+  Pop $1
+FunctionEnd
+
 Function .onInit
   SetShellVarContext current
   System::Call 'kernel32::CreateMutexW(p 0, i 0, w "LiteSynapse.setup") p.r1 ?e'
@@ -470,10 +490,16 @@ Function .onInit
     MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} needs 64-bit Windows." /SD IDOK
     Abort
   ${EndIf}
-  ; "Start with Windows" starts checked when a LiteSynapse Run value already exists.
+  ; "Start with Windows" starts checked when a LiteSynapse Run value already exists and Task Manager's
+  ; Startup apps has not turned it off.
   ReadRegStr $0 HKCU "${RUN_KEY}" "${RUN_VALUE}"
   ${If} $0 != ""
-    StrCpy $StartupState ${BST_CHECKED}
+    Call StartupTurnedOff
+    ${If} $0 = 1
+      StrCpy $StartupState ${BST_UNCHECKED}
+    ${Else}
+      StrCpy $StartupState ${BST_CHECKED}
+    ${EndIf}
   ${Else}
     StrCpy $StartupState ${BST_UNCHECKED}
   ${EndIf}
@@ -697,6 +723,8 @@ Section "${APP_NAME}" SecMain
   ReadRegStr $1 HKCU "${RUN_KEY}" "${RUN_VALUE}"
   ${If} $StartupState == ${BST_CHECKED}
     WriteRegStr HKCU "${RUN_KEY}" "${RUN_VALUE}" '"$INSTDIR\${APP_EXE}" --tray'
+    ; Turned off in Task Manager's Startup apps before: the ticked box turns it back on.
+    DeleteRegValue HKCU "${APPROVED_KEY}" "${RUN_VALUE}"
     !insertmacro LOG "Start with Windows: on"
   ${ElseIf} $1 != ""
     ; Only remove the value when it starts a LiteSynapse.exe (this or an older copy).
@@ -706,6 +734,7 @@ Section "${APP_NAME}" SecMain
     Pop $0
     ${If} $0 = 1
       DeleteRegValue HKCU "${RUN_KEY}" "${RUN_VALUE}"
+      DeleteRegValue HKCU "${APPROVED_KEY}" "${RUN_VALUE}"
       !insertmacro LOG "Start with Windows: off (removed $1)"
     ${Else}
       !insertmacro LOG "Start with Windows: off (left the unrelated Run value $1)"
@@ -783,6 +812,7 @@ Section "Uninstall"
     Pop $0
     ${If} $0 = 1
       DeleteRegValue HKCU "${RUN_KEY}" "${RUN_VALUE}"
+      DeleteRegValue HKCU "${APPROVED_KEY}" "${RUN_VALUE}"
     ${EndIf}
   ${EndIf}
   DeleteRegKey HKCU "${UNINST_KEY}"

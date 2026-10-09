@@ -1336,22 +1336,25 @@ internal sealed class Service
 		}
 	}
 
+	// On when the Run value exists and Task Manager's Startup apps has not turned it off.
 	public static bool IsStartup()
 	{
-		using RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey);
-		return k?.GetValue("LiteSynapse") != null;
+		return StartupApproved.State("LiteSynapse") == "enabled";
 	}
 
 	public static void SetStartup(bool on)
 	{
-		using RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
 		if (on)
 		{
+			using RegistryKey k = Registry.CurrentUser.CreateSubKey(RunKey);
 			k.SetValue("LiteSynapse", "\"" + Environment.ProcessPath + "\" --tray");
+			// Turned off in Task Manager before: Windows would keep skipping it.
+			StartupApproved.Enable("LiteSynapse");
 		}
 		else
 		{
-			k.DeleteValue("LiteSynapse", throwOnMissingValue: false);
+			using RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+			k?.DeleteValue("LiteSynapse", throwOnMissingValue: false);
 		}
 	}
 }

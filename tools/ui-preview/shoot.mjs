@@ -223,6 +223,13 @@ scenario('main', async browser => {
   await shot(p, '31-settings-gaming');
   await tab(p, 'Performance');
   await shot(p, '32-settings-performance');
+  await p.click('button[data-fk="razer:svc"]');
+  await shot(p, '32b-razer-services-confirm', 400);
+  await p.click('.modal-f .btn.primary');
+  await p.waitForSelector('.modal-t:text-is("Razer services")');
+  await shot(p, '32c-razer-services-done', 400);
+  await p.keyboard.press('Escape');
+  await shot(p, '32d-settings-performance-after', 400);
   await tab(p, 'Appearance');
   await p.click('.accent-opt:has-text("Violet")');
   await shot(p, '33-settings-appearance-violet');

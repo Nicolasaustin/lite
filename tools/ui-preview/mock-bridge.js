@@ -330,6 +330,19 @@
     razerCheck: () => delay(700).then(() => { st.razer = Object.assign({}, st.razer, { checked: true }); return st; }),
     razerCleanup: a => {
       if (a.action === 'disableGameManager') return delay(600).then(() => { st.razer = Object.assign({}, st.razer, { gmsService: 'disabled' }); pushState(); return { message: 'Razer Game Manager Service 3 is stopped and disabled.' }; });
+      if (a.action === 'disableServices') return delay(900).then(() => {
+        const r = st.razer, off = [];
+        if ((r.autostart || []).length) off.push('Synapse autostart');
+        if (r.gmsService === 'running' || r.gmsService === 'stopped') off.push('Razer Game Manager Service 3');
+        (r.services || []).filter(s => ['running', 'auto', 'manual'].includes(s.state)).forEach(s => off.push(s.label));
+        if (r.upgradeTask === 'ready') off.push('upgrade task');
+        st.razer = Object.assign({}, r, {
+          autostart: [], gmsService: r.gmsService === 'absent' ? 'absent' : 'disabled', upgradeTask: r.upgradeTask === 'absent' ? 'absent' : 'disabled', runOnce: [],
+          services: (r.services || []).filter(s => !s.driver).map(s => Object.assign({}, s, { state: 'disabled' }))
+        });
+        pushState();
+        return { message: off.length ? 'Turned off: ' + off.join(', ') + '.' : 'No Razer service, task or sign-in autostart is on. Nothing to do.' };
+      });
       if (a.action === 'driverGuide') return delay(400).then(() => ({ message: 'Opened the driver removal guide in an administrator PowerShell window (dry run first).' }));
       return fail(`Unknown action "${a.action}".`);
     },

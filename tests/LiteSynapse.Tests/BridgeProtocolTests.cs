@@ -223,8 +223,24 @@ public class BridgeProtocolTests
 		};
 		Assert.Equal(contract.OrderBy(k => k, StringComparer.Ordinal).ToArray(), Keys(s));
 		Assert.Equal(new[] { "connected", "name" }, Keys(s["mouse"].AsObject()));
-		Assert.Equal(new[] { "checked", "filterDrivers", "gmsService", "rzCommon", "synapseInstalled", "synapseRunning" }, Keys(s["razer"].AsObject()));
+		Assert.Equal(new[] { "autostart", "checked", "filterDrivers", "gmsService", "runOnce", "rzCommon", "services", "synapseInstalled", "synapseRunning", "upgradeTask" }, Keys(s["razer"].AsObject()));
+		Assert.Equal("absent", (string)s["razer"]["upgradeTask"]);
+		Assert.Empty(s["razer"]["services"].AsArray());
 		Assert.Equal("mint", (string)s["accent"]);
+	}
+
+	[Fact]
+	public void RazerServicesAreSentWithNameLabelStateAndDriver()
+	{
+		StateDto st = new StateDto();
+		st.Razer.Services.Add(new RazerServiceDto { Name = "cpuz165", Label = "CPUID driver (cpuz165)", State = "manual", Driver = true });
+		st.Razer.Autostart.Add("RazerAppEngine");
+		JsonObject r = Obj(WebProtocol.State(st))["state"]["razer"].AsObject();
+		JsonObject svc = r["services"][0].AsObject();
+		Assert.Equal(new[] { "driver", "label", "name", "state" }, Keys(svc));
+		Assert.Equal("cpuz165", (string)svc["name"]);
+		Assert.True((bool)svc["driver"]);
+		Assert.Equal("RazerAppEngine", (string)r["autostart"][0]);
 	}
 
 	[Fact]

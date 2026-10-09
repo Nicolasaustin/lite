@@ -266,7 +266,17 @@ internal sealed class Bridge
 			SynapseRunning = r.SynapseRunning,
 			GmsService = string.IsNullOrEmpty(r.GmsService) ? "absent" : r.GmsService,
 			FilterDrivers = (r.FilterDrivers ?? new List<string>()).ToList(),
-			RzCommon = r.RzCommon
+			RzCommon = r.RzCommon,
+			Autostart = (r.Autostart ?? new List<string>()).ToList(),
+			Services = (r.Services ?? new List<RazerService>()).Where((RazerService s) => s != null).Select((RazerService s) => new RazerServiceDto
+			{
+				Name = s.Name ?? "",
+				Label = s.Label ?? s.Name ?? "",
+				State = s.State ?? "auto",
+				Driver = s.Driver
+			}).ToList(),
+			UpgradeTask = string.IsNullOrEmpty(r.UpgradeTask) ? "absent" : r.UpgradeTask,
+			RunOnce = (r.RunOnce ?? new List<string>()).ToList()
 		};
 	}
 
@@ -916,7 +926,7 @@ internal sealed class Bridge
 	private async Task<object> RazerCleanup(WebArgs a)
 	{
 		string action = a.Str("action");
-		if (action != "disableGameManager" && action != "driverGuide")
+		if (!RazerLeftovers.Actions.Contains(action))
 		{
 			throw new BridgeException($"Unknown clean-up step \"{action}\".");
 		}
