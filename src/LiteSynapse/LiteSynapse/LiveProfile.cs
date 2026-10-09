@@ -46,6 +46,9 @@ internal class LiveProfile
 	// The last Apply wrote the mouse's memory.
 	public bool Wrote { get; private set; }
 
+	// A slot is about to be (re)written (live, pre-write or by hand): what it stored before is gone.
+	public event Action<int> SlotWritten;
+
 	private static string SlotFile => Path.Combine(Cfg.Dir, "return-slot.txt");
 
 	public static string TableFile => Path.Combine(Cfg.Dir, "onboard.json");
@@ -175,6 +178,7 @@ internal class LiveProfile
 			Table().Forget(slot);
 			SaveTable();
 		}
+		SlotWritten?.Invoke(slot);
 		string err = OnboardMemory.Write(dev, slot, p, progress);
 		if (err != null)
 		{

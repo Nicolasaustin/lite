@@ -2788,10 +2788,10 @@ function mouseOnboard() {
         what([h('span', { class: 'badge accent' }, 'Live'), ' Used by LiteSynapse'], stored ? `Now holds ${quote(stored)}` : 'Holds the active profile'),
         h('div', { class: 'side' }, n === S.liveSlots[0] ? 'Slots 1 and 2 take turns, so the slot the mouse is using is never rewritten.' : ''));
     }
-    if (n === 1) {
+    if (n <= 2) {
       return h('div', { class: 'slot-row' }, who,
         what(stored || 'Not written by LiteSynapse', 'Kept for live profiles', stored ? '' : 'faint'),
-        h('div', { class: 'side' }, 'Turn on “Run profiles on the mouse itself” in Settings to use it.'));
+        h('div', { class: 'side' }, n === 1 ? 'Turn on “Run profiles on the mouse itself” in Settings to use slots 1 and 2.' : ''));
     }
     const pick = ui.onboardPick[n] || stored || S.activeMouse || names[0] || '';
     const writing = busy === n;
@@ -2805,7 +2805,7 @@ function mouseOnboard() {
   return h('div', { class: 'stack' },
     banner('calm', 'chip', 'The Naga keeps up to 5 profiles in its own memory',
       'They work without LiteSynapse, even on another PC. The profile button on the mouse cycles through the slots, and its light shows which slot is in use.'),
-    h('div', { class: 'card' }, cardHead('Onboard slots', S.liveWrite ? 'Slots 1 and 2 are LiteSynapse’s. Slots 3 to 5 are yours: write any profile into them.' : 'Slots 2 to 5 are yours: write any profile into them.', null, 'layers'),
+    h('div', { class: 'card' }, cardHead('Onboard slots', 'Slots 1 and 2 are LiteSynapse’s. Slots 3 to 5 are yours: write any profile into them.', null, 'layers'),
       h('div', { class: 'slot-list' }, [1, 2, 3, 4, 5].map(row))));
 }
 async function writeSlot(n) {
@@ -3441,7 +3441,7 @@ function setGaming() {
         return h('span', { class: 'chip', title: g && g.exes.length ? g.exes.join(', ') : 'Not linked to a program' },
           h('span', { class: 'shield', style: 'display:inline-grid;place-items:center;width:18px;height:18px;border-radius:6px' }, icon('shield', 12)), p.name);
       })) : h('div', { class: 'small muted' }, 'None of your profiles is an anti-cheat game.'),
-      h('div', { class: 'small faint', style: 'margin-top:12px' }, 'Profiles are matched to anti-cheat games by name, from the flag in Razer’s game list.')),
+      h('div', { class: 'small faint', style: 'margin-top:12px' }, 'Anti-cheat games are recognized by their program (cs2.exe, VALORANT, r5apex.exe …), whatever profile they are linked to, and by the profile name.')),
     h('div', { class: 'card' },
       srow('Keyboard profile for games',
         'Used by linked games that don’t pick their own keyboard profile. With “None”, those games get no Snap Tap and no macro keys.',

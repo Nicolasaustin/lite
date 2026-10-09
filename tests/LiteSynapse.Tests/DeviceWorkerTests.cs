@@ -117,6 +117,44 @@ public class DeviceWorkerTests
 	}
 
 	[Fact]
+	public void PausedWorkWaitsUntilResumeAndThenOnlyTheLatestRuns()
+	{
+		using DeviceWorker w = new DeviceWorker();
+		using ManualResetEventSlim release = new ManualResetEventSlim();
+		ConcurrentQueue<string> ran = new ConcurrentQueue<string>();
+		// A job that is running when Pause is called is waited for.
+		Task<bool> busy = w.Post("mouse", () => { release.Wait(2000); ran.Enqueue("first"); });
+		SpinWait.SpinUntil(() => w.Busy, 2000);
+		Task pause = Task.Run(() => w.Pause(5000));
+		Assert.False(pause.Wait(100));
+		release.Set();
+		Assert.True(pause.Wait(3000));
+		Assert.True(busy.Result);
+		// While paused nothing runs; the latest job of a kind is kept.
+		Task<bool> old = w.Post("mouse", () => ran.Enqueue("stale"));
+		Task<bool> latest = w.Post("mouse", () => ran.Enqueue("latest"));
+		Task<bool> kb = w.Post("kb", () => ran.Enqueue("kb"));
+		Assert.False(old.Result);
+		Assert.False(latest.Wait(300));
+		Assert.Equal(new[] { "first" }, ran.ToArray());
+		w.Resume();
+		Assert.True(latest.Wait(3000) && latest.Result);
+		Assert.True(kb.Wait(3000) && kb.Result);
+		Assert.Equal(new[] { "first", "latest", "kb" }, ran.ToArray());
+	}
+
+	[Fact]
+	public void DisposeWhilePausedDropsTheWaitingWork()
+	{
+		DeviceWorker w = new DeviceWorker();
+		w.Pause(100);
+		Task<bool> t = w.Post("mouse", () => { });
+		w.Dispose();
+		Assert.True(t.Wait(3000));
+		Assert.False(t.Result);
+	}
+
+	[Fact]
 	public void CancelDropsAWaitingJob()
 	{
 		using DeviceWorker w = new DeviceWorker();

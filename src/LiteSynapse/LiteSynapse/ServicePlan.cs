@@ -60,11 +60,20 @@ internal static class ServicePlan
 		return "";
 	}
 
-	// True when Competitive-safe applies: it is on, a linked game is in front, and that game (or the profile the
+	// True when Competitive-safe applies: it is on and an anti-cheat game is in front. That is the program itself
+	// (cs2.exe, ... whatever profile it is linked to, or none), or a linked game whose profile (or the profile the
 	// user picked for it) is flagged as anti-cheat protected.
-	public static bool BlockedByCompetitiveSafe(bool competitiveSafe, bool gameInFront, string gameProfile, string activeMouse)
+	public static bool BlockedByCompetitiveSafe(bool competitiveSafe, bool gameInFront, string gameProfile, string activeMouse, string foregroundExe = null)
 	{
-		if (!competitiveSafe || !gameInFront)
+		if (!competitiveSafe)
+		{
+			return false;
+		}
+		if (AntiCheat.IsProtectedExe(foregroundExe))
+		{
+			return true;
+		}
+		if (!gameInFront)
 		{
 			return false;
 		}
@@ -76,14 +85,15 @@ internal static class ServicePlan
 	//  - pickedByHand: the user picked the profiles by hand (automatic switching off) and LiteSynapse's own window
 	//    is not in front. Snap Tap, macros and remaps work only in a linked game or with a profile picked by hand;
 	//  - mouseOnboard: the mouse runs the profile from its own memory, so no software remap is needed;
-	//  - suspended: sleeping or locked: nothing at all, the hook is removed.
-	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false)
+	//  - suspended: sleeping or locked: nothing at all, the hook is removed;
+	//  - foregroundExe: the program in front (for Competitive-safe).
+	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false, string foregroundExe = null)
 	{
 		if (suspended || !(gameInFront || pickedByHand))
 		{
 			return EngineInputs.Off;
 		}
-		if (BlockedByCompetitiveSafe(competitiveSafe, gameInFront, gameProfile, mp?.Name))
+		if (BlockedByCompetitiveSafe(competitiveSafe, gameInFront, gameProfile, mp?.Name, foregroundExe))
 		{
 			return EngineInputs.Off;
 		}

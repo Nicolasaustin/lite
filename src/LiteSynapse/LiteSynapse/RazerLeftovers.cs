@@ -674,7 +674,7 @@ public class RazerLeftovers
 		{
 			return DriverScript + " was not found next to LiteSynapse.exe. Reinstall LiteSynapse to get it back.";
 		}
-		ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -NoExit -File \"" + path + "\"")
+		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath, "-NoProfile -ExecutionPolicy Bypass -NoExit -File \"" + path + "\"")
 		{
 			UseShellExecute = true,
 			Verb = "runas",
@@ -692,11 +692,15 @@ public class RazerLeftovers
 		return msg;
 	}
 
+	// Windows PowerShell by its full path: a bare name would also find a powershell.exe in the working directory
+	// (LiteSynapse's own, user-writable folder), and that copy would get the administrator rights.
+	private static string PowerShellPath => Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+
 	// Exit code of the script; -2 when it did not finish within waitMs.
 	private static int RunElevatedPowerShell(string script, bool hidden, int waitMs)
 	{
 		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-		ProcessStartInfo psi = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -ExecutionPolicy Bypass " + (hidden ? "-WindowStyle Hidden " : "") + "-EncodedCommand " + encoded)
+		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath, "-NoProfile -NonInteractive -ExecutionPolicy Bypass " + (hidden ? "-WindowStyle Hidden " : "") + "-EncodedCommand " + encoded)
 		{
 			UseShellExecute = true,
 			Verb = "runas",

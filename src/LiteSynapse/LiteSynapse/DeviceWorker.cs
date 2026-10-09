@@ -135,6 +135,9 @@ internal sealed class DeviceWorker : IDisposable
 
 	private volatile string running;
 
+	// Work waits (queued, latest per kind) while another process drives the devices (the self-test).
+	private bool paused;
+
 	public DeviceWorker()
 	{
 		thread = new Thread(Loop)
@@ -193,12 +196,36 @@ internal sealed class DeviceWorker : IDisposable
 		}
 	}
 
+	// Holds all work until Resume; what is posted meanwhile stays queued (latest per kind). Waits up to waitMs
+	// for the job that is running to finish, so nothing of ours is on the wire when this returns.
+	public void Pause(int waitMs)
+	{
+		lock (gate)
+		{
+			paused = true;
+		}
+		Stopwatch sw = Stopwatch.StartNew();
+		while (running != null && sw.ElapsedMilliseconds < waitMs)
+		{
+			Thread.Sleep(10);
+		}
+	}
+
+	public void Resume()
+	{
+		lock (gate)
+		{
+			paused = false;
+		}
+		wake.Set();
+	}
+
 	private void Loop()
 	{
 		while (true)
 		{
-			string kind;
-			Job job;
+			string kind = null;
+			Job job = null;
 			int sleep;
 			lock (gate)
 			{
@@ -207,13 +234,15 @@ internal sealed class DeviceWorker : IDisposable
 					return;
 				}
 				long now = clock.ElapsedMilliseconds;
-				if (queue.TryTakeDue(now, out kind, out job))
+				if (!paused && queue.TryTakeDue(now, out kind, out job))
 				{
 					sleep = 0;
+					// Set under the lock, so Pause never misses a job that was just taken.
+					running = kind;
 				}
 				else
 				{
-					long w = queue.WaitTime(now);
+					long w = paused ? -1 : queue.WaitTime(now);
 					sleep = (w < 0) ? Timeout.Infinite : (int)Math.Min(w, int.MaxValue);
 					if (stopping)
 					{
@@ -231,7 +260,6 @@ internal sealed class DeviceWorker : IDisposable
 				wake.WaitOne(sleep);
 				continue;
 			}
-			running = kind;
 			try
 			{
 				job.Work();

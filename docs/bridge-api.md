@@ -112,7 +112,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `runningApps` | `{}` | `string[]` of `name.exe` for processes with a visible window, sorted, deduped |
 | `saveMacro` | `{ originalName: string\|null, macro: { name, steps } }` | State (rename updates keyboard macro-key references) |
 | `deleteMacro` | `{ name }` | State (removes references from keyboard profiles) |
-| `onboardWrite` | `{ slot: 2..5, profile }` | `{ ok: bool, message }` (sends `progress` pushes while writing) |
+| `onboardWrite` | `{ slot: 3..5, profile }` | `{ ok: bool, message }` (sends `progress` pushes while writing). Slots 1 and 2 are LiteSynapse's live slots in both modes and are refused |
 | `calibrate` | `{}` | `null` — opens the native calibration window (classic; the page no longer offers it) |
 | `probeMouseLighting` | `{}` | `{ zones: [ { id: 0, name: "All zones" }, ... ] }` (read-only probe) |
 | `setMouseLighting` | `{ profile?: name (default: active), zone?: "all"\|"scroll"\|"logo"\|"side", effect: "off"\|"static"\|"breathing"\|"spectrum", color: "#RRGGBB", brightness: 0..100 }` | State — saved on that mouse profile, applied now if it is active. `zone` "all" (default) sets every zone and drops per-zone settings; a zone set like the rest stops being separate |

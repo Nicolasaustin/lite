@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -97,7 +98,7 @@ internal sealed class Bridge
 			["linkRunningGame"] = Now(LinkRunningGame),
 			["razerCheck"] = RazerCheck,
 			["razerCleanup"] = RazerCleanup,
-			["runSelfTest"] = Now(RunSelfTest),
+			["runSelfTest"] = RunSelfTest,
 			["openConfigFolder"] = Now(_ =>
 			{
 				Shell("explorer.exe", "\"" + Cfg.Dir + "\"");
@@ -934,18 +935,71 @@ internal sealed class Bridge
 		return new MessageResult(message ?? "");
 	}
 
-	// A console window running "LiteSynapse.exe testall" (device and logic self-test).
-	private static object RunSelfTest(WebArgs a)
+	// A console window running "LiteSynapse.exe testall" (device and logic self-test). The test drives the mouse
+	// itself, so this process leaves the devices alone until it ends (it holds Program.SelfTestMutex meanwhile)
+	// and then syncs them again.
+	private async Task<object> RunSelfTest(WebArgs a)
 	{
 		string exe = Environment.ProcessPath;
 		if (string.IsNullOrEmpty(exe) || !File.Exists(exe))
 		{
 			throw new BridgeException("Cannot find LiteSynapse.exe.");
 		}
-		// start /b /wait: the test attaches to this console and the prompt waits until it finished.
-		string args = $"/s /k \"title LiteSynapse self-test & start \"\" /b /wait \"{exe}\" testall\"";
-		Shell("cmd.exe", args, Path.GetDirectoryName(exe));
+		await Task.Run(svc.BeginSelfTest);
+		try
+		{
+			// start /b /wait: the test attaches to this console and the prompt waits until it finished.
+			string args = $"/s /k \"title LiteSynapse self-test & start \"\" /b /wait \"{exe}\" testall\"";
+			Shell("cmd.exe", args, Path.GetDirectoryName(exe));
+		}
+		catch
+		{
+			svc.EndSelfTest();
+			throw;
+		}
+		_ = Task.Run(() =>
+		{
+			try
+			{
+				WaitForSelfTest();
+			}
+			finally
+			{
+				svc.EndSelfTest();
+			}
+		});
 		return null;
+	}
+
+	// Returns once the self-test process has started (it holds Program.SelfTestMutex) and ended: at most 20 s for
+	// it to start, 15 minutes to run.
+	private static void WaitForSelfTest()
+	{
+		Mutex m;
+		Stopwatch sw = Stopwatch.StartNew();
+		while (!Mutex.TryOpenExisting(Program.SelfTestMutex, out m))
+		{
+			if (sw.Elapsed > TimeSpan.FromSeconds(20))
+			{
+				return;
+			}
+			Thread.Sleep(200);
+		}
+		using (m)
+		{
+			try
+			{
+				if (m.WaitOne(TimeSpan.FromMinutes(15)))
+				{
+					m.ReleaseMutex();
+				}
+			}
+			catch (AbandonedMutexException)
+			{
+				// The test window was closed half way: the mutex is ours now.
+				m.ReleaseMutex();
+			}
+		}
 	}
 
 	private object ReloadConfig(WebArgs a)

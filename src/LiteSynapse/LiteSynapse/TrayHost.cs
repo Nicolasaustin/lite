@@ -115,6 +115,18 @@ internal sealed class TrayHost
 	private static nint current;
 
 	// Ends the app as the tray menu's Exit does. False when no tray loop is running.
+	// Second start of LiteSynapse.exe: asks the running instance to show its window (it may be hidden in the tray).
+	public static void ShowRunningInstance()
+	{
+		uint msg = W32.RegisterWindowMessage(ShowWindowMessage);
+		if (msg != 0)
+		{
+			// The running instance may bring its window to the front (this process got the user's click).
+			AllowSetForegroundWindow(-1);
+			W32.PostMessage(new IntPtr(0xFFFF), msg, IntPtr.Zero, IntPtr.Zero);
+		}
+	}
+
 	public static bool RequestExit()
 	{
 		nint h = current;
@@ -132,6 +144,21 @@ internal sealed class TrayHost
 	private int sessionAttempts;
 
 	private uint taskbarCreated;
+
+	// Posted (broadcast) by a second start of LiteSynapse.exe: show this instance's window instead.
+	public const string ShowWindowMessage = "LiteSynapse.ShowWindow";
+
+	private uint showWindowMsg;
+
+	private const int WM_CLOSE = 16;
+
+	private const uint MSGFLT_ALLOW = 1u;
+
+	[DllImport("user32", SetLastError = true)]
+	private static extern bool ChangeWindowMessageFilterEx(nint hwnd, uint msg, uint action, nint changeInfo);
+
+	[DllImport("user32")]
+	private static extern bool AllowSetForegroundWindow(int processId);
 
 	private W32.WndProc keepAlive;
 
@@ -186,6 +213,10 @@ internal sealed class TrayHost
 		keepAlive = tuple.Item2;
 		current = hwnd;
 		taskbarCreated = W32.RegisterWindowMessage("TaskbarCreated");
+		showWindowMsg = W32.RegisterWindowMessage(ShowWindowMessage);
+		// Run as administrator, Windows blocks these from Explorer and from a normal second start unless allowed.
+		ChangeWindowMessageFilterEx(hwnd, taskbarCreated, MSGFLT_ALLOW, IntPtr.Zero);
+		ChangeWindowMessageFilterEx(hwnd, showWindowMsg, MSGFLT_ALLOW, IntPtr.Zero);
 		nint[] small = new nint[1];
 		ExtractIconEx(Environment.ProcessPath, 0, null, small, 1u);
 		icon = small[0];
@@ -278,6 +309,12 @@ internal sealed class TrayHost
 				AddIcon();
 				return IntPtr.Zero;
 			}
+			if (m == showWindowMsg && m != 0)
+			{
+				Cfg.Log("LiteSynapse was started again: showing the window");
+				UiHost.ShowWindow(svc);
+				return IntPtr.Zero;
+			}
 			switch (m)
 			{
 			case 537u:
@@ -310,10 +347,20 @@ internal sealed class TrayHost
 				}
 				break;
 			}
-			if (m == 22 && w != IntPtr.Zero)
+			if (m == WM_ENDSESSION && w != IntPtr.Zero)
 			{
+				// Sign-out, or Restart Manager / Setup closing apps (the session goes on): leave the message loop so
+				// the tray icon goes and the process really ends.
 				svc.Shutdown();
-				return null;
+				W32.PostQuitMessage(0);
+				return IntPtr.Zero;
+			}
+			if (m == WM_CLOSE)
+			{
+				// taskkill without /F (Setup's second step): the same as Exit.
+				Cfg.Log("close requested");
+				W32.PostQuitMessage(0);
+				return IntPtr.Zero;
 			}
 			return null;
 		}

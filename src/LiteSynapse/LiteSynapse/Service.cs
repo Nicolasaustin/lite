@@ -98,6 +98,13 @@ internal sealed class Service
 
 	private string lastLighting;
 
+	// What each slot's own lighting storage is known to hold (MouseLighting.Describe), as sent by this run of
+	// LiteSynapse; null = unknown (never sent, or the slot was rewritten since). Device worker only.
+	private readonly string[] slotLighting = new string[OnboardSlots.SlotCount + 1];
+
+	// Self-tests running in a second LiteSynapse process (they drive the mouse themselves).
+	private int selfTests;
+
 	private string lastMouseName;
 
 	private string lastKbName;
@@ -202,6 +209,14 @@ internal sealed class Service
 		Reload();
 		ActiveMouse = DefaultMouse;
 		ActiveKeyboard = DefaultKeyboard;
+		// A slot write (live, pre-write or by hand) replaces that slot's stored lighting.
+		liveProfile.SlotWritten += slot =>
+		{
+			if (slot >= 1 && slot <= OnboardSlots.SlotCount)
+			{
+				slotLighting[slot] = null;
+			}
+		};
 		if (selfElevated)
 		{
 			Cfg.Log("running as administrator");
@@ -521,6 +536,29 @@ internal sealed class Service
 		worker.Post("devices", () => SyncDevices(reset: true));
 	}
 
+	// The self-test runs in a second LiteSynapse process and drives the mouse itself (slot writes, switches): device
+	// work here waits until it ends, then the devices are read and sent everything again. Blocks up to ~3 s for a
+	// device job that is running: call it off the UI thread.
+	public void BeginSelfTest()
+	{
+		if (Interlocked.Increment(ref selfTests) == 1)
+		{
+			worker.Cancel("prewrite");
+			worker.Pause(3000);
+			Cfg.Log("self-test started: LiteSynapse leaves the devices alone until it ends");
+		}
+	}
+
+	public void EndSelfTest()
+	{
+		if (Interlocked.Decrement(ref selfTests) == 0)
+		{
+			worker.Resume();
+			Cfg.Log("self-test ended: syncing the devices again");
+			EnsureDevices();
+		}
+	}
+
 	// Runs work on the device worker (e.g. reads for the UI). Only the latest pending request of a kind runs;
 	// a replaced one completes with default.
 	public Task<T> RunOnDevices<T>(string kind, Func<T> work)
@@ -572,6 +610,13 @@ internal sealed class Service
 			try
 			{
 				err = (m == null) ? "Naga not found" : liveProfile.WriteSlot(m, slot, p, progress);
+				if (m != null && slot == m.ActiveStorage())
+				{
+					// The slot the mouse is running now has this profile's DPI and lighting: what was last sent is
+					// no longer what the mouse shows, so the next sync sends the active profile's values again.
+					m.InvalidateCache();
+					lastLighting = null;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -932,15 +977,18 @@ internal sealed class Service
 		KbProfile kp = FindKeyboard(ActiveKeyboard);
 		bool onboard = LiveWrite && mouse != null && mp != null && !liveFailed;
 		bool game = InGame && !selfInFront;
-		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront);
+		// While LiteSynapse's own window is in front, fgExe is still the program before it; the engine is off then.
+		string exe = selfInFront ? null : fgExe;
+		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront, foregroundExe: exe);
 		if (!force && engineSet && e == engineInputs)
 		{
 			return;
 		}
-		bool blocked = !sleeping && !locked && ServicePlan.BlockedByCompetitiveSafe(settings.CompetitiveSafe, game, fgRule?.Profile, mp?.Name);
+		bool blocked = !sleeping && !locked && ServicePlan.BlockedByCompetitiveSafe(settings.CompetitiveSafe, game, fgRule?.Profile, mp?.Name, exe);
 		if (blocked && !competitiveBlocked)
 		{
-			Cfg.Log("competitive-safe: \"" + (fgRule?.Profile ?? ActiveMouse) + "\" is anti-cheat protected, so no Snap Tap, macros or remaps");
+			string what = AntiCheat.IsProtectedExe(exe) ? exe : (fgRule?.Profile ?? ActiveMouse);
+			Cfg.Log("competitive-safe: \"" + what + "\" is anti-cheat protected, so no Snap Tap, macros or remaps");
 		}
 		competitiveBlocked = blocked;
 		engineInputs = e;
@@ -1063,7 +1111,7 @@ internal sealed class Service
 		lastMouseName = mp.Name;
 		if (mp.Lighting != null)
 		{
-			ApplyLighting(m, mp.Lighting, switched);
+			ApplyLighting(m, mp.Lighting, force: false, switched: switched);
 		}
 		if (status != LiveStatus)
 		{
@@ -1074,7 +1122,10 @@ internal sealed class Service
 
 	// Per-profile mouse lighting, written to the slot the mouse is running (its storage byte is the slot number;
 	// 0x01 only reaches slot 1), falling back to 0x01 if the mouse refuses that. Skipped when it is already showing.
-	private void ApplyLighting(RazerDevice m, MouseLightingSettings s, bool force)
+	// force: send even if it was sent last (the user changed it). switched: the mouse just moved to another slot,
+	// which shows its own stored lighting; nothing is sent when LiteSynapse already put this lighting there, so an
+	// alt-tab in and out of a game does not rewrite the slots' lighting each time.
+	private void ApplyLighting(RazerDevice m, MouseLightingSettings s, bool force, bool switched = false)
 	{
 		byte store = m.ActiveStorage();
 		if (LiveWrite && !OnboardSlots.IsLiveSlot(store))
@@ -1084,19 +1135,31 @@ internal sealed class Service
 			lastLighting = null;
 			return;
 		}
-		string key = MouseLighting.Describe(s) + "|" + store;
-		if (!force && key == lastLighting)
+		string want = MouseLighting.Describe(s);
+		string key = want + "|" + store;
+		if (!force && !switched && key == lastLighting)
 		{
 			return;
 		}
+		if (!force && switched && store <= OnboardSlots.SlotCount && slotLighting[store] == want)
+		{
+			lastLighting = key;
+			return;
+		}
 		string err = MouseLighting.Apply(m, s, store);
+		byte sentTo = store;
 		if (err != null && store != MouseLighting.VarStore)
 		{
 			Cfg.Log($"mouse lighting for slot {store}: {err}; trying 0x01");
 			err = MouseLighting.Apply(m, s, MouseLighting.VarStore);
+			sentTo = MouseLighting.VarStore;
 		}
 		lastLighting = (err == null) ? key : null;
-		Cfg.Log($"mouse lighting {MouseLighting.Describe(s)} (slot {store}): {err ?? "ok"}");
+		if (sentTo >= 1 && sentTo <= OnboardSlots.SlotCount)
+		{
+			slotLighting[sentTo] = (err == null) ? want : null;
+		}
+		Cfg.Log($"mouse lighting {want} (slot {store}): {err ?? "ok"}");
 	}
 
 	private void SyncKeyboard()
@@ -1220,6 +1283,7 @@ internal sealed class Service
 		}
 		liveProfile.Forget();
 		lastLighting = null;
+		Array.Clear(slotLighting);
 		lastMouseName = null;
 		lastKbName = null;
 		lastKbEffect = null;

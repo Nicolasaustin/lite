@@ -375,6 +375,27 @@ public class BridgeProtocolTests
 	}
 
 	[Fact]
+	public void AProfileLinkedToAnAntiCheatProgramGetsTheShieldWhateverItsName()
+	{
+		ProfileStore store = new ProfileStore
+		{
+			Mouse = new List<MouseProfile> { new MouseProfile { Name = "CS2 Premier" }, new MouseProfile { Name = "PEAK" }, new MouseProfile { Name = "Spare" } }
+		};
+		List<GameRule> games = new List<GameRule>
+		{
+			new GameRule { Profile = "CS2 Premier", Exes = new List<string> { "cs2.exe" } },
+			new GameRule { Profile = "PEAK", Exes = new List<string> { "PEAK.exe" } },
+			new GameRule { Profile = "Spare", Exes = null },
+			null
+		};
+		StateDto s = new StateDto();
+		WebState.FillStore(s, store, games);
+		Assert.True(s.MouseProfiles.Single(p => p.Name == "CS2 Premier").AntiCheat);
+		Assert.False(s.MouseProfiles.Single(p => p.Name == "PEAK").AntiCheat);
+		Assert.False(s.MouseProfiles.Single(p => p.Name == "Spare").AntiCheat);
+	}
+
+	[Fact]
 	public void TheUsersRealProfilesSerialize()
 	{
 		var (store, games, dir) = TestData.LoadRealCopy();

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -310,6 +311,14 @@ internal static class WebState
 	public static void FillStore(StateDto s, ProfileStore store, IEnumerable<GameRule> games)
 	{
 		s.MouseProfiles = (store?.Mouse ?? new List<MouseProfile>()).Where(p => p != null).Select(Mouse).ToList();
+		// A profile linked to an anti-cheat game's program counts as protected too (Competitive-safe follows the exe).
+		HashSet<string> byExe = new HashSet<string>((games ?? Enumerable.Empty<GameRule>())
+			.Where(g => g?.Profile != null && g.Exes != null && g.Exes.Any(AntiCheat.IsProtectedExe))
+			.Select(g => g.Profile), StringComparer.OrdinalIgnoreCase);
+		foreach (MouseProfileDto d in s.MouseProfiles)
+		{
+			d.AntiCheat |= byExe.Contains(d.Name ?? "");
+		}
 		s.KeyboardProfiles = (store?.Keyboard ?? new List<KbProfile>()).Where(p => p != null).Select(Keyboard).ToList();
 		s.Macros = (store?.Macros ?? new List<Macro>()).Where(m => m != null).Select(Macro).ToList();
 		s.Games = (games ?? Enumerable.Empty<GameRule>()).Where(g => g != null).Select(Game).ToList();

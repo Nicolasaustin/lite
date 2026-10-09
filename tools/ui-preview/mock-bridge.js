@@ -279,8 +279,8 @@
     },
     onboardWrite: a => {
       const slot = a.slot | 0;
-      if (slot < 2 || slot > 5) fail('"slot" must be between 2 and 5.');
-      if (st.liveSlots.includes(slot)) fail(`Slot ${slot} is used for live profiles.`);
+      if (slot < 1 || slot > 5) fail('Slot must be 3, 4 or 5.');
+      if (slot <= 2 || st.liveSlots.includes(slot)) fail(`Slot ${slot} is one of LiteSynapse's live slots (1 and 2). Pick slot 3, 4 or 5.`);
       const p = find('mouse', a.profile);
       const steps = [`Writing "${p.name}" to slot ${slot}...`, 'Writing DPI and polling rate...', 'Writing buttons...', 'Writing lighting...', 'Checking what was written...'];
       let chain = Promise.resolve();

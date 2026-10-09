@@ -1807,8 +1807,13 @@ internal class MainForm : Form
 				{
 					p.DpiStages[p.DpiActive - 1] = dpi.Value;
 				}
-				SaveProfiles();
-				Task.Run(() => app.Mouse?.SetDpi(p.Dpi));
+				// The service's path: saved under its lock, the live slot rewritten, and the DPI sent only to a slot
+				// LiteSynapse may change (never to the user's own slot while live profiles are on).
+				app.SaveProfiles(p.Name);
+				if (p.Name == app.ActiveMouse)
+				{
+					app.ApplyMousePerformance();
+				}
 			}
 		};
 		BuildLighting(pNagaLight, nagaBrightOn, nagaBright, "Mouse lighting isn't supported by LiteSynapse yet. The Naga keeps the lighting Synapse last set.");
@@ -2137,7 +2142,7 @@ internal class MainForm : Form
 			for (int i = 1; i <= 5; i++)
 			{
 				float num = 60 + (i - 1) * 56 + 14;
-				Icons.SdCard(graphics, 22f, num - 9f, 1f, (i == 1) ? Color.FromArgb(120, 120, 120) : Color.FromArgb(215, 215, 215), SlotColors[i]);
+				Icons.SdCard(graphics, 22f, num - 9f, 1f, (i <= 2) ? Color.FromArgb(120, 120, 120) : Color.FromArgb(215, 215, 215), SlotColors[i]);
 			}
 		};
 		((Control)memPanel).MouseClick += (object? _, MouseEventArgs me) =>
@@ -2153,7 +2158,7 @@ internal class MainForm : Form
 			((Control)darkCombo).Location = new Point(64, 60 + (s - 1) * 56);
 			((Control)darkCombo).Width = 340;
 			((Control)darkCombo).BackColor = Color.FromArgb(24, 24, 24);
-			((Control)darkCombo).Enabled = s != 1;
+			((Control)darkCombo).Enabled = s > 2;
 			DarkCombo c = darkCombo;
 			memCombos[s] = c;
 			((Control)memPanel).Controls.Add((Control)(object)c);
@@ -2185,9 +2190,9 @@ internal class MainForm : Form
 			{
 				DarkCombo c = memCombos[s];
 				c.Items.Clear();
-				if (s == 1)
+				if (s <= 2)
 				{
-					c.Items.Add("Live profile (used while Synapse is running)");
+					c.Items.Add("LiteSynapse live slot");
 					c.SelectedIndex = 0;
 					continue;
 				}
@@ -2230,10 +2235,10 @@ internal class MainForm : Form
 		{
 			((Control)memStatus).Text = "Naga not found.";
 		}
-		else if (app.LiveSlots.Contains(slot))
+		else if (slot <= 2 || app.LiveSlots.Contains(slot))
 		{
 			((Control)memStatus).ForeColor = Color.FromArgb(230, 120, 80);
-			((Control)memStatus).Text = $"Slot {slot} holds the live profiles while \"Run selected profiles on the mouse itself\" is on. Pick slot 3, 4 or 5, or turn that setting off.";
+			((Control)memStatus).Text = $"Slot {slot} is one of LiteSynapse's live slots (1 and 2). Pick slot 3, 4 or 5.";
 		}
 		else
 		{
@@ -2349,9 +2354,12 @@ internal class MainForm : Form
 		if (p != null)
 		{
 			p.PollingRate = hz;
-			SaveProfiles();
+			app.SaveProfiles(p.Name);
 			LoadAll();
-			Task.Run(() => app.Mouse?.SetPolling(hz));
+			if (p.Name == app.ActiveMouse)
+			{
+				app.ApplyMousePerformance();
+			}
 		}
 	}
 

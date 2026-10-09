@@ -450,7 +450,11 @@ public class WebOpsTests
 		Assert.Throws<BridgeException>(() => WebOps.CheckOnboardSlot(2, live));
 		Assert.Throws<BridgeException>(() => WebOps.CheckOnboardSlot(6, live));
 		WebOps.CheckOnboardSlot(3, live);
-		WebOps.CheckOnboardSlot(2, new int[0]);
+		WebOps.CheckOnboardSlot(5, live);
+		// With live profiles off, slots 1 and 2 are still LiteSynapse's: it moves the mouse off them.
+		Assert.Throws<BridgeException>(() => WebOps.CheckOnboardSlot(2, new int[0]));
+		Assert.Throws<BridgeException>(() => WebOps.CheckOnboardSlot(1, null));
+		WebOps.CheckOnboardSlot(4, null);
 	}
 
 	[Fact]

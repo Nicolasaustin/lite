@@ -172,7 +172,7 @@ public class AntiCheatTests
 	[Fact]
 	public void The_flagged_profiles_are_protected()
 	{
-		string[] expected = { "APEXLEGENDS", "BF", "Call of Duty", "CS2", "fortnite", "h1z1", "Halo", "MarvelRivals", "new world", "PUBG", "rogue", "rust", "splitgate", "SIEGE", "Tarky", "Valorant" };
+		string[] expected = { "APEXLEGENDS", "BF", "Call of Duty", "CS2", "DEADLOCK", "fortnite", "gta", "h1z1", "Halo", "LeagueOfLegends", "MarvelRivals", "new world", "PUBG", "rogue", "rust", "splitgate", "SIEGE", "Tarky", "Valorant" };
 		Assert.Equal(expected.OrderBy((string s) => s), AntiCheat.Profiles.OrderBy((string s) => s));
 		Assert.All(expected, (string p) => Assert.True(AntiCheat.IsProtected(p), p));
 	}
@@ -189,13 +189,37 @@ public class AntiCheatTests
 
 	[Theory]
 	[InlineData("minecraft")]
-	[InlineData("DEADLOCK")]
+	[InlineData("PEAK")]
 	[InlineData("CS")]
 	[InlineData("")]
 	[InlineData(null)]
 	public void Other_profiles_are_not_protected(string name)
 	{
 		Assert.False(AntiCheat.IsProtected(name));
+	}
+
+	[Theory]
+	[InlineData("cs2.exe", true)]
+	[InlineData("CS2.EXE", true)]
+	[InlineData("VALORANT-Win64-Shipping.exe", true)]
+	[InlineData("r5apex_dx12.exe", true)]
+	[InlineData("project8.exe", true)]
+	[InlineData("League of Legends.exe", true)]
+	[InlineData("GTA5_Enhanced.exe", true)]
+	[InlineData("PEAK.exe", false)]
+	[InlineData("javaw.exe", false)]
+	[InlineData("LiteSynapse.exe", false)]
+	[InlineData("", false)]
+	[InlineData(null, false)]
+	public void Protected_games_are_also_known_by_their_program(string exe, bool expected)
+	{
+		Assert.Equal(expected, AntiCheat.IsProtectedExe(exe));
+	}
+
+	[Fact]
+	public void Every_protected_game_has_a_known_program()
+	{
+		Assert.All(AntiCheat.Profiles, (string p) => Assert.NotEmpty(DefaultGames.ExesFor(p)));
 	}
 }
 

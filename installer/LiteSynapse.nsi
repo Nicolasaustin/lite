@@ -176,8 +176,10 @@ Function ${un}StrContains
   Pop $4
   Pop $3
   Pop $2
-  Pop $1
+  ; The stack holds the caller's $0, then $1: restore both and leave the result on top.
   Exch $0
+  Exch
+  Pop $1
 FunctionEnd
 
 ; -> 1 when LiteSynapse.exe runs (from any folder), else 0.

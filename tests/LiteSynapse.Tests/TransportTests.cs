@@ -7,6 +7,24 @@ namespace LiteSynapse.Tests;
 public class TransportTests
 {
 	[Fact]
+	public void AReplyAnswersTheRequestWithTheSameClassAndCommand()
+	{
+		byte[] req = new byte[RazerReport.Length];
+		RazerReport.Build(req, 0x1F, 0x05, 0x84, 1, new byte[0]);
+		byte[] reply = (byte[])req.Clone();
+		reply[1] = 2;
+		reply[9] = 3;
+		Assert.True(RazerReport.Answers(req, reply));
+		// Another program's GET (lighting) answered in between: not ours.
+		byte[] other = new byte[RazerReport.Length];
+		RazerReport.Build(other, 0x1F, 0x0F, 0x82, 3, new byte[] { 1, 1, 0 });
+		other[1] = 2;
+		Assert.False(RazerReport.Answers(req, other));
+		other[7] = 0x05;
+		Assert.False(RazerReport.Answers(req, other));
+	}
+
+	[Fact]
 	public void ReportLayoutAndCrc()
 	{
 		byte[] r = new byte[RazerReport.Length];

@@ -99,6 +99,12 @@ internal sealed class RazerDevice : IDisposable
 	// The transaction id is settled: it worked once, or the one-time probe already ran.
 	private bool probed;
 
+	// The device has answered with its own class/command echoed (every Razer device does). Only once that was seen
+	// is a final reply for another command taken as another program's (Synapse, a second LiteSynapse) and skipped.
+	private bool echoSeen;
+
+	private bool foreignLogged;
+
 	private bool disposed;
 
 	// Last values this device confirmed (status 2) or reported. null = unknown, ask/send again.
@@ -401,6 +407,24 @@ internal sealed class RazerDevice : IDisposable
 				return IoError;
 			}
 			status = response[1];
+			if (StatusPoll.IsFinal(status))
+			{
+				if (RazerReport.Answers(request, response))
+				{
+					echoSeen = true;
+				}
+				else if (echoSeen)
+				{
+					// The answer to another program's command on the same device: not ours, keep reading.
+					if (!foreignLogged)
+					{
+						foreignLogged = true;
+						Cfg.Log($"{Name}: skipped an answer to another program's command ({response[7]:X2}/{response[8]:X2}); is Razer Synapse running?");
+					}
+					status = StatusNew;
+					continue;
+				}
+			}
 			if (status == StatusOk && reply != null)
 			{
 				Array.Copy(response, RazerReport.ArgsOffset, reply, 0, Math.Min(reply.Length, RazerReport.ArgsLength));

@@ -99,6 +99,9 @@ internal class InputEngine : IDisposable
 
 		public readonly Native.INPUT[] Release;
 
+		// Key-ups for what is still held after each segment (a macro stopped part way sends the one for where it was).
+		public readonly Native.INPUT[][] ReleaseAfter;
+
 		public PreparedMacro(Macro m)
 		{
 			Plan = new MacroPlan(m.Steps);
@@ -112,11 +115,22 @@ internal class InputEngine : IDisposable
 					Batches[i][j] = Native.KeyInput(keys[j].Vk, keys[j].Ext, keys[j].Down);
 				}
 			}
-			Release = new Native.INPUT[Plan.LeftDown.Length];
-			for (int k = 0; k < Release.Length; k++)
+			Release = Ups(Plan.LeftDown);
+			ReleaseAfter = new Native.INPUT[Plan.HeldAfter.Length][];
+			for (int i = 0; i < ReleaseAfter.Length; i++)
 			{
-				Release[k] = Native.KeyInput(Plan.LeftDown[k].Vk, Plan.LeftDown[k].Ext, down: false);
+				ReleaseAfter[i] = Ups(Plan.HeldAfter[i]);
 			}
+		}
+
+		private static Native.INPUT[] Ups(MacroPlan.Key[] keys)
+		{
+			Native.INPUT[] ups = new Native.INPUT[keys.Length];
+			for (int k = 0; k < ups.Length; k++)
+			{
+				ups[k] = Native.KeyInput(keys[k].Vk, keys[k].Ext, down: false);
+			}
+			return ups;
 		}
 	}
 
@@ -167,6 +181,14 @@ internal class InputEngine : IDisposable
 	private PreparedMacro macroNext;
 
 	private volatile bool macroRunning;
+
+	// Bumped by ReleaseAll (profile change, engine off, Dispose): a running macro stops after the batch it is
+	// sending and lifts the keys it holds. macroNextGen is the value when the waiting macro was triggered.
+	private int macroGen;
+
+	private int macroNextGen;
+
+	private readonly ManualResetEvent macroCancel = new ManualResetEvent(initialState: false);
 
 	internal bool MacroBusy => macroRunning;
 
@@ -749,6 +771,8 @@ internal class InputEngine : IDisposable
 
 	private void ReleaseAll()
 	{
+		Interlocked.Increment(ref macroGen);
+		macroCancel.Set();
 		snap.Reset(sendPlain);
 		foreach (int item in injected)
 		{
@@ -766,6 +790,7 @@ internal class InputEngine : IDisposable
 			return;
 		}
 		macroRunning = true;
+		macroNextGen = Volatile.Read(ref macroGen);
 		Volatile.Write(ref macroNext, m);
 		macroSignal.Set();
 	}
@@ -787,18 +812,35 @@ internal class InputEngine : IDisposable
 				macroRunning = false;
 				continue;
 			}
+			int gen = Volatile.Read(ref macroNextGen);
+			macroCancel.Reset();
+			if (gen != Volatile.Read(ref macroGen) || disposed)
+			{
+				// The profile changed (or LiteSynapse is closing) between the key press and now.
+				macroRunning = false;
+				continue;
+			}
 			bool lowRes = !timer.HighResolution;
 			if (lowRes)
 			{
 				Native.timeBeginPeriod(1u);
 			}
+			int sent = -1;
 			try
 			{
 				MacroPlan.Segment[] segs = m.Plan.Segments;
 				for (int i = 0; i < segs.Length; i++)
 				{
+					if (gen != Volatile.Read(ref macroGen) || disposed)
+					{
+						break;
+					}
 					Native.SendKeys(m.Batches[i], m.Batches[i].Length);
-					timer.Sleep(segs[i].DelayMs);
+					sent = i;
+					if (!timer.Sleep(segs[i].DelayMs, macroCancel))
+					{
+						break;
+					}
 				}
 			}
 			catch (Exception ex)
@@ -807,7 +849,12 @@ internal class InputEngine : IDisposable
 			}
 			finally
 			{
-				Native.SendKeys(m.Release, m.Release.Length);
+				// Lifts what the macro still holds where it stopped (all of LeftDown when it ran to the end).
+				if (sent >= 0)
+				{
+					Native.INPUT[] up = m.ReleaseAfter[sent];
+					Native.SendKeys(up, up.Length);
+				}
 				if (lowRes)
 				{
 					Native.timeEndPeriod(1u);
@@ -854,6 +901,8 @@ internal class InputEngine : IDisposable
 			disposed = true;
 			macroSignal.Set();
 			thread.Join(2000);
+			// A macro that was running stops at once (ReleaseAll above) and lifts its keys before the process ends.
+			macroThread.Join(1000);
 		}
 		catch
 		{

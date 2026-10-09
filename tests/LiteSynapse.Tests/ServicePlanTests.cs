@@ -91,6 +91,21 @@ public class ServicePlanTests
 	}
 
 	[Fact]
+	public void CompetitiveSafeFollowsTheAntiCheatProgramWhateverItsProfile()
+	{
+		MouseProfile renamed = new MouseProfile { Name = "CS2 Premier" };
+		// The CS2 profile was renamed: cs2.exe in front is still protected.
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(renamed, Gamer, gameInFront: true, mouseOnboard: true, competitiveSafe: true, "CS2 Premier", suspended: false, foregroundExe: "cs2.exe"));
+		// cs2.exe is not linked at all and a keyboard profile was picked by hand.
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: true, null, suspended: false, pickedByHand: true, foregroundExe: "CS2.EXE"));
+		Assert.True(ServicePlan.BlockedByCompetitiveSafe(competitiveSafe: true, gameInFront: false, null, "PEAK", "VALORANT-Win64-Shipping.exe"));
+		// Competitive-safe off, or another program in front: nothing changes.
+		Assert.Same(Gamer, ServicePlan.Engine(renamed, Gamer, gameInFront: true, mouseOnboard: true, competitiveSafe: false, "CS2 Premier", suspended: false, foregroundExe: "cs2.exe").Keyboard);
+		Assert.Same(Gamer, ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: true, null, suspended: false, pickedByHand: true, foregroundExe: "notepad.exe").Keyboard);
+		Assert.Same(Gamer, ServicePlan.Engine(Peak, Gamer, gameInFront: true, mouseOnboard: true, competitiveSafe: true, "PEAK", suspended: false, foregroundExe: "PEAK.exe").Keyboard);
+	}
+
+	[Fact]
 	public void BlockedOnlyWhenOnAndAGameIsInFront()
 	{
 		Assert.True(ServicePlan.BlockedByCompetitiveSafe(competitiveSafe: true, gameInFront: true, "Valorant", null));

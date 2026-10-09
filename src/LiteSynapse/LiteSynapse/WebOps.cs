@@ -695,16 +695,18 @@ internal static class WebOps
 		return (n.Length == 0) ? "profile" : n;
 	}
 
-	// The slots the window may write: 2..5, except the ones live profiles use right now.
+	// The slots the window may write: 3..5, the user's. Slots 1 and 2 are LiteSynapse's live slots whether live
+	// profiles are on or off (with them off LiteSynapse moves the mouse off those slots), so a profile written there
+	// would not stay in use.
 	public static void CheckOnboardSlot(int slot, IReadOnlyCollection<int> liveSlots)
 	{
-		if (slot < 2 || slot > 5)
+		if (slot < 1 || slot > 5)
 		{
-			throw new BridgeException("Slot must be 2 to 5.");
+			throw new BridgeException("Slot must be 3, 4 or 5.");
 		}
-		if (liveSlots != null && liveSlots.Contains(slot))
+		if (slot <= 2 || (liveSlots != null && liveSlots.Contains(slot)))
 		{
-			throw new BridgeException($"Slot {slot} holds the live profiles while \"Run selected profiles on the mouse itself\" is on. Pick slot 3, 4 or 5, or turn that setting off.");
+			throw new BridgeException($"Slot {slot} is one of LiteSynapse's live slots (1 and 2). Pick slot 3, 4 or 5.");
 		}
 	}
 }

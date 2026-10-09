@@ -14,6 +14,9 @@ namespace LiteSynapse;
 
 internal static class Program
 {
+	// Held by "LiteSynapse.exe testall" while it drives the devices.
+	public const string SelfTestMutex = "Local\\LiteSynapse.SelfTest";
+
 	private static class Cursor
 	{
 		public static int X
@@ -67,10 +70,22 @@ internal static class Program
 		if (args.Length >= 1 && args[0] == "testall")
 		{
 			AttachConsole(-1);
-			int transport = TransportCheck();
-			int all = Tests.TestAll();
-			Cfg.FlushLog();
-			return (transport != 0) ? 1 : all;
+			// While this is held, a running LiteSynapse leaves the devices alone (Bridge.RunSelfTest).
+			using Mutex selfTest = new Mutex(initiallyOwned: true, SelfTestMutex, out bool owned);
+			try
+			{
+				int transport = TransportCheck();
+				int all = Tests.TestAll();
+				Cfg.FlushLog();
+				return (transport != 0) ? 1 : all;
+			}
+			finally
+			{
+				if (owned)
+				{
+					selfTest.ReleaseMutex();
+				}
+			}
 		}
 		if (args.Length >= 1 && args[0] == "transport")
 		{
@@ -150,8 +165,21 @@ internal static class Program
 		{
 			if (!first)
 			{
+				// Already running, usually in the tray: a shortcut or a second start shows its window instead of
+				// doing nothing. The autostart copy (--tray) just leaves.
+				if (!args.Contains("--tray"))
+				{
+					TrayHost.ShowRunningInstance();
+					if (Native.IsProcessElevated((uint)Environment.ProcessId) == true)
+					{
+						System.Windows.Forms.MessageBox.Show("LiteSynapse is already running. To run it as administrator, exit it first (right-click the tray icon > Exit), then start it again with Run as administrator.", "LiteSynapse", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+					}
+				}
 				return 0;
 			}
+			// After Restart Manager closed it for an update (for example of the .NET runtime), Windows starts it
+			// again in the tray. Not after a crash or hang (it restarts itself) and not after a reboot (the Run value).
+			RegisterApplicationRestart("--tray", RESTART_NO_CRASH | RESTART_NO_HANG | RESTART_NO_REBOOT);
 			TaskScheduler.UnobservedTaskException += (object? _, UnobservedTaskExceptionEventArgs e) =>
 			{
 				Cfg.Log("task error: " + e.Exception.GetBaseException().Message);
@@ -367,6 +395,15 @@ internal static class Program
 
 	[DllImport("kernel32")]
 	private static extern bool AttachConsole(int pid);
+
+	private const int RESTART_NO_CRASH = 1;
+
+	private const int RESTART_NO_HANG = 2;
+
+	private const int RESTART_NO_REBOOT = 8;
+
+	[DllImport("kernel32", CharSet = CharSet.Unicode)]
+	private static extern int RegisterApplicationRestart(string commandLine, int flags);
 
 	[DllImport("user32", CharSet = CharSet.Unicode)]
 	private static extern int GetKeyNameText(int lParam, StringBuilder sb, int n);

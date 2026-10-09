@@ -24,6 +24,12 @@ internal static class RazerReport
 		r[89] = Crc(r);
 	}
 
+	// True when a status reply is the answer to this request: it repeats the request's class and command.
+	public static bool Answers(byte[] request, byte[] response)
+	{
+		return response[7] == request[7] && response[8] == request[8];
+	}
+
 	public static byte Crc(byte[] r)
 	{
 		byte crc = 0;

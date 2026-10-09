@@ -265,7 +265,18 @@ internal static class Native
 	// Millisecond-accurate waits without raising the system-wide timer resolution (Windows 10 1803+).
 	public sealed class PreciseTimer : IDisposable
 	{
+		// The timer's handle as a WaitHandle, for waiting on it together with a cancel event.
+		private sealed class TimerWaitHandle : WaitHandle
+		{
+			public TimerWaitHandle(nint h)
+			{
+				SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(h, ownsHandle: false);
+			}
+		}
+
 		private nint h = CreateWaitableTimerExW(IntPtr.Zero, null, 2u, 0x1F0003u);
+
+		private WaitHandle[] pair;
 
 		public bool HighResolution => h != IntPtr.Zero;
 
@@ -284,6 +295,29 @@ internal static class Native
 			{
 				Thread.Sleep(ms);
 			}
+		}
+
+		// Like Sleep, but returns false as soon as cancel is set (the timer keeps its precision otherwise).
+		public bool Sleep(int ms, WaitHandle cancel)
+		{
+			if (ms <= 0)
+			{
+				return !cancel.WaitOne(0);
+			}
+			long due = -10000L * ms;
+			if (h != IntPtr.Zero && SetWaitableTimer(h, ref due, 0, IntPtr.Zero, IntPtr.Zero, resume: false))
+			{
+				if (pair == null || pair[1] != cancel)
+				{
+					pair = new WaitHandle[2]
+					{
+						new TimerWaitHandle(h),
+						cancel
+					};
+				}
+				return WaitHandle.WaitAny(pair) == 0;
+			}
+			return !cancel.WaitOne(ms);
 		}
 
 		public void Dispose()
