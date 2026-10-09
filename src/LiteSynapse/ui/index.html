@@ -1663,12 +1663,18 @@ function rangeInput(attrs, onInput, onCommit) {
   setFill(r);
   return r;
 }
-function lightColor(p) {
+// The lighting a zone ("scroll", "logo", "side") shows: its own settings, else the profile's (null = left alone).
+function zoneLight(p, zone) {
   const L = p && p.lighting;
+  if (!L) return null;
+  return (zone && zone !== 'all' && L.zones && L.zones[zone]) || L;
+}
+function lightColorOf(L) {
   if (!L || L.effect === 'off') return null;
   if (L.effect === 'spectrum') return 'spectrum';
   return L.color || '#00FF00';
 }
+function lightColor(p) { return lightColorOf(p && p.lighting); }
 // Small square that shows a profile's lighting (avatar background or a swatch).
 function lightingFill(p) {
   const c = lightColor(p);
@@ -2246,11 +2252,11 @@ function buttonValue(p, id) {
 }
 
 // Paint for the lit parts of the drawing: the profile's lighting, or the accent when lighting is left as it is.
-function mzLed(p) {
-  const c = lightColor(p);
+function mzLed(p, zone) {
+  const L = zoneLight(p, zone), c = lightColorOf(L);
   if (c === 'spectrum') return { fill: 'url(#mzSpec)', text: '#0A0C0F', glow: true };
   if (c) return { fill: c, text: luminance(c) > 0.2 ? '#0A0C0F' : '#F3F4F6', glow: true };
-  if (p && p.lighting && p.lighting.effect === 'off') return { fill: '#2B2F37', text: '#C9CDD3', glow: false };
+  if (L && L.effect === 'off') return { fill: '#2B2F37', text: '#C9CDD3', glow: false };
   return { fill: 'var(--accent)', text: 'var(--on-accent)', glow: true };
 }
 function mzDefs() {
@@ -2284,28 +2290,29 @@ function mzTopCallout(p, c) {
   return mzButton(p, c.id, `${line}<circle class="hit" cx="${px}" cy="${py}" r="7"/>`, tx, y, c.left);
 }
 function mouseTopSvg(p) {
-  const L = mzLed(p), lit = `fill:${L.fill}`;
+  const W = mzLed(p, 'scroll'), G = mzLed(p, 'logo'), P = mzLed(p, 'side');
   let s = `<svg class="mz" viewBox="-268 -164 536 330" role="group" aria-label="Top of the mouse">${mzDefs()}` +
     `<path d="${MZ_TOP_BODY}" transform="translate(4 6)" fill="#000" opacity=".4"/>` +
     `<path d="${MZ_TOP_BODY}" fill="url(#mzBody)" stroke="rgba(255,255,255,.17)" stroke-width="1.4"/>` +
     `<path d="${MZ_TOP_SHINE}" fill="url(#mzShine)"/>` +
     '<path d="M0 -139V-100M-60 -50H-9M66 -50H9" fill="none" stroke="#0C0D0F" stroke-width="2"/>';
-  if (L.glow) s += `<g filter="url(#mzGlow)" opacity=".5" style="${lit}"><rect x="-8" y="-100" width="16" height="56" rx="7"/><circle cx="0" cy="58" r="13"/><rect x="72" y="-16" width="16" height="64" rx="4"/></g>`;
-  s += `<rect x="-7" y="-100" width="14" height="56" rx="6" style="${lit};fill-opacity:.3;stroke:${L.fill}" stroke-width="2"/>` +
+  s += '<g filter="url(#mzGlow)" opacity=".5">' + (W.glow ? `<rect x="-8" y="-100" width="16" height="56" rx="7" style="fill:${W.fill}"/>` : '') +
+    (G.glow ? `<circle cx="0" cy="58" r="13" style="fill:${G.fill}"/>` : '') + (P.glow ? `<rect x="72" y="-16" width="16" height="64" rx="4" style="fill:${P.fill}"/>` : '') + '</g>';
+  s += `<rect x="-7" y="-100" width="14" height="56" rx="6" style="fill:${W.fill};fill-opacity:.3;stroke:${W.fill}" stroke-width="2"/>` +
     '<path d="M-3.5 -90H3.5M-3.5 -82H3.5M-3.5 -74H3.5M-3.5 -66H3.5M-3.5 -58H3.5" stroke="rgba(0,0,0,.4)" stroke-width="1.6"/>';
   for (const [id, y] of [['M1', -40], ['M2', -23]]) s += `<rect class="mbtn${mzSel(id)}" data-b="${id}" x="-7" y="${y}" width="14" height="12" rx="3"/>`;
-  for (let j = 0; j < 4; j++) s += `<rect x="${72 + j * 1.5}" y="${-15 + j * 17}" width="12" height="10" rx="2" style="${lit};fill-opacity:.22;stroke:${L.fill}" stroke-width="1.2"/>`;
-  s += `<circle cx="0" cy="58" r="10" fill="none" style="stroke:${L.fill}" stroke-width="2.2"/>`;
+  for (let j = 0; j < 4; j++) s += `<rect x="${72 + j * 1.5}" y="${-15 + j * 17}" width="12" height="10" rx="2" style="fill:${P.fill};fill-opacity:.22;stroke:${P.fill}" stroke-width="1.2"/>`;
+  s += `<circle cx="0" cy="58" r="10" fill="none" style="stroke:${G.fill}" stroke-width="2.2"/>`;
   for (const c of MZ_TOP) s += mzTopCallout(p, c);
   return s + '</svg>';
 }
 function mouseSideSvg(p) {
-  const L = mzLed(p);
+  const L = mzLed(p, 'side'), W = mzLed(p, 'scroll');
   let s = `<svg class="mz" viewBox="-268 -172 536 344" role="group" aria-label="The 12-button side panel">${mzDefs()}` +
     `<path d="${MZ_SIDE_BODY}" transform="translate(4 6)" fill="#000" opacity=".4"/>` +
     `<path d="${MZ_SIDE_BODY}" fill="url(#mzBody)" stroke="rgba(255,255,255,.17)" stroke-width="1.4"/>` +
     '<path d="M-42 -134C-56 -100 -58 -40 -54 30" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="6" stroke-linecap="round"/>' +
-    `<rect x="-52" y="-136" width="9" height="30" rx="4.5" transform="rotate(-14 -47.5 -121)" style="fill:${L.fill}"/>` +
+    `<rect x="-52" y="-136" width="9" height="30" rx="4.5" transform="rotate(-14 -47.5 -121)" style="fill:${W.fill}"/>` +
     '<rect x="-45" y="-69" width="92" height="124" rx="11" fill="#0D0E10" stroke="rgba(255,255,255,.09)"/>';
   if (L.glow) s += `<rect x="-38" y="-62" width="78" height="108" rx="8" filter="url(#mzGlow)" opacity=".45" style="fill:${L.fill}"/>`;
   for (let r = 0; r < 4; r++) {
@@ -2575,13 +2582,19 @@ function mousePerformance(p) {
 /* ---- Lighting (per profile) ----------------------------------------------------------------- */
 const MOUSE_EFFECTS = [['off', 'Off', 'power'], ['static', 'Static', 'sun'], ['breathing', 'Breathing', 'pulse'], ['spectrum', 'Spectrum', 'palette']];
 const PRESET_COLORS = ['#00FF00', '#2EE6A6', '#00FFFF', '#0050FF', '#8000FF', '#FF00FF', '#FF0000', '#FF8000', '#FFD000', '#FFFFFF'];
+// The Naga Left-Handed's zones (Advanced › Detect zones lists them: scroll wheel #1, logo #4, right side #16).
+const LIGHT_ZONES = [['all', 'All'], ['scroll', 'Scroll wheel'], ['logo', 'Logo'], ['side', 'Side panel']];
+const zoneName = id => (LIGHT_ZONES.find(z => z[0] === id) || [id, id])[1];
+const lightZone = () => ui.lightZone || 'all';
+const ownZones = p => (p.lighting && p.lighting.zones) ? LIGHT_ZONES.slice(1).filter(([id]) => p.lighting.zones[id]).map(z => z[0]) : [];
 function lightDraft(p) {
-  if (ui.light && ui.light.profile === p.name) return ui.light;
-  const L = p.lighting;
-  return { profile: p.name, effect: L ? L.effect : '', color: ((L && L.color) || '#00FF00').toUpperCase(), brightness: L ? L.brightness : 100, rev: 0 };
+  const zone = lightZone();
+  if (ui.light && ui.light.profile === p.name && ui.light.zone === zone) return ui.light;
+  const L = zoneLight(p, zone);
+  return { profile: p.name, zone, effect: L ? L.effect : '', color: ((L && L.color) || '#00FF00').toUpperCase(), brightness: L ? L.brightness : 100, rev: 0 };
 }
 function editLight(p, mutate, now) {
-  if (!ui.light || ui.light.profile !== p.name) ui.light = lightDraft(p);
+  if (!ui.light || ui.light.profile !== p.name || ui.light.zone !== lightZone()) ui.light = lightDraft(p);
   mutate(ui.light);
   if (!ui.light.effect) ui.light.effect = 'static';
   ui.light.rev++;
@@ -2592,17 +2605,40 @@ const saveLight = debounce(() => {
   const d = ui.light;
   if (!d) return;
   const rev = d.rev;
-  act('setMouseLighting', { profile: d.profile, effect: d.effect, color: d.color.toUpperCase(), brightness: d.brightness },
-    { ok: `Lighting saved for ${quote(d.profile)}`, key: 'light' })
+  act('setMouseLighting', { profile: d.profile, zone: d.zone, effect: d.effect, color: d.color.toUpperCase(), brightness: d.brightness },
+    { ok: d.zone === 'all' ? `Lighting saved for ${quote(d.profile)}` : `${zoneName(d.zone)} lighting saved for ${quote(d.profile)}`, key: 'light' })
     .then(r => { if (ui.light === d && (r === FAILED || d.rev === rev)) { ui.light = null; requestRender(); } });
 }, 300);
+// Back to the profile's lighting for one zone (a zone set like the rest stops being separate).
+function resetZone(p, zone) {
+  const L = p.lighting;
+  if (!L) return;
+  saveLight.cancel();
+  ui.light = null;
+  act('setMouseLighting', { profile: p.name, zone, effect: L.effect, color: L.color, brightness: L.brightness }, { ok: `${zoneName(zone)} follows the profile again`, key: 'light' });
+}
 
-function mousePreviewSvg(d) {
-  const on = d.effect && d.effect !== 'off';
-  const a = on ? Math.max(0.18, d.brightness / 100) : 0;
-  const fill = !on ? '#2B2F37' : d.effect === 'spectrum' ? 'url(#lsSpec)' : d.color;
-  const glow = on ? `<g filter="url(#lsGlow)" opacity="${(a * 0.9).toFixed(2)}"><rect x="66" y="22" width="18" height="42" rx="9" fill="${fill}"/><circle cx="75" cy="158" r="17" fill="${fill}"/><rect x="108" y="92" width="26" height="74" rx="9" fill="${fill}"/></g>` : '';
-  const op = on ? a.toFixed(2) : '1';
+// What each zone shows in the preview: the draft on the zone being edited, the saved lighting elsewhere. A change
+// being made under "All" shows on every zone (saving it sets them all the same).
+function previewZones(p, d, editing) {
+  const out = {};
+  for (const [id] of LIGHT_ZONES.slice(1)) {
+    const L = zoneLight(p, id);
+    out[id] = (d.zone === id || (d.zone === 'all' && (editing || !(p.lighting && p.lighting.zones && p.lighting.zones[id]))))
+      ? d : (L ? { effect: L.effect, color: L.color, brightness: L.brightness } : { effect: '' });
+  }
+  return out;
+}
+function mousePreviewSvg(z, zone) {
+  const paint = x => {
+    const on = !!x.effect && x.effect !== 'off';
+    const a = on ? Math.max(0.18, x.brightness / 100) : 0;
+    return { on, a, op: on ? a.toFixed(2) : '1', fill: !on ? '#2B2F37' : x.effect === 'spectrum' ? 'url(#lsSpec)' : x.color };
+  };
+  const W = paint(z.scroll), L = paint(z.logo), P = paint(z.side);
+  const glow = (q, shape) => q.on ? `<g filter="url(#lsGlow)" opacity="${(q.a * 0.9).toFixed(2)}">${shape.replace('FILL', q.fill)}</g>` : '';
+  // A dashed outline marks the zone being edited.
+  const mark = { scroll: '<rect x="62" y="20" width="26" height="46" rx="11"/>', logo: '<circle cx="75" cy="158" r="19"/>', side: '<rect x="106" y="90" width="30" height="78" rx="10"/>' }[zone] || '';
   return `<svg width="150" height="224" viewBox="0 0 150 224" aria-hidden="true">
 <defs>
   <linearGradient id="lsBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2E35"/><stop offset="1" stop-color="#15171B"/></linearGradient>
@@ -2610,15 +2646,16 @@ function mousePreviewSvg(d) {
   <filter id="lsGlow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="9"/></filter>
 </defs>
 <ellipse cx="75" cy="216" rx="50" ry="6" fill="#000" opacity=".45"/>
-${glow}
+${glow(W, '<rect x="66" y="22" width="18" height="42" rx="9" fill="FILL"/>')}${glow(L, '<circle cx="75" cy="158" r="17" fill="FILL"/>')}${glow(P, '<rect x="108" y="92" width="26" height="74" rx="9" fill="FILL"/>')}
 <path d="M75 8C112 8 132 40 134 88L136 150C137 192 110 214 75 214S13 192 14 150L16 88C18 40 38 8 75 8Z" fill="url(#lsBody)" stroke="rgba(255,255,255,.10)"/>
 <path d="M75 10V80M18 84Q75 98 132 84" fill="none" stroke="rgba(255,255,255,.09)"/>
-<rect x="68" y="26" width="14" height="34" rx="7" fill="${fill}" opacity="${op}"/>
+<rect x="68" y="26" width="14" height="34" rx="7" fill="${W.fill}" opacity="${W.op}"/>
 <path d="M70 34h10M70 42h10M70 50h10" stroke="rgba(0,0,0,.35)" stroke-width="1.5"/>
-<circle cx="75" cy="158" r="12" fill="none" stroke="${fill}" stroke-width="3" opacity="${op}"/>
-<circle cx="75" cy="158" r="4" fill="${fill}" opacity="${op}"/>
-<rect x="112" y="96" width="18" height="66" rx="6" fill="${fill}" opacity="${on ? (a * 0.85).toFixed(2) : '1'}"/>
+<circle cx="75" cy="158" r="12" fill="none" stroke="${L.fill}" stroke-width="3" opacity="${L.op}"/>
+<circle cx="75" cy="158" r="4" fill="${L.fill}" opacity="${L.op}"/>
+<rect x="112" y="96" width="18" height="66" rx="6" fill="${P.fill}" opacity="${P.on ? (P.a * 0.85).toFixed(2) : '1'}"/>
 <g fill="rgba(0,0,0,.42)">${[0, 1, 2, 3].map(r => [0, 1, 2].map(c => `<rect x="${114 + c * 5}" y="${100 + r * 15}" width="3.6" height="12" rx="1.4"/>`).join('')).join('')}</g>
+${mark ? `<g fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3">${mark}</g>` : ''}
 </svg>`;
 }
 // Synapse warns about this too: Windows Dynamic Lighting (or Synapse itself) can take over the lights.
@@ -2627,18 +2664,23 @@ function lightingConflictHint() {
     h('span', null, 'Lights not changing? Quit Razer Synapse and turn off Windows Dynamic Lighting (Settings → Personalization → Dynamic Lighting → “Use Dynamic Lighting on my devices”). Either one can take over the lights.'));
 }
 function mouseLighting(p) {
+  const zone = lightZone();
   const d = lightDraft(p);
   const set = !!d.effect;
   const colorOk = set && (d.effect === 'static' || d.effect === 'breathing');
+  const own = ownZones(p);
   const preview = h('div', { class: 'preview' });
   const caption = h('div', { class: 'cap' });
   // Repaints the preview from the live draft (slider and color drags update it without re-rendering the page).
   const paint = () => {
-    const x = ui.light && ui.light.profile === p.name ? ui.light : d;
-    preview.replaceChildren(svg(mousePreviewSvg(x)), caption);
+    const editing = !!ui.light && ui.light.profile === p.name && ui.light.zone === zone;
+    const x = editing ? ui.light : d;
+    preview.replaceChildren(svg(mousePreviewSvg(previewZones(p, x, editing), zone)), caption);
+    const mixed = zone === 'all' ? own.length > 0 && !ui.light : false;
     setKids(caption,
       x.effect ? h('span', { class: 'swatch-dot', style: `background:${x.effect === 'spectrum' ? lightingFill({ lighting: x }) : x.effect === 'off' ? 'transparent' : x.color}` }) : null,
-      !x.effect ? 'Left as it is' : x.effect === 'off' ? 'Lights off' : `${effectName(x.effect)} · ${x.brightness}%`);
+      (zone === 'all' ? '' : zoneName(zone) + ' · ') + (!x.effect ? 'Left as it is' : x.effect === 'off' ? 'Lights off' : `${effectName(x.effect)} · ${x.brightness}%`),
+      mixed ? ' · zones differ' : null);
   };
   paint();
   const hex = h('input', {
@@ -2657,13 +2699,24 @@ function mouseLighting(p) {
     onchange: () => requestRender()
   });
   const bright = h('span', { class: 'num small muted', style: 'width:44px;text-align:right' }, `${d.brightness}%`);
+  const zoneNote = zone === 'all'
+    ? (own.length ? `${own.map(zoneName).join(' and ')} ${own.length === 1 ? 'has' : 'have'} its own lighting. A change here sets every zone the same.` : 'Every zone shows the same lighting. Pick a zone to light it differently.')
+    : own.includes(zone) ? `${zoneName(zone)} has its own lighting.` : `${zoneName(zone)} follows the profile’s lighting until you change it here.`;
   return h('div', { class: 'stack' },
     h('div', { class: 'card' },
-      cardHead([`Lighting for ${quote(p.name)}`, h('span', { class: 'badge warn' }, 'Experimental')],
+      cardHead(`Lighting for ${quote(p.name)}`,
         'Saved with this profile and applied whenever it becomes active. Written to the mouse with the profile’s slot.', null, 'sun'),
       h('div', { class: 'light-grid' },
         preview,
         h('div', { class: 'stack' },
+          h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Zone'),
+            h('div', { class: 'row wrap', style: 'gap:10px' },
+              h('div', { class: 'seg', role: 'group', 'aria-label': 'Lighting zone' }, LIGHT_ZONES.map(([id, label]) => h('button', {
+                'aria-pressed': String(zone === id), 'data-fk': 'light:zone:' + id,
+                onclick: () => { if (zone !== id) { saveLight.flush(); ui.lightZone = id; ui.light = null; requestRender(); } }
+              }, label, id !== 'all' && own.includes(id) ? h('span', { class: 'dot ok', style: 'margin-left:6px', title: 'Has its own lighting' }) : null))),
+              zone !== 'all' && own.includes(zone) ? h('button', { class: 'btn sm ghost', 'data-fk': 'light:zone-reset', onclick: () => resetZone(p, zone) }, icon('reset', 14), 'Same as the rest') : null),
+            h('div', { class: 'small faint' }, zoneNote)),
           !set ? banner('calm', 'info', 'This profile leaves the lighting alone', 'The mouse keeps whatever lighting it has. Pick an effect to give this profile its own.') : null,
           h('div', { class: 'field' }, h('div', { class: 'field-l' }, 'Effect'),
             h('div', { class: 'choices' }, MOUSE_EFFECTS.map(([id, label, ic]) => h('button', {
@@ -2674,7 +2727,7 @@ function mouseLighting(p) {
             h('div', { class: 'row wrap', style: 'gap:12px' },
               h('div', { class: 'swatches' },
                 PRESET_COLORS.map(c => h('button', {
-                  class: 'swatch', style: `background:${c}`, 'aria-pressed': String(colorOk && d.color === c), 'aria-label': c, title: c, disabled: !colorOk,
+                  class: 'swatch', style: `background:${c}`, 'aria-pressed': String(colorOk && d.color === c), 'aria-label': c, title: c, disabled: !colorOk, 'data-fk': 'light:c:' + c,
                   onclick: () => { editLight(p, x => { x.color = c; }, true); requestRender(); }
                 })),
                 h('label', { class: 'swatch custom', title: 'Custom color', 'aria-pressed': String(colorOk && !PRESET_COLORS.includes(d.color)) }, icon('plus', 14), custom)),

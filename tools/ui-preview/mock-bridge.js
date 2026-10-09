@@ -298,7 +298,16 @@
       if (!MOUSE_EFFECTS.includes(a.effect)) fail(`Unknown effect "${a.effect}".`);
       if (!/^#[0-9A-Fa-f]{6}$/.test(a.color || '')) fail('"color" must be #RRGGBB.');
       const b = Math.round(Number(a.brightness)); if (!(b >= 0 && b <= 100)) fail('"brightness" must be between 0 and 100.');
-      p.lighting = { effect: a.effect, color: a.color.toUpperCase(), brightness: b };
+      const light = { effect: a.effect, color: a.color.toUpperCase(), brightness: b };
+      const zone = a.zone || 'all';
+      if (zone === 'all') { p.lighting = light; return st; }
+      if (!['scroll', 'logo', 'side'].includes(zone)) fail(`Unknown lighting zone "${zone}".`);
+      const all = p.lighting || { effect: 'static', color: '#00FF00', brightness: 100 };
+      const zones = Object.assign({}, all.zones);
+      if (light.effect === all.effect && light.color === all.color && light.brightness === all.brightness) delete zones[zone];
+      else zones[zone] = light;
+      p.lighting = Object.assign({}, all, { zones: Object.keys(zones).length ? zones : undefined });
+      if (!p.lighting.zones) delete p.lighting.zones;
       return st;
     },
     setCompetitiveSafe: a => { st.competitiveSafe = bool(a.on, 'on'); return st; },

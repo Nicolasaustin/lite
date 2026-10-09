@@ -82,6 +82,40 @@ public class MouseLightingTests
 		return new MouseLightingSettings { Effect = effect, Color = color, Brightness = brightness };
 	}
 
+	[Fact]
+	public void A_zone_with_its_own_lighting_gets_its_own_commands()
+	{
+		MouseLightingSettings s = S("static", "#00FF00");
+		s.Zones = new Dictionary<string, MouseLightingSettings> { ["logo"] = S("static", "#FF0000", 50) };
+		List<MouseLighting.Cmd> cmds = MouseLighting.Commands(s, 2);
+		Assert.Equal(6, cmds.Count);
+		// Scroll wheel (0x01) and right side (0x10) keep the profile's green; the logo (0x04) is red at 50 %.
+		Assert.Equal("020101000001" + "00FF00", Convert.ToHexString(cmds[0].Args));
+		Assert.Equal("020401000001" + "FF0000", Convert.ToHexString(cmds[2].Args));
+		Assert.Equal("020480", Convert.ToHexString(cmds[3].Args));
+		Assert.Equal("021001000001" + "00FF00", Convert.ToHexString(cmds[4].Args));
+		Assert.Equal("0210FF", Convert.ToHexString(cmds[5].Args));
+		// Each zone can have its own effect too.
+		s.Zones["side"] = S("spectrum");
+		Assert.Equal("021003", Convert.ToHexString(MouseLighting.Commands(s, 2)[4].Args));
+	}
+
+	[Fact]
+	public void Zone_settings_are_validated_and_described()
+	{
+		MouseLightingSettings s = S("static", "#00FF00");
+		Assert.Equal("static #00FF00 100%", MouseLighting.Describe(s));
+		s.Zones = new Dictionary<string, MouseLightingSettings> { ["scroll"] = S("breathing", "#0000FF", 80) };
+		Assert.Equal("scroll breathing #0000FF 80%, logo static #00FF00 100%, side static #00FF00 100%", MouseLighting.Describe(s));
+		Assert.Null(MouseLighting.Validate(s));
+		s.Zones["scroll"] = S("static", "blue");
+		Assert.Contains("scroll wheel", MouseLighting.Validate(s));
+		// Unknown zone ids in saved data are ignored, not written.
+		s.Zones = new Dictionary<string, MouseLightingSettings> { ["back"] = S("static", "#FF0000") };
+		Assert.Equal("static #00FF00 100%", MouseLighting.Describe(s));
+		Assert.All(MouseLighting.Commands(s, 1).Where(c => c.Id == 0x02), c => Assert.EndsWith("00FF00", Convert.ToHexString(c.Args)));
+	}
+
 	[Theory]
 	[InlineData("off", 6, "010400")]
 	[InlineData("static", 9, "010401000001102030")]

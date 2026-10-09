@@ -12,13 +12,19 @@ internal static class MouseLighting
 
 	public static readonly string[] Effects = new string[4] { "off", "static", "breathing", "spectrum" };
 
-	// Zones written by Apply and by onboard writes.
-	public static readonly (byte Led, string Name)[] Zones = new (byte, string)[3]
+	// Zones written by Apply and by onboard writes (the Naga Left-Handed answers for these three). Id is what profiles
+	// and the window use for per-zone lighting (MouseLightingSettings.Zones).
+	public static readonly (string Id, byte Led, string Name)[] Zones = new (string, byte, string)[3]
 	{
-		(0x01, "scroll wheel"),
-		(0x04, "logo"),
-		(0x10, "right side")
+		("scroll", 0x01, "scroll wheel"),
+		("logo", 0x04, "logo"),
+		("side", 0x10, "right side")
 	};
+
+	public static bool IsZone(string id)
+	{
+		return Array.Exists(Zones, ((string Id, byte Led, string Name) z) => z.Id == id);
+	}
 
 	// LEDs asked for by Probe; 0x00 addresses every zone at once.
 	private static readonly (byte Led, string Name)[] ProbeLeds = new (byte, string)[5]
@@ -31,6 +37,28 @@ internal static class MouseLighting
 	};
 
 	internal readonly record struct Cmd(byte Led, string Zone, byte Class, byte Id, byte Size, byte[] Args);
+
+	// Short text for the log and for "already showing": one setting, or each zone's when they differ.
+	public static string Describe(MouseLightingSettings s)
+	{
+		if (s == null)
+		{
+			return "none";
+		}
+		static string One(MouseLightingSettings z)
+		{
+			return $"{z.Effect} {z.Color} {z.Brightness}%";
+		}
+		List<string> parts = new List<string>();
+		bool same = true;
+		foreach (var (id, _, _) in Zones)
+		{
+			string d = One(s.For(id));
+			parts.Add(id + " " + d);
+			same &= d == One(s);
+		}
+		return same ? One(s) : string.Join(", ", parts);
+	}
 
 	// Read-only: asks each LED for its brightness (0F/84) and lists the ones the mouse answers for. An LED the mouse
 	// does not have answers "failed", which is expected here, so nothing is logged for it.
@@ -78,13 +106,30 @@ internal static class MouseLighting
 		return "mouse rejected lighting for " + string.Join(", ", rejected);
 	}
 
-	// null when s can be written, otherwise why not.
+	// null when s (and each of its zones) can be written, otherwise why not.
 	public static string Validate(MouseLightingSettings s)
 	{
 		if (s == null)
 		{
 			return null;
 		}
+		foreach (var (id, _, name) in Zones)
+		{
+			MouseLightingSettings z = s.For(id);
+			if (z != s)
+			{
+				string bad = ValidateOne(z);
+				if (bad != null)
+				{
+					return name + ": " + bad;
+				}
+			}
+		}
+		return ValidateOne(s);
+	}
+
+	private static string ValidateOne(MouseLightingSettings s)
+	{
 		if (EffectId(s.Effect) < 0)
 		{
 			return $"unknown lighting effect \"{s.Effect}\"";
@@ -96,15 +141,17 @@ internal static class MouseLighting
 		return null;
 	}
 
-	// For each zone: the effect (0F/02), then its brightness (0F/04). s must pass Validate.
+	// For each zone: the effect (0F/02), then its brightness (0F/04), with the zone's own settings if it has
+	// them. s must pass Validate.
 	internal static List<Cmd> Commands(MouseLightingSettings s, byte storage)
 	{
 		List<Cmd> list = new List<Cmd>();
-		foreach (var (led, zone) in Zones)
+		foreach (var (id, led, zone) in Zones)
 		{
-			var (size, args) = EffectArgs(s, storage, led);
+			MouseLightingSettings z = s.For(id);
+			var (size, args) = EffectArgs(z, storage, led);
 			list.Add(new Cmd(led, zone, 0x0F, 0x02, size, args));
-			list.Add(new Cmd(led, zone, 0x0F, 0x04, 3, BrightnessArgs(storage, led, s.Brightness)));
+			list.Add(new Cmd(led, zone, 0x0F, 0x04, 3, BrightnessArgs(storage, led, z.Brightness)));
 		}
 		return list;
 	}

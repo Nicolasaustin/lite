@@ -840,10 +840,13 @@ internal sealed class Bridge
 	{
 		string name = a.Str("profile", optional: true);
 		MouseProfile p = string.IsNullOrEmpty(name) ? ActiveMouseProfile() : WebOps.FindMouse(Store, name);
-		// Color and brightness keep the profile's values when left out (e.g. switching the effect to "off").
-		string color = a.Str("color", optional: true) ?? p.Lighting?.Color ?? "#00FF00";
-		int brightness = a.Int("brightness", 0, 100, Math.Clamp(p.Lighting?.Brightness ?? 100, 0, 100));
-		p.Lighting = WebOps.MouseLight(a.Str("effect"), color, brightness);
+		// zone: "all" (default) or one zone ("scroll", "logo", "side"). Color and brightness keep that zone's values
+		// when left out (e.g. switching the effect to "off").
+		string zone = a.Str("zone", optional: true);
+		MouseLightingSettings current = (string.IsNullOrEmpty(zone) || zone == "all") ? p.Lighting : p.Lighting?.For(zone);
+		string color = a.Str("color", optional: true) ?? current?.Color ?? "#00FF00";
+		int brightness = a.Int("brightness", 0, 100, Math.Clamp(current?.Brightness ?? 100, 0, 100));
+		WebOps.SetMouseLight(p, zone, WebOps.MouseLight(a.Str("effect"), color, brightness));
 		svc.SaveProfiles();
 		string err = svc.ApplyMouseLighting(p);
 		if (err != null)

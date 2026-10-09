@@ -381,6 +381,42 @@ internal static class WebOps
 		};
 	}
 
+	// Lighting for one zone or all of them. zone null or "all": every zone shows s (per-zone settings go away).
+	// Otherwise only that zone changes; a profile without lighting gets the default for the other zones first,
+	// and a zone set back to the same as the rest stops being separate.
+	public static void SetMouseLight(MouseProfile p, string zone, MouseLightingSettings s)
+	{
+		if (string.IsNullOrEmpty(zone) || zone == "all")
+		{
+			p.Lighting = s;
+			return;
+		}
+		if (!LiteSynapse.MouseLighting.IsZone(zone))
+		{
+			throw new BridgeException($"Unknown lighting zone \"{zone}\". Use all, scroll, logo or side.");
+		}
+		MouseLightingSettings all = p.Lighting ?? new MouseLightingSettings();
+		all.Zones ??= new Dictionary<string, MouseLightingSettings>();
+		if (SameLight(s, all))
+		{
+			all.Zones.Remove(zone);
+		}
+		else
+		{
+			all.Zones[zone] = s;
+		}
+		if (all.Zones.Count == 0)
+		{
+			all.Zones = null;
+		}
+		p.Lighting = all;
+	}
+
+	private static bool SameLight(MouseLightingSettings a, MouseLightingSettings b)
+	{
+		return string.Equals(a.Effect, b.Effect, StringComparison.OrdinalIgnoreCase) && string.Equals(a.Color, b.Color, StringComparison.OrdinalIgnoreCase) && a.Brightness == b.Brightness;
+	}
+
 	// ---- Keyboard ------------------------------------------------------------------------------------------
 
 	public static void SetKbEffect(KbProfile p, string effect, int speed)

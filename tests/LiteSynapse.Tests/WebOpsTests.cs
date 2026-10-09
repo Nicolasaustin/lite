@@ -285,6 +285,29 @@ public class WebOpsTests
 		Assert.Throws<BridgeException>(() => WebOps.MouseLight("static", "#000000", 101));
 	}
 
+	[Fact]
+	public void MouseLightingPerZoneOrAll()
+	{
+		MouseProfile p = new MouseProfile { Name = "CS2" };
+		// One zone on a profile without lighting: the rest get the default, the zone its own.
+		WebOps.SetMouseLight(p, "logo", WebOps.MouseLight("static", "#FF0000", 100));
+		Assert.Equal("#00FF00", p.Lighting.Color);
+		Assert.Equal("#FF0000", p.Lighting.For("logo").Color);
+		Assert.Equal("#00FF00", p.Lighting.For("scroll").Color);
+		// Setting the zone back to the same as the rest drops it.
+		WebOps.SetMouseLight(p, "logo", WebOps.MouseLight("static", "#00ff00", 100));
+		Assert.Null(p.Lighting.Zones);
+		// "all" (or no zone) sets every zone and drops per-zone settings.
+		WebOps.SetMouseLight(p, "side", WebOps.MouseLight("breathing", "#0000FF", 40));
+		Assert.NotNull(p.Lighting.Zones);
+		WebOps.SetMouseLight(p, "all", WebOps.MouseLight("static", "#FFFFFF", 100));
+		Assert.Null(p.Lighting.Zones);
+		Assert.Equal("#FFFFFF", p.Lighting.For("side").Color);
+		WebOps.SetMouseLight(p, null, WebOps.MouseLight("off", "#FFFFFF", 100));
+		Assert.Equal("off", p.Lighting.Effect);
+		Assert.Throws<BridgeException>(() => WebOps.SetMouseLight(p, "wheel", WebOps.MouseLight("static", "#FFFFFF", 100)));
+	}
+
 	// ---- Keyboard ----
 
 	[Fact]

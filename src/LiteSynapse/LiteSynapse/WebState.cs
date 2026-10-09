@@ -108,6 +108,10 @@ internal sealed class LightingDto
 	public string Color { get; set; }
 
 	public int Brightness { get; set; }
+
+	// Zones lit differently ("scroll", "logo", "side"); left out when every zone shows the settings above.
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public Dictionary<string, LightingDto> Zones { get; set; }
 }
 
 internal sealed class KbProfileDto
@@ -219,11 +223,25 @@ internal static class WebState
 			{
 				Effect = p.Lighting.Effect,
 				Color = p.Lighting.Color,
-				Brightness = p.Lighting.Brightness
+				Brightness = p.Lighting.Brightness,
+				Zones = ZoneDtos(p.Lighting)
 			},
 			ClickSwap = p.ClickSwap,
 			AntiCheat = AntiCheat.IsProtected(p.Name)
 		};
+	}
+
+	private static Dictionary<string, LightingDto> ZoneDtos(MouseLightingSettings l)
+	{
+		Dictionary<string, LightingDto> zones = (l.Zones ?? new Dictionary<string, MouseLightingSettings>())
+			.Where(kv => kv.Value != null && LiteSynapse.MouseLighting.IsZone(kv.Key))
+			.ToDictionary(kv => kv.Key, kv => new LightingDto
+			{
+				Effect = kv.Value.Effect,
+				Color = kv.Value.Color,
+				Brightness = kv.Value.Brightness
+			});
+		return (zones.Count == 0) ? null : zones;
 	}
 
 	public static KbProfileDto Keyboard(KbProfile p)

@@ -157,6 +157,11 @@ scenario('main', async browser => {
   await p.click('details.adv summary');
   await p.click('button:has-text("Detect zones")');
   await shot(p, '14-mouse-lighting', 800);
+  await p.click('[data-fk="light:zone:logo"]');
+  await p.click('[data-fk="light:c:#FF0000"]');
+  await shot(p, '14b-mouse-lighting-zone', 600);
+  await p.click('[data-fk="light:zone:all"]');
+  await shot(p, '14c-mouse-lighting-all-mixed', 400);
   await tab(p, 'Onboard memory');
   await shot(p, '15-mouse-onboard');
   await p.click('button[data-fk="slotw:4"]');

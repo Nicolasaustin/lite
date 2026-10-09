@@ -1,3 +1,24 @@
+# LiteSynapse 1.1.4 test build 5: what to try
+
+New in build 5: **lighting per zone**. **Mouse → Lighting** has a **Zone** row: All, Scroll wheel, Logo, Side panel.
+
+- Pick a zone, then an effect, color and brightness: only that zone changes. A green dot marks zones with their
+  own lighting, and **Same as the rest** puts a zone back in line with the others.
+- **All** sets every zone the same (zones with their own lighting follow it again).
+- Each zone is saved with the profile and written into the mouse's live slot, like everything else.
+- The lighting is no longer marked Experimental: you confirmed colors change on the mouse.
+
+| # | Try this | Expected |
+|---|---|---|
+| 1 | Zone **Logo** → red | Only the logo turns red |
+| 2 | Zone **Scroll wheel** → Breathing, blue | Only the wheel breathes blue |
+| 3 | Zone **All** → green | Every zone is green again |
+| 4 | Switch to another profile and back | Each profile keeps its own zone colors |
+
+Everything from build 4 below still applies.
+
+---
+
 # LiteSynapse 1.1.3 test build 4: what to try
 
 Build 4 fixes what your build 2 and 3 logs showed:
@@ -15,7 +36,7 @@ Everything from build 3 below still applies.
 
 ## Install
 
-1. Run `LiteSynapse-Setup-1.1.3.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
+1. Run `LiteSynapse-Setup-1.1.4.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
    profiles, games and macros. No uninstall needed.
    - SmartScreen says "Windows protected your PC" because the app isn't code-signed: **More info → Run anyway**.
 2. Quit Razer Synapse fully (tray icon → **Quit**) so it can't fight over the mouse and keyboard.

@@ -259,6 +259,29 @@ public class BridgeProtocolTests
 	}
 
 	[Fact]
+	public void MouseLightingZonesAreSentOnlyWhenSet()
+	{
+		MouseProfile p = new MouseProfile
+		{
+			Name = "CS2",
+			Lighting = new MouseLightingSettings
+			{
+				Zones = new Dictionary<string, MouseLightingSettings>
+				{
+					["logo"] = new MouseLightingSettings { Effect = "static", Color = "#FF0000", Brightness = 50 },
+					["bogus"] = new MouseLightingSettings()
+				}
+			}
+		};
+		JsonObject l = JsonNode.Parse(JsonSerializer.Serialize(WebState.Mouse(p), WebJson.Default.MouseProfileDto))["lighting"].AsObject();
+		Assert.Equal(new[] { "brightness", "color", "effect", "zones" }, Keys(l));
+		// Zone ids stay as they are; unknown zones are left out.
+		Assert.Equal(new[] { "logo" }, Keys(l["zones"].AsObject()));
+		Assert.Equal("#FF0000", (string)l["zones"]["logo"]["color"]);
+		Assert.Equal(new[] { "brightness", "color", "effect" }, Keys(l["zones"]["logo"].AsObject()));
+	}
+
+	[Fact]
 	public void MouseLightingNullIsWrittenAsNull()
 	{
 		JsonObject o = JsonNode.Parse(JsonSerializer.Serialize(WebState.Mouse(new MouseProfile { Name = "Amongus" }), WebJson.Default.MouseProfileDto)).AsObject();

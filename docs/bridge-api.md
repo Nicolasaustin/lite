@@ -40,7 +40,8 @@ All JSON property names are camelCase.
   "mouseProfiles": [
     { "name": "CS2", "pollingRate": 1000, "dpi": 800, "dpiStages": [400, 800], "dpiActive": 2,
       "buttons": { "Side8": { "key": "KEY_W", "mods": [] }, "Side3": { "key": "DISABLED", "mods": [] } },
-      "lighting": { "effect": "static", "color": "#00FF00", "brightness": 100 },   // per profile; null = leave mouse as is
+      "lighting": { "effect": "static", "color": "#00FF00", "brightness": 100,   // per profile; null = leave mouse as is
+                    "zones": { "logo": { "effect": "static", "color": "#FF0000", "brightness": 100 } } },   // only zones lit differently ("scroll", "logo", "side"); left out when none
       "clickSwap": true,          // left-handed click swap written to onboard memory
       "antiCheat": true }         // game is flagged as anti-cheat protected
   ],
@@ -108,7 +109,7 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `onboardWrite` | `{ slot: 2..5, profile }` | `{ ok: bool, message }` (sends `progress` pushes while writing) |
 | `calibrate` | `{}` | `null` — opens the native calibration window (classic; the page no longer offers it) |
 | `probeMouseLighting` | `{}` | `{ zones: [ { id: 0, name: "All zones" }, ... ] }` (read-only probe) |
-| `setMouseLighting` | `{ profile?: name (default: active), effect: "off"\|"static"\|"breathing"\|"spectrum", color: "#RRGGBB", brightness: 0..100 }` | State — saved on that mouse profile, applied now if it is active |
+| `setMouseLighting` | `{ profile?: name (default: active), zone?: "all"\|"scroll"\|"logo"\|"side", effect: "off"\|"static"\|"breathing"\|"spectrum", color: "#RRGGBB", brightness: 0..100 }` | State — saved on that mouse profile, applied now if it is active. `zone` "all" (default) sets every zone and drops per-zone settings; a zone set like the rest stops being separate |
 | `setCompetitiveSafe` | `{ on }` | State |
 | `setGameKeyboardDefault` | `{ keyboardProfile }` (`""` = none) | State |
 | `linkRunningGame` | `{ profile }` | `{ exe: string\|null }` — adds `state.lastGameExe` to that profile's game rule (creates the rule if missing) |
@@ -130,7 +131,8 @@ Unknown commands reply `ok: false`.
 
 Owned by the data/protocol work:
 ```csharp
-public class MouseLightingSettings { string Effect = "static"; string Color = "#00FF00"; int Brightness = 100; }
+public class MouseLightingSettings { string Effect = "static"; string Color = "#00FF00"; int Brightness = 100;
+                                     Dictionary<string, MouseLightingSettings> Zones; /* null = all zones alike */ }
 // MouseProfile gains: MouseLightingSettings Lighting (null = leave as is); bool ClickSwap = true
 // KeyTarget.Key may be "DISABLED" or "MOUSE_MIDDLE"
 internal static class AntiCheat { public static bool IsProtected(string profileName); public static readonly string[] Profiles; }

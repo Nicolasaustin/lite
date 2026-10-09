@@ -1084,7 +1084,7 @@ internal sealed class Service
 			lastLighting = null;
 			return;
 		}
-		string key = $"{s.Effect}|{s.Color}|{s.Brightness}|{store}";
+		string key = MouseLighting.Describe(s) + "|" + store;
 		if (!force && key == lastLighting)
 		{
 			return;
@@ -1096,7 +1096,7 @@ internal sealed class Service
 			err = MouseLighting.Apply(m, s, MouseLighting.VarStore);
 		}
 		lastLighting = (err == null) ? key : null;
-		Cfg.Log($"mouse lighting {s.Effect} {s.Color} {s.Brightness}% (slot {store}): {err ?? "ok"}");
+		Cfg.Log($"mouse lighting {MouseLighting.Describe(s)} (slot {store}): {err ?? "ok"}");
 	}
 
 	private void SyncKeyboard()

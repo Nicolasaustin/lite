@@ -51,14 +51,15 @@ public class ModelTests
 	public void Unknown_fields_survive_a_save_on_every_stored_class()
 	{
 		ProfileStore s = RoundTrip<ProfileStore>("{\"Future\": 1, \"Mouse\": [{\"Name\": \"A\", \"Tilt\": \"x\", " +
-			"\"Lighting\": {\"Effect\": \"static\", \"Color\": \"#010203\", \"Brightness\": 9, \"Zones\": [1]}, " +
+			"\"Lighting\": {\"Effect\": \"static\", \"Color\": \"#010203\", \"Brightness\": 9, \"Gradient\": [1]}, " +
 			"\"Buttons\": {\"Side1\": {\"Key\": \"KEY_1\", \"Mods\": [], \"Turbo\": true}}}], " +
 			"\"Keyboard\": [{\"Name\": \"K\", \"GamingMode\": {\"On\": true}}], \"Macros\": [{\"Name\": \"M\", \"Steps\": [], \"Loop\": 3}]}");
 		Assert.Equal(1, s.ExtraData["Future"].GetInt32());
 		MouseProfile m = s.Mouse.Single();
 		Assert.Equal("x", m.ExtraData["Tilt"].GetString());
 		Assert.Equal(("static", "#010203", 9), (m.Lighting.Effect, m.Lighting.Color, m.Lighting.Brightness));
-		Assert.Equal(1, m.Lighting.ExtraData["Zones"][0].GetInt32());
+		Assert.Equal(1, m.Lighting.ExtraData["Gradient"][0].GetInt32());
+		Assert.Null(m.Lighting.Zones);
 		Assert.True(m.Buttons["Side1"].ExtraData["Turbo"].GetBoolean());
 		Assert.True(s.Keyboard.Single().ExtraData["GamingMode"].GetProperty("On").GetBoolean());
 		Assert.Equal(3, s.Macros.Single().ExtraData["Loop"].GetInt32());
