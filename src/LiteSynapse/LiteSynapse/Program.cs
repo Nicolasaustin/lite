@@ -255,6 +255,8 @@ internal static class Program
 				UiHost.ToggleFlyout(svc, Cursor.X, Cursor.Y);
 			}
 			new TrayHost(svc).Run();
+			// Windows close the normal way (the main window saves its size and state) before the process ends.
+			UiHost.CloseAll(2000);
 			svc.Shutdown();
 			Cfg.FlushLog();
 			return 0;

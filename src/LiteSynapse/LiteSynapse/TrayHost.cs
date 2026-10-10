@@ -104,6 +104,15 @@ internal sealed class TrayHost
 	// Retries the session (lock/unlock) registration, which fails while the session service is not up yet.
 	private static readonly nint SessionTimer = 2;
 
+	// Retries adding the tray icon when Explorer was too busy to take it (at sign-in).
+	private static readonly nint AddIconTimer = 3;
+
+	private int addIconTries;
+
+	// The last left-button release on the icon, so the second click of a double-click does not close the
+	// flyout the first one opened.
+	private long lastIconUp;
+
 	private readonly Service svc;
 
 	private nint hwnd;
@@ -287,6 +296,12 @@ internal sealed class TrayHost
 			{
 			case 514u:
 			{
+				long now = Environment.TickCount64;
+				if (now - lastIconUp < System.Windows.Forms.SystemInformation.DoubleClickTime)
+				{
+					break;
+				}
+				lastIconUp = now;
 				W32.GetCursorPos(out var p);
 				UiHost.ToggleFlyout(svc, p.x, p.y);
 				break;
@@ -330,6 +345,12 @@ internal sealed class TrayHost
 				OnSession((int)w);
 				return null;
 			case 275u:
+				if (w == AddIconTimer)
+				{
+					W32.KillTimer(hwnd, AddIconTimer);
+					AddIcon();
+					return IntPtr.Zero;
+				}
 				if (w == SettleTimer)
 				{
 					W32.KillTimer(hwnd, SettleTimer);
@@ -434,7 +455,22 @@ internal sealed class TrayHost
 	private void AddIcon()
 	{
 		NOTIFYICONDATA d = Data(7u);
-		Shell_NotifyIcon(0u, ref d);
+		if (Shell_NotifyIcon(0u, ref d))
+		{
+			addIconTries = 0;
+			W32.KillTimer(hwnd, AddIconTimer);
+			return;
+		}
+		// Explorer was busy (it is, at sign-in) and no TaskbarCreated follows: without a retry the app ran the
+		// whole session with no icon, and so no flyout and no clean Exit.
+		if (++addIconTries <= 30)
+		{
+			W32.SetTimer(hwnd, AddIconTimer, 2000u, IntPtr.Zero);
+		}
+		else
+		{
+			Cfg.Log("tray icon could not be added");
+		}
 	}
 
 	private string shownTip;
@@ -450,7 +486,11 @@ internal sealed class TrayHost
 		}
 		shownTip = tip;
 		NOTIFYICONDATA d = Data(4u);
-		Shell_NotifyIcon(1u, ref d);
+		if (!Shell_NotifyIcon(1u, ref d))
+		{
+			// The icon is not there to change (it never got added, or Explorer lost it): add it.
+			AddIcon();
+		}
 	}
 
 	private void RemoveIcon()

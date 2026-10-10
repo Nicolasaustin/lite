@@ -72,6 +72,12 @@ internal static class UiHost
 			finally
 			{
 				Interlocked.Decrement(ref pending);
+				// An action that opened nothing (a tray click that only dismissed the flyout) must not leave this
+				// thread idling with no window.
+				if (Application.OpenForms.Count == 0)
+				{
+					AfterClose();
+				}
 			}
 		}));
 	}
@@ -123,7 +129,9 @@ internal static class UiHost
 		bool exit = false;
 		lock (gate)
 		{
-			if (Application.OpenForms.Count == 0 && pending == 0)
+			// Can be reached twice for one close (the closed form's handler and the action that closed it):
+			// the second time the thread is already on its way out.
+			if (alive && Application.OpenForms.Count == 0 && pending == 0)
 			{
 				alive = false;
 				exit = true;
@@ -139,6 +147,11 @@ internal static class UiHost
 	// Set by the window just before it closes itself because a linked game came to the front.
 	internal static volatile bool ClosingForGame;
 
+	// The main window closed since the last clean-up. The flyout and the calibration window allocate next to
+	// nothing, and the flyout closes precisely when the user clicks back into the game - a forced, blocking
+	// collection then stopped every thread, the keyboard hook included, on the first keystrokes of the round.
+	private static volatile bool mainClosed;
+
 	// The window is gone: hand the memory back instead of sitting on it for the rest of the session.
 	//
 	// Skipped while the keyboard hook is live, because a compacting collection pauses every thread. And
@@ -150,9 +163,18 @@ internal static class UiHost
 	{
 		bool forGame = ClosingForGame;
 		ClosingForGame = false;
+		bool afterMain = mainClosed;
+		mainClosed = false;
 		try
 		{
-			if (forGame || svcForMemory?.EngineBusy == true || svcForMemory?.InGame == true)
+			if (!afterMain || forGame || svcForMemory?.EngineBusy == true || svcForMemory?.InGame == true)
+			{
+				return;
+			}
+			// The service may not have seen the switch yet: look at what is in front right now.
+			string front = Native.ForegroundExePath(out uint pid);
+			if (front != null && pid != (uint)Environment.ProcessId
+				&& svcForMemory?.FindGame(System.IO.Path.GetFileName(front), front) != null)
 			{
 				return;
 			}
@@ -160,6 +182,47 @@ internal static class UiHost
 			GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 		}
 		catch
+		{
+		}
+	}
+
+	// Closes every window before the process exits (tray Exit), so each closes the normal way - the main
+	// window saves its size and state - instead of being cut off with the thread. Waits up to timeoutMs.
+	public static void CloseAll(int timeoutMs)
+	{
+		Control inv;
+		lock (gate)
+		{
+			if (!alive)
+			{
+				return;
+			}
+			inv = invoker;
+		}
+		if (inv == null || inv.IsDisposed)
+		{
+			return;
+		}
+		using ManualResetEventSlim done = new ManualResetEventSlim();
+		try
+		{
+			inv.BeginInvoke((Action)(() =>
+			{
+				try
+				{
+					foreach (Form f in Application.OpenForms.Cast<Form>().ToArray())
+					{
+						f.Close();
+					}
+				}
+				finally
+				{
+					done.Set();
+				}
+			}));
+			done.Wait(timeoutMs);
+		}
+		catch (InvalidOperationException)
 		{
 		}
 	}
@@ -185,6 +248,7 @@ internal static class UiHost
 				main.FormClosed += (object _1, FormClosedEventArgs _2) =>
 				{
 					main = null;
+					mainClosed = true;
 					BeginAfterClose();
 				};
 			}
@@ -207,6 +271,7 @@ internal static class UiHost
 
 	public static void ToggleFlyout(Service svc, int x, int y)
 	{
+		svcForMemory = svc;
 		Post(() =>
 		{
 			if (flyout != null && !flyout.IsDisposed)
@@ -231,6 +296,7 @@ internal static class UiHost
 	// calibration window closes and the result is saved.
 	public static void Calibrate(Service svc, Action closed = null)
 	{
+		svcForMemory = svc;
 		Post(() =>
 		{
 			if (calibration != null && !calibration.IsDisposed)
@@ -254,6 +320,12 @@ internal static class UiHost
 				ForeColor = Theme.Text,
 				Icon = AppIcon.Icon()
 			};
+			// Owned by the main window, so when that closes itself for a game this goes with it, instead of
+			// staying on top of the game with Snap Tap off and in-game presses taken as answers.
+			if (main != null && !main.IsDisposed)
+			{
+				form.Owner = main;
+			}
 			Ui.Dialog(form);
 			Label label = new Label
 			{
@@ -306,7 +378,30 @@ internal static class UiHost
 			form.FormClosed += (object _1, FormClosedEventArgs _2) =>
 			{
 				svc.Engine.Calibrating = null;
-				svc.SetCalibration(learned);
+				// Saved only when the run was finished, and on top of what was learned before: closing the window
+				// to look, or half way, used to replace the saved calibration with a partial or empty one, and
+				// every button not re-learned lost its remap.
+				if (step >= names.Length)
+				{
+					Dictionary<string, BaseKey> merged = new Dictionary<string, BaseKey>();
+					foreach (KeyValuePair<string, BaseKey> kv in svc.Base ?? new Dictionary<string, BaseKey>())
+					{
+						// An old entry whose key a newly learned button now sends would make two buttons collide.
+						if (kv.Value != null && !learned.Values.Any((BaseKey b) => b.Sc == kv.Value.Sc && b.Ext == kv.Value.Ext))
+						{
+							merged[kv.Key] = kv.Value;
+						}
+					}
+					foreach (KeyValuePair<string, BaseKey> kv in learned)
+					{
+						merged[kv.Key] = kv.Value;
+					}
+					svc.SetCalibration(merged);
+				}
+				else
+				{
+					Cfg.Log($"calibration closed after {step} of {names.Length} buttons: the saved calibration is unchanged");
+				}
 				calibration = null;
 				try
 				{

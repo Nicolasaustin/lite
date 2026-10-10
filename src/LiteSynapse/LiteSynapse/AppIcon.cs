@@ -38,10 +38,32 @@ internal static class AppIcon
 		return bmp;
 	}
 
+	private static Icon cached;
+
+	[System.Runtime.InteropServices.DllImport("user32.dll")]
+	private static extern bool DestroyIcon(nint h);
+
+	// One icon for the process. Icon.FromHandle does not own the handle, so the old version leaked an HICON
+	// (and its two bitmaps) every time a window was built; this one makes an owning copy and frees the
+	// original. Forms never dispose Form.Icon, so sharing it is safe.
 	public static Icon Icon(int size = 32)
 	{
+		if (cached != null)
+		{
+			return cached;
+		}
 		using Bitmap b = Make(size);
-		return System.Drawing.Icon.FromHandle(b.GetHicon());
+		nint h = b.GetHicon();
+		try
+		{
+			using Icon temp = System.Drawing.Icon.FromHandle(h);
+			cached = (Icon)temp.Clone();
+		}
+		finally
+		{
+			DestroyIcon(h);
+		}
+		return cached;
 	}
 
 	// Writes app.ico from the embedded frames (PNG-compressed, Windows Vista and later).
