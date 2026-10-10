@@ -142,6 +142,54 @@ internal sealed class TrayHost
 		return h != IntPtr.Zero && W32.PostMessage(h, MsgExit, IntPtr.Zero, IntPtr.Zero);
 	}
 
+	// WM_APP + 4: a balloon from the tray icon (a Razer device Windows could not start). Its text is handed over
+	// under balloonLock; the tray thread reads it when the message arrives.
+	private const uint MsgBalloon = 32772u;
+
+	private static readonly object balloonLock = new object();
+
+	private static string balloonTitle;
+
+	private static string balloonText;
+
+	// Shows a balloon from the tray icon, from any thread. False when no tray loop is running.
+	public static bool RequestBalloon(string title, string text)
+	{
+		lock (balloonLock)
+		{
+			balloonTitle = title ?? "";
+			balloonText = text ?? "";
+		}
+		nint h = current;
+		return h != IntPtr.Zero && W32.PostMessage(h, MsgBalloon, IntPtr.Zero, IntPtr.Zero);
+	}
+
+	// NIM_MODIFY with NIF_INFO: a warning balloon with the text handed over by RequestBalloon. The fields are fixed
+	// size (szInfoTitle 64, szInfo 256, each with its terminator), so longer text is cut.
+	private void ShowBalloon()
+	{
+		string title;
+		string text;
+		lock (balloonLock)
+		{
+			title = balloonTitle ?? "";
+			text = balloonText ?? "";
+		}
+		if (text.Length == 0)
+		{
+			return;
+		}
+		NOTIFYICONDATA d = Data(0x10u);
+		d.szInfoTitle = (title.Length > 63) ? title.Substring(0, 63) : title;
+		d.szInfo = (text.Length > 255) ? text.Substring(0, 255) : text;
+		d.dwInfoFlags = 2u;
+		if (!Shell_NotifyIcon(1u, ref d))
+		{
+			// The icon is not there to show it from: add it; the row under Performance > RAZER still says it.
+			AddIcon();
+		}
+	}
+
 	private nint icon;
 
 	private nint devNotify;
@@ -320,6 +368,9 @@ internal sealed class TrayHost
 		case MsgExit:
 			Cfg.Log("exit requested from the window");
 			W32.PostQuitMessage(0);
+			return IntPtr.Zero;
+		case MsgBalloon:
+			ShowBalloon();
 			return IntPtr.Zero;
 		default:
 			if (m == taskbarCreated && m != 0)

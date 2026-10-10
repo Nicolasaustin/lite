@@ -21,6 +21,11 @@ public class RazerLeftovers
 
 	public const string DriverScript = "remove-razer-filter-drivers.ps1";
 
+	// FIX DEAD RAZER DEVICES: for a Naga / BlackWidow Lite that Windows no longer starts after a Razer driver install
+	// went wrong (dead at sign-in). Removes Razer's driver packages and the stuck device entries so Windows sets the
+	// devices up again on its own drivers. Run from tools\ next to the exe, checked against the built-in copy first.
+	public const string FixScript = "fix-razer-input.ps1";
+
 	// Synapse 4 starts itself at sign-in through this HKCU Run value (SysUtilsNative.setApplicationAutoStart).
 	public const string SynapseRunValue = "RazerAppEngine";
 
@@ -39,7 +44,7 @@ public class RazerLeftovers
 	internal static readonly string[] ProtectedServices = new string[4] { "Audiosrv", "AudioEndpointBuilder", "VSSrv", "XTU3SERVICE" };
 
 	// The clean-up steps the window can ask for.
-	internal static readonly string[] Actions = new string[4] { "disableServices", "enableServices", "disableGameManager", "driverGuide" };
+	internal static readonly string[] Actions = new string[5] { "disableServices", "enableServices", "disableGameManager", "driverGuide", "fixInput" };
 
 	// Razer services known to open a network or localhost listener: the Chroma SDK server (its REST API on
 	// 127.0.0.1), Razer Central and the Synapse service itself (updates and sign-in). Only used to say so in the
@@ -75,6 +80,10 @@ public class RazerLeftovers
 	public List<string> FilterDrivers { get; set; } = new List<string>();
 
 	public bool RzCommon { get; set; }
+
+	// Plugged-in Razer devices that Windows could not start (Device Manager shows a problem code). A Razer driver
+	// install that went wrong looks like this: dead at sign-in, lit for a moment at boot, then dark.
+	public List<DeadDevice> DeadDevices { get; set; } = new List<DeadDevice>();
 
 	// HKCU Run values that start Razer software at sign-in and are on (Task Manager's Startup apps has not turned
 	// them off). Usually just "RazerAppEngine".
@@ -372,7 +381,8 @@ public class RazerLeftovers
 		List<RazerService> found = (Services ?? new List<RazerService>()).Where((RazerService s) => s != null).ToList();
 		string services = (found.Count == 0) ? "none" : string.Join(", ", found.Select((RazerService s) => s.Name + " " + s.State));
 		return $"Synapse installed: {SynapseInstalled}; Synapse running: {SynapseRunning}; {GmsServiceName}: {GmsService}; filter drivers: {((FilterDrivers.Count == 0) ? "none" : string.Join(", ", FilterDrivers))}; RzCommon: {RzCommon}; " +
-			$"autostart: {(((Autostart?.Count ?? 0) == 0) ? "off" : string.Join(", ", Autostart))}; services: {services}; upgrade task: {UpgradeTask}; RunOnce: {(((RunOnce?.Count ?? 0) == 0) ? "none" : string.Join(", ", RunOnce))}";
+			$"autostart: {(((Autostart?.Count ?? 0) == 0) ? "off" : string.Join(", ", Autostart))}; services: {services}; upgrade task: {UpgradeTask}; RunOnce: {(((RunOnce?.Count ?? 0) == 0) ? "none" : string.Join(", ", RunOnce))}; " +
+			$"devices not working: {(((DeadDevices?.Count ?? 0) == 0) ? "none" : string.Join(", ", DeadDevices.Select((DeadDevice d) => d.Label)))}";
 	}
 
 	// ---- "Turn off Razer services" (planned and worded here, tested; run below) -----------------------------
@@ -682,6 +692,14 @@ public class RazerLeftovers
 		}
 		try
 		{
+			r.DeadDevices = Win.DeadDevices();
+		}
+		catch (Exception exDead)
+		{
+			Cfg.Log("razer check (devices): " + exDead.Message);
+		}
+		try
+		{
 			r.Autostart = Win.RazerAutostart();
 		}
 		catch (Exception ex5)
@@ -738,11 +756,22 @@ public class RazerLeftovers
 	// Full path of the driver helper script shipped with LiteSynapse, or null.
 	public static string FindDriverScript()
 	{
+		return FindTool(DriverScript);
+	}
+
+	// Full path of the FIX DEAD RAZER DEVICES script shipped with LiteSynapse, or null.
+	public static string FindFixScript()
+	{
+		return FindTool(FixScript);
+	}
+
+	private static string FindTool(string name)
+	{
 		string baseDir = AppContext.BaseDirectory;
 		string[] candidates = new string[2]
 		{
-			Path.Combine(baseDir, "tools", DriverScript),
-			Path.Combine(baseDir, DriverScript)
+			Path.Combine(baseDir, "tools", name),
+			Path.Combine(baseDir, name)
 		};
 		return candidates.FirstOrDefault(File.Exists);
 	}
@@ -763,6 +792,8 @@ public class RazerLeftovers
 				return DisableGameManager(current);
 			case "driverGuide":
 				return DriverGuide(current);
+			case "fixInput":
+				return FixInput(current);
 			default:
 				return "Unknown action \"" + action + "\".";
 			}
@@ -848,6 +879,12 @@ public class RazerLeftovers
 	private static string EnableServices()
 	{
 		RazerLeftovers before = Check(deep: true);
+		string refusal = EnableRefusal(before);
+		if (refusal != null)
+		{
+			Cfg.Log("razer restore: refused: " + refusal);
+			return refusal;
+		}
 		List<string> autostart = new List<string>();
 		foreach (string v in Win.RazerAutostart())
 		{
@@ -931,6 +968,79 @@ public class RazerLeftovers
 	// sc.exe to put each Razer service back to running (Game Manager automatic, the rest demand-start) and start
 	// it, and schtasks to re-enable the upgrade task. Only counts a config failure; a service that will not start
 	// (a missing dependency) is not treated as a failure of the restore.
+	// Why TURN ON RAZER SERVICES must not run now, or null. Razer's services install Razer's filter drivers the
+	// moment they start. With the drivers removed (the driver guide) that install happens on the fly, and on a PC
+	// where it went wrong it left the mouse and keyboard dead at sign-in until the driver was removed again. So the
+	// services only go back on while Razer's drivers are still in place; otherwise the supported way to run Synapse
+	// again is a Synapse reinstall. A device that is already wedged needs the fix first.
+	internal static string EnableRefusal(RazerLeftovers before)
+	{
+		if (before == null)
+		{
+			return null;
+		}
+		List<DeadDevice> dead = before.DeadDevices ?? new List<DeadDevice>();
+		if (dead.Count > 0)
+		{
+			return "Not turned on: Windows cannot start " + string.Join(" and ", dead.Select((DeadDevice d) => d.Label)) +
+				". Press FIX DEAD RAZER DEVICES first.";
+		}
+		if (before.SynapseInstalled && (before.FilterDrivers?.Count ?? 0) == 0 && !before.RzCommon)
+		{
+			return "Not turned on: Razer's filter drivers are not installed, and Razer's services install them the moment they start. " +
+				"On this PC that left the mouse and keyboard dead at sign-in until the driver was removed again. " +
+				"To run Razer Synapse again: exit LiteSynapse, then reinstall Synapse from razer.com. " +
+				"If the devices stop working after that, press FIX DEAD RAZER DEVICES.";
+		}
+		return null;
+	}
+
+	// Device Manager's problem code in words (the same table as fix-razer-input.ps1).
+	internal static string ProblemText(int code)
+	{
+		switch (code)
+		{
+		case 0: return "OK";
+		case 1: return "not configured";
+		case 3: return "driver corrupt";
+		case 10: return "cannot start";
+		case 14: return "needs restart";
+		case 18: return "reinstall driver";
+		case 19: return "registry damaged";
+		case 22: return "disabled";
+		case 24: return "not present";
+		case 28: return "no driver";
+		case 31: return "cannot load driver";
+		case 32: return "driver service disabled";
+		case 37: return "driver failed to start";
+		case 38: return "old driver still loaded";
+		case 39: return "driver missing or corrupt";
+		case 43: return "device reported failure";
+		case 45: return "not connected";
+		case 47: return "needs restart";
+		case 48: return "driver blocked";
+		case 52: return "driver not signed";
+		default: return "code " + code;
+		}
+	}
+
+	// The device behind a hardware id list, for a device Windows could not name.
+	internal static string DeviceName(IEnumerable<string> hardwareIds)
+	{
+		foreach (string id in hardwareIds ?? Enumerable.Empty<string>())
+		{
+			if (id != null && id.Contains("PID_008D", StringComparison.OrdinalIgnoreCase))
+			{
+				return "Razer Naga";
+			}
+			if (id != null && id.Contains("PID_0235", StringComparison.OrdinalIgnoreCase))
+			{
+				return "Razer BlackWidow Lite";
+			}
+		}
+		return "Razer device";
+	}
+
 	internal static string EnableScript(IEnumerable<string> services, bool task)
 	{
 		StringBuilder sb = new StringBuilder();
@@ -960,7 +1070,7 @@ public class RazerLeftovers
 		}
 		// It runs with administrator rights, now without a UAC prompt (LiteSynapse is elevated), from a folder this
 		// account can write to: only the copy built into LiteSynapse.exe is trusted.
-		if (!MatchesBuiltIn(path))
+		if (!MatchesBuiltIn(path, DriverScript))
 		{
 			Cfg.Log("razer cleanup: " + path + " differs from the copy built into LiteSynapse.exe; not run");
 			return DriverScript + " has been changed since LiteSynapse was installed, so it was not run. Reinstall LiteSynapse to get the original back.";
@@ -983,11 +1093,50 @@ public class RazerLeftovers
 		return msg;
 	}
 
-	private static bool MatchesBuiltIn(string path)
+	// What FIX DEAD RAZER DEVICES says once the script is on its way; Service exits the app when it sees it.
+	public const string FixStarted = "The fix is running in the PowerShell window. LiteSynapse closes in a few seconds so the devices are free. " +
+		"When the window says it is done: unplug both Razer devices, wait 10 seconds, plug them back in, and start LiteSynapse again.";
+
+	// FIX DEAD RAZER DEVICES: runs the recovery script in a visible administrator PowerShell window (LiteSynapse is
+	// elevated, so no prompt). The script closes LiteSynapse itself - it holds the devices open - so Service leaves
+	// cleanly a few seconds after this returns FixStarted.
+	private static string FixInput(RazerLeftovers current)
+	{
+		string path = FindFixScript();
+		if (path == null)
+		{
+			return FixScript + " was not found next to LiteSynapse.exe. Reinstall LiteSynapse to get it back, or run tools\\FixRazer2.bat from the repository.";
+		}
+		if (!MatchesBuiltIn(path, FixScript))
+		{
+			Cfg.Log("razer fix: " + path + " differs from the copy built into LiteSynapse.exe; not run");
+			return FixScript + " has been changed since LiteSynapse was installed, so it was not run. Reinstall LiteSynapse to get the original back.";
+		}
+		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath, FixInputArguments(path))
+		{
+			UseShellExecute = true,
+			Verb = "runas",
+			WindowStyle = ProcessWindowStyle.Normal
+		};
+		using (Process.Start(psi))
+		{
+		}
+		List<DeadDevice> dead = current?.DeadDevices ?? new List<DeadDevice>();
+		Cfg.Log("razer fix: started " + path + ((dead.Count > 0) ? " for " + string.Join(", ", dead.Select((DeadDevice d) => d.Label)) : ""));
+		return FixStarted;
+	}
+
+	// The script by its full path; nothing else, so a folder name cannot add an argument.
+	internal static string FixInputArguments(string path)
+	{
+		return "-NoProfile -ExecutionPolicy Bypass -File \"" + path + "\"";
+	}
+
+	private static bool MatchesBuiltIn(string path, string resource)
 	{
 		try
 		{
-			using Stream built = typeof(RazerLeftovers).Assembly.GetManifestResourceStream(DriverScript);
+			using Stream built = typeof(RazerLeftovers).Assembly.GetManifestResourceStream(resource);
 			if (built == null)
 			{
 				return false;
@@ -1260,6 +1409,23 @@ public class RazerLeftovers
 
 		[DllImport("setupapi.dll")]
 		private static extern bool SetupDiDestroyDeviceInfoList(nint set);
+
+		private const uint DIGCF_PRESENT = 0x0002;
+
+		private const int SPDRP_DEVICEDESC = 0x00;
+
+		private const int SPDRP_SERVICE = 0x04;
+
+		private const int SPDRP_FRIENDLYNAME = 0x0C;
+
+		// CM_Get_DevNode_Status: the device has a problem (its number is in the second out value).
+		private const uint DN_HAS_PROBLEM = 0x0400;
+
+		[DllImport("cfgmgr32.dll")]
+		private static extern int CM_Get_DevNode_Status(out uint status, out uint problem, int devInst, uint flags);
+
+		[DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+		private static extern bool SetupDiGetDeviceInstanceId(nint set, ref SP_DEVINFO_DATA data, StringBuilder id, int size, out int required);
 
 		public static bool ServiceExists(string name)
 		{
@@ -1810,6 +1976,61 @@ public class RazerLeftovers
 			return found.ToList();
 		}
 
+		// Plugged-in Razer devices (USB id 1532) that Windows has a problem with: a Device Manager problem code other
+		// than 0. The composite device and each of its interfaces count separately. A few milliseconds.
+		public static List<DeadDevice> DeadDevices()
+		{
+			List<DeadDevice> list = new List<DeadDevice>();
+			foreach (string enumerator in new string[2] { "USB", "HID" })
+			{
+				nint set = SetupDiGetClassDevs(IntPtr.Zero, enumerator, IntPtr.Zero, DIGCF_ALLCLASSES | DIGCF_PRESENT);
+				if (set == new IntPtr(-1))
+				{
+					continue;
+				}
+				try
+				{
+					SP_DEVINFO_DATA data = new SP_DEVINFO_DATA
+					{
+						cbSize = Marshal.SizeOf<SP_DEVINFO_DATA>()
+					};
+					for (uint i = 0u; SetupDiEnumDeviceInfo(set, i, ref data); i++)
+					{
+						List<string> ids = Property(set, ref data, SPDRP_HARDWAREID);
+						if (!ids.Any((string id) => id.Contains("VID_1532", StringComparison.OrdinalIgnoreCase)))
+						{
+							continue;
+						}
+						if (CM_Get_DevNode_Status(out uint status, out uint problem, data.DevInst, 0u) != 0)
+						{
+							continue;
+						}
+						if ((status & DN_HAS_PROBLEM) == 0 && problem == 0)
+						{
+							continue;
+						}
+						StringBuilder sb = new StringBuilder(512);
+						string instance = SetupDiGetDeviceInstanceId(set, ref data, sb, sb.Capacity, out _) ? sb.ToString() : (ids.FirstOrDefault() ?? "");
+						string name = Property(set, ref data, SPDRP_FRIENDLYNAME).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s))
+							?? Property(set, ref data, SPDRP_DEVICEDESC).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s))
+							?? DeviceName(ids);
+						list.Add(new DeadDevice
+						{
+							Name = name,
+							Id = instance,
+							Problem = (int)problem,
+							Service = Property(set, ref data, SPDRP_SERVICE).FirstOrDefault() ?? ""
+						});
+					}
+				}
+				finally
+				{
+					SetupDiDestroyDeviceInfoList(set);
+				}
+			}
+			return list;
+		}
+
 		private static List<string> Property(nint set, ref SP_DEVINFO_DATA data, int property)
 		{
 			byte[] buf = new byte[1024];
@@ -1854,4 +2075,22 @@ public sealed class RazerService
 
 	// It is known to listen on the network or on localhost.
 	public bool Network { get; set; }
+}
+
+// One plugged-in Razer device that Windows could not start: its Device Manager problem code, and the driver it is
+// bound to. The same device shows more than once when several of its interfaces (mouse, keyboard, ...) fail.
+public sealed class DeadDevice
+{
+	public string Name { get; set; }
+
+	// The device instance id (USB\VID_1532&PID_008D\...).
+	public string Id { get; set; }
+
+	// Device Manager's problem code (39: driver missing or corrupt, 10: cannot start, ...).
+	public int Problem { get; set; }
+
+	// The driver service bound to it ("RzDev_008d", "HidUsb", ...), "" for none.
+	public string Service { get; set; }
+
+	public string Label => (string.IsNullOrWhiteSpace(Name) ? "Razer device" : Name.Trim()) + ": Windows error " + Problem + " (" + RazerLeftovers.ProblemText(Problem) + ")";
 }

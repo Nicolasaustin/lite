@@ -807,6 +807,14 @@ internal sealed class Service
 					Cfg.Log("Razer Synapse was seen: the mouse's slots will be written again on the next switch (or press RESYNC MOUSE)");
 				});
 			}
+			if (r.DeadDevices.Count > 0)
+			{
+				// Windows could not start a Razer device (a Razer driver install went wrong): say so where the user
+				// will see it, since the device itself gives no sign beyond lighting up at boot and going dark.
+				string what = string.Join("; ", r.DeadDevices.Select((DeadDevice d) => d.Label));
+				Cfg.Log("razer devices not working: " + what + " - Performance > RAZER > FIX DEAD RAZER DEVICES");
+				TrayHost.RequestBalloon("Razer device not working", what + ". Open LiteSynapse > Performance > RAZER > FIX DEAD RAZER DEVICES.");
+			}
 		}
 		Notify();
 	}
@@ -815,6 +823,20 @@ internal sealed class Service
 	public string RazerCleanup(string action)
 	{
 		string msg = RazerLeftovers.Cleanup(action, Razer);
+		if (action == "fixInput" && msg == RazerLeftovers.FixStarted)
+		{
+			// The recovery script needs the devices free (it closes LiteSynapse itself otherwise): leave cleanly in a
+			// few seconds, once the window has shown the message. Shutdown puts the mouse back on its own slot.
+			Cfg.Log("razer fix: LiteSynapse exits so the recovery script can set the devices up again");
+			Task.Delay(4000).ContinueWith((Task _) =>
+			{
+				if (!TrayHost.RequestExit())
+				{
+					Environment.Exit(0);
+				}
+			});
+			return msg;
+		}
 		RefreshRazer();
 		ScanStale = true;
 		return msg;

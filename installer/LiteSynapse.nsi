@@ -81,6 +81,7 @@ CRCCheck on
   !macro LS_UNINSTALL_FILES
     Delete "$INSTDIR\${APP_EXE}"
     Delete "$INSTDIR\tools\remove-razer-filter-drivers.ps1"
+    Delete "$INSTDIR\tools\fix-razer-input.ps1"
     RMDir "$INSTDIR\tools"
   !macroend
 !endif
@@ -674,6 +675,7 @@ Section "${APP_NAME}" SecMain
     Delete "$OldInstall\LiteSynapse.runtimeconfig.json"
     Delete "$OldInstall\LiteSynapse.pdb"
     Delete "$OldInstall\tools\remove-razer-filter-drivers.ps1"
+    Delete "$OldInstall\tools\fix-razer-input.ps1"
     RMDir "$OldInstall\tools"
     RMDir "$OldInstall"
     ${If} ${FileExists} "$OldInstall\${APP_EXE}"

@@ -1,5 +1,32 @@
 # Testing LiteSynapse
 
+## Build 22 (1.2.11): FIX DEAD RAZER DEVICES, and TURN ON RAZER SERVICES made safe
+
+What happened: with Razer's filter drivers removed (the driver guide) and Synapse still installed, TURN ON RAZER
+SERVICES started Razer's services, those installed Razer's driver on the fly, and after the restart the Naga and
+the BlackWidow Lite were dead at sign-in (lit for a moment at boot, then dark). A Synapse reinstall did not repair
+the device entries; removing Razer's driver and the entries, so Windows set the devices up again on its own
+drivers, did (tools/FixRazer2.bat). Build 22 puts that into the app and closes the door it came through:
+
+- **Performance > RAZER > FIX DEAD RAZER DEVICES**: runs `tools\fix-razer-input.ps1` (the FixRazer2 script,
+  checked against the copy built into the exe) in a visible administrator PowerShell window. It lists every Razer
+  device entry with Windows' problem code, closes Razer software and LiteSynapse, turns Razer's services, tasks and
+  auto-start off, stops Windows from downloading the Razer driver while it works, removes Razer's driver packages
+  and the stuck device entries, rescans, waits for Windows' own keyboard and mouse drivers, and ends with a verdict.
+  Log: `FixRazer2-log.txt` on the Desktop. LiteSynapse exits a few seconds after starting it (the script needs the
+  devices free); start it again afterwards. Never touches mshidkmdf or the power plan.
+- **TURN ON RAZER SERVICES** now asks first, and refuses (changing nothing) when Razer's filter drivers are not in
+  place - that is when starting the services makes Razer install the driver - or when a Razer device is already
+  wedged. The message names the supported way back to Synapse: exit LiteSynapse, reinstall Synapse from razer.com.
+- **Start-up check**: every Razer check (at sign-in, and CHECK AGAIN) also asks Windows for the problem code of
+  each plugged-in Razer device. A wedged device is logged (`razer devices not working: ...`), shown as a red row
+  under Performance > RAZER with Windows' code in words, and announced once from the tray icon.
+
+To test: Performance > RAZER shows no red device row on a healthy PC; press CHECK AGAIN. TURN ON RAZER SERVICES
+with Synapse installed and the filter drivers removed says "Not turned on: ..." and changes nothing (the log says
+`razer restore: refused`). FIX DEAD RAZER DEVICES asks, opens the PowerShell window, LiteSynapse closes, the
+window ends with the green verdict, `FixRazer2-log.txt` is on the Desktop.
+
 ## Build 21 (1.2.10): TURN ON RAZER SERVICES (undo the cleanup)
 
 Performance > RAZER now has a **TURN ON RAZER SERVICES** button next to TURN OFF, so anything LiteSynapse disabled

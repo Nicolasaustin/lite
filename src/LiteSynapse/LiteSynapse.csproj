@@ -55,5 +55,8 @@
     <None Update="tools\remove-razer-filter-drivers.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- And inside the exe, so the copy in tools\ is checked before it runs with administrator rights. -->
     <EmbeddedResource Include="tools\remove-razer-filter-drivers.ps1" LogicalName="remove-razer-filter-drivers.ps1" />
+    <!-- FIX DEAD RAZER DEVICES (Performance > Razer): the same arrangement, run from tools\ after a check against the built-in copy. -->
+    <None Update="tools\fix-razer-input.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="tools\fix-razer-input.ps1" LogicalName="fix-razer-input.ps1" />
   </ItemGroup>
 </Project>

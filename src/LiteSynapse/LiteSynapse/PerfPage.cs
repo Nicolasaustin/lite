@@ -621,8 +621,11 @@ internal sealed class PerfPage
 		return Shell(0, "Razer software left on this PC",
 			"What Razer's own software installed and still runs. LiteSynapse talks to the devices directly, so none of it " +
 			"is needed. Anything ON here is HURTING: it runs alongside your game. TURN ON RAZER SERVICES puts back what " +
-			"TURN OFF turned off, if you want to run Synapse again (it installs nothing). The filter drivers are left " +
-			"alone unless you say so, because removing the wrong one takes the mouse with it.",
+			"TURN OFF turned off, but only while Razer's own drivers are still in place: Razer's services install those " +
+			"drivers when they start, and on this PC that once left the mouse and keyboard dead at sign-in. FIX DEAD " +
+			"RAZER DEVICES is the cure for that: it clears the Razer driver and the stuck device entries so Windows sets " +
+			"the mouse and keyboard up again on its own drivers. The filter drivers are otherwise left alone unless you " +
+			"say so, because removing the wrong one takes the mouse with it.",
 			false,
 			Plain("CHECK AGAIN", false, () => Work(0, "Checking...", () =>
 			{
@@ -631,8 +634,36 @@ internal sealed class PerfPage
 			})),
 			Plain("TURN OFF RAZER SERVICES", true, () => Work(0, "Waiting for Windows to ask permission...",
 				() => app.RazerCleanup("disableServices"))),
-			Plain("TURN ON RAZER SERVICES", false, () => Work(0, "Waiting for Windows to ask permission...",
-				() => app.RazerCleanup("enableServices"))),
+			Plain("TURN ON RAZER SERVICES", false, () =>
+			{
+				DialogResult answer = MessageBox.Show(owner,
+					"Razer's services install Razer's driver when they start. On this PC that left the mouse and keyboard " +
+					"dead at sign-in until the driver was removed again.\n\nLiteSynapse only turns them on while Razer's own " +
+					"drivers are still in place, and refuses otherwise. Turn them on?",
+					"LiteSynapse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+				if (answer != DialogResult.Yes)
+				{
+					Say(0, "Nothing was changed.");
+					return;
+				}
+				Work(0, "Waiting for Windows to ask permission...", () => app.RazerCleanup("enableServices"));
+			}),
+			Plain("FIX DEAD RAZER DEVICES", false, () =>
+			{
+				DialogResult answer = MessageBox.Show(owner,
+					"For a Naga or BlackWidow Lite that Windows no longer starts: dead at sign-in, lights up at boot and then " +
+					"goes dark.\n\nThis closes LiteSynapse, turns Razer's services off, removes Razer's driver and the stuck " +
+					"device entries, and lets Windows set the mouse and keyboard up again on its own drivers. It shows " +
+					"everything it does in a PowerShell window and leaves a log on your Desktop (FixRazer2-log.txt).\n\n" +
+					"Keep a spare keyboard and mouse at hand. Continue?",
+					"LiteSynapse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+				if (answer != DialogResult.Yes)
+				{
+					Say(0, "Nothing was changed.");
+					return;
+				}
+				Work(0, "Starting the fix...", () => app.RazerCleanup("fixInput"));
+			}),
 			Plain("TURN OFF GAME MANAGER", false, () => Work(0, "Waiting for Windows to ask permission...",
 				() => app.RazerCleanup("disableGameManager"))),
 			Plain("FILTER DRIVERS", false, () => Work(0, "Working...", () => app.RazerCleanup("driverGuide"))));
@@ -656,6 +687,13 @@ internal sealed class PerfPage
 			rows.Add(Info("Razer Synapse running",
 				"While it runs it can change the lighting and switch the mouse's slots behind LiteSynapse. Close it from the tray.",
 				"on", Tweaks.Caution, "Fights with LiteSynapse"));
+		}
+		foreach (DeadDevice d in r.DeadDevices ?? new List<DeadDevice>())
+		{
+			rows.Add(Info(d.Label,
+				"Windows could not start this device" + (string.IsNullOrEmpty(d.Service) ? "" : " (driver " + d.Service + ")") +
+				". Press FIX DEAD RAZER DEVICES.",
+				"on", Tweaks.Risky, "Not working"));
 		}
 		rows.Add(Info("Razer Game Manager Service 3", GmsText(r.GmsService), PerfModel.ServiceState(r.GmsService)));
 		if (r.RzCommon)

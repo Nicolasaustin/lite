@@ -44,7 +44,7 @@ Pages: Welcome, Install folder, Options, Install, Finish (with "Launch LiteSynap
 
   No console window appears. If LiteSynapse still runs, for example because it was started as
   administrator, Setup asks you to exit it from the tray icon and then retry.
-- **Files**: `LiteSynapse.exe` and `tools\remove-razer-filter-drivers.ps1`, plus `uninstall.exe`. When
+- **Files**: `LiteSynapse.exe`, `tools\remove-razer-filter-drivers.ps1` and `tools\fix-razer-input.ps1`, plus `uninstall.exe`. When
   installing over the old Documents folder, the old build's `LiteSynapse.dll`, `.deps.json`,
   `.runtimeconfig.json` and `.pdb` are removed.
 - **Profiles and settings** go in `data` next to the exe. The first match wins. A file that already exists

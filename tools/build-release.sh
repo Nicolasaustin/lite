@@ -17,6 +17,7 @@ FILE_LIST=build/installer-files.nsh
 SCRIPT=installer/LiteSynapse.nsi
 SEED=installer/seed-data
 DRIVER_SCRIPT=remove-razer-filter-drivers.ps1
+FIX_SCRIPT=fix-razer-input.ps1
 LOCK="${LITESYNAPSE_BUILD_LOCK:-${TMPDIR:-/tmp}/litesynapse-build.lock}"
 
 fail() { echo "build-release: $*" >&2; exit 1; }
@@ -66,18 +67,20 @@ locked dotnet publish src/LiteSynapse/LiteSynapse.csproj -c Release -r win-x64 \
   || fail "dotnet publish failed"
 [ -f "$PUBLISH/LiteSynapse.exe" ] || fail "publish did not produce $PUBLISH/LiteSynapse.exe"
 
-# The Razer clean-up script (Settings > Performance) is run from tools\ next to the exe. The project
-# normally publishes it already; otherwise take it from the repository.
-if [ ! -f "$PUBLISH/tools/$DRIVER_SCRIPT" ]; then
-  for src in "tools/$DRIVER_SCRIPT" "src/LiteSynapse/tools/$DRIVER_SCRIPT"; do
-    if [ -f "$src" ]; then
-      mkdir -p "$PUBLISH/tools"
-      cp -f "$src" "$PUBLISH/tools/"
-      break
-    fi
-  done
-fi
-[ -f "$PUBLISH/tools/$DRIVER_SCRIPT" ] || echo "warning: $DRIVER_SCRIPT not found; the installer will not include it" >&2
+# The Razer clean-up and recovery scripts (Performance > Razer) are run from tools\ next to the exe. The
+# project normally publishes them already; otherwise take them from the repository.
+for script in "$DRIVER_SCRIPT" "$FIX_SCRIPT"; do
+  if [ ! -f "$PUBLISH/tools/$script" ]; then
+    for src in "tools/$script" "src/LiteSynapse/tools/$script"; do
+      if [ -f "$src" ]; then
+        mkdir -p "$PUBLISH/tools"
+        cp -f "$src" "$PUBLISH/tools/"
+        break
+      fi
+    done
+  fi
+  [ -f "$PUBLISH/tools/$script" ] || echo "warning: $script not found; the installer will not include it" >&2
+done
 
 echo "Published files:"
 (cd "$PUBLISH" && find . -type f -printf '  %P (%s bytes)\n' | sort)
