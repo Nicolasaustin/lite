@@ -75,18 +75,57 @@ public static class Cfg
 		catch (Exception ex)
 		{
 			Log("load " + path + ": " + ex.Message);
+			// A file that is there but cannot be read is kept aside, so nothing that saves the empty default
+			// afterwards can destroy the only copy - and the copy Save keeps from the time before is tried.
+			try
+			{
+				File.Copy(path, path + ".corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"), overwrite: true);
+			}
+			catch
+			{
+			}
+			try
+			{
+				string previous = path + ".bak";
+				if (File.Exists(previous))
+				{
+					T old = JsonSerializer.Deserialize<T>(File.ReadAllText(previous), Opt);
+					if (old != null)
+					{
+						Log("load " + path + ": using the previous copy (" + Path.GetFileName(previous) + ")");
+						return old;
+					}
+				}
+			}
+			catch (Exception ex2)
+			{
+				Log("load " + path + ".bak: " + ex2.Message);
+			}
 		}
 		return new T();
 	}
 
-	// Written to a temporary file and moved over the old one: a crash or power cut mid-write must not leave
-	// profiles.json or settings.json truncated, which would load as empty and lose the user's settings.
+	// Written to a temporary file, flushed to the disk itself, and then swapped in with the old file kept as
+	// .bak: a crash, power cut or full disk mid-save must not leave profiles.json or settings.json empty,
+	// which would load as defaults and lose the user's settings. (A rename alone is journalled, but the data
+	// behind it is written lazily - without the flush a power cut could still leave a file of zeros.)
 	public static void Save<T>(string path, T v)
 	{
 		Directory.CreateDirectory(Dir);
 		string tmp = path + ".tmp";
-		File.WriteAllText(tmp, JsonSerializer.Serialize(v, Opt));
-		File.Move(tmp, path, overwrite: true);
+		using (FileStream fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+		{
+			JsonSerializer.Serialize(fs, v, Opt);
+			fs.Flush(flushToDisk: true);
+		}
+		if (File.Exists(path))
+		{
+			File.Replace(tmp, path, path + ".bak", ignoreMetadataErrors: true);
+		}
+		else
+		{
+			File.Move(tmp, path);
+		}
 	}
 
 	// Copies the files that exist into a new folder data/backup-<yyyyMMdd-HHmmss>[-n] and returns that folder,
@@ -174,13 +213,22 @@ public static class Cfg
 	{
 		try
 		{
-			FlushLog(300);
+			// A short wait for the writer, not a long one: this runs on the window's thread.
+			FlushLog(20);
 			if (!File.Exists(LogFile))
 			{
 				return "";
 			}
 			using FileStream fs = new FileStream(LogFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+			// Only the end of the file: the last few hundred lines fit in 64 KB, and reading a megabyte from the
+			// start to keep 200 lines was a hitch every time the Settings page refreshed.
+			long start = Math.Max(0, fs.Length - 64 * 1024);
+			fs.Seek(start, SeekOrigin.Begin);
 			using StreamReader r = new StreamReader(fs, Encoding.UTF8);
+			if (start > 0)
+			{
+				r.ReadLine();
+			}
 			Queue<string> tail = new Queue<string>();
 			string line;
 			while ((line = r.ReadLine()) != null)
@@ -307,6 +355,10 @@ internal sealed class LogFileWriter
 
 	private void Rotate()
 	{
+		if (DateTime.UtcNow < retryRotateAt)
+		{
+			return;
+		}
 		Close();
 		try
 		{
@@ -314,7 +366,23 @@ internal sealed class LogFileWriter
 		}
 		catch
 		{
-			// Someone holds log.old.txt without sharing: keep appending to log.txt rather than lose lines.
+			// Someone holds log.txt or log.old.txt without sharing: keep appending to log.txt rather than lose
+			// lines, and do not try again (a reopen, a failed move and an exception) on every line - wait ten
+			// minutes. If it is still held by then and the log has grown well past its limit, start it over.
+			retryRotateAt = DateTime.UtcNow.AddMinutes(10);
+			try
+			{
+				if (new FileInfo(path).Length > limit * 4)
+				{
+					using FileStream truncate = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+					truncate.SetLength(0);
+				}
+			}
+			catch
+			{
+			}
 		}
 	}
+
+	private DateTime retryRotateAt = DateTime.MinValue;
 }

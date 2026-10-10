@@ -18,6 +18,10 @@ public class AppSettings
 	// turns it on.
 	public bool CompetitiveSafe { get; set; }
 
+	// "Switch profiles automatically when a game starts". Picking a profile by hand turns it off for the session
+	// only; the Settings switch is what is remembered.
+	public bool Auto { get; set; } = true;
+
 	// Keyboard profile for game rules that have none ("" = none, as before).
 	public string GameKeyboardDefault { get; set; } = "";
 

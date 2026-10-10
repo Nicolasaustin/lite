@@ -60,6 +60,8 @@ internal static class DeviceEvents
 		{
 			return false;
 		}
-		return (Marshal.PtrToStringUni(lParam + 28) ?? "").Contains("VID_1532", StringComparison.OrdinalIgnoreCase);
+		// Only the Naga and the BlackWidow Lite: a Razer headset, dongle or dock coming and going must not reset
+		// and re-send everything to two devices that never left, mid-match.
+		return DeviceTuning.IsOurDevice(Marshal.PtrToStringUni(lParam + 28) ?? "");
 	}
 }

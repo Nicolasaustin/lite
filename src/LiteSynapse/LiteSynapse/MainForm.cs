@@ -93,7 +93,7 @@ internal class MainForm : Form
 
 		internal void _003CBuildSettings_003Eb__78_4(object? _1, EventArgs _2)
 		{
-			Process.Start("explorer.exe", Cfg.Dir);
+			Process.Start("explorer.exe", Cfg.Dir)?.Dispose();
 		}
 
 		internal void _003CBuildNaga_003Eb__79_5(object? _, PaintEventArgs pe)
@@ -139,7 +139,7 @@ internal class MainForm : Form
 				Process.Start(new ProcessStartInfo("control.exe", "main.cpl")
 				{
 					UseShellExecute = true
-				});
+				})?.Dispose();
 			}
 			catch
 			{
@@ -1530,8 +1530,9 @@ internal class MainForm : Form
 			string text = PickRunning();
 			if (text != null && !g.Exes.Contains(text, StringComparer.OrdinalIgnoreCase))
 			{
-				g.Exes.Add(text);
-				app.SaveGames();
+				app.Edit(() => g.Exes.Add(text));
+				// The profile goes onto an idle live slot now, so the game's first start is only a switch.
+				app.SaveGames(g.Profile);
 				app.ForceRecheck();
 				FillGames();
 			}
@@ -1541,8 +1542,20 @@ internal class MainForm : Form
 			string text = Ui.Prompt((IWin32Window)(object)this, name, "Program files (.exe), separated by commas", string.Join(", ", g.Exes));
 			if (text != null)
 			{
-				g.Exes = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-				app.SaveGames();
+				// "cs2", a quoted path pasted from Explorer, a full path: all become "cs2.exe", which is what the
+				// game check compares - stored raw they never matched and the game was never detected.
+				List<string> exes;
+				try
+				{
+					exes = ProfileOps.CleanExes(text.Split(','));
+				}
+				catch (OpError ex)
+				{
+					MessageBox.Show((IWin32Window)(object)this, ex.Message, "LiteSynapse");
+					return;
+				}
+				app.Edit(() => g.Exes = exes);
+				app.SaveGames(g.Profile);
 				app.ForceRecheck();
 				FillGames();
 			}
@@ -1553,7 +1566,7 @@ internal class MainForm : Form
 			//IL_0027: Invalid comparison between Unknown and I4
 			if ((int)MessageBox.Show((IWin32Window)(object)this, "Stop auto-switching to \"" + name + "\"?", "LiteSynapse", (MessageBoxButtons)1) == 1)
 			{
-				app.Games.Remove(g);
+				app.Edit(() => app.Games.Remove(g));
 				app.SaveGames();
 				FillGames();
 			}
@@ -1586,7 +1599,7 @@ internal class MainForm : Form
 				{
 					Profile = name
 				};
-				app.Games.Add(item);
+				app.Edit(() => app.Games.Add(item));
 				app.SaveGames();
 				FillGames();
 			}));
@@ -1643,11 +1656,8 @@ internal class MainForm : Form
 		{
 			if (!loading)
 			{
-				app.Auto = tgAuto.Checked;
-				if (tgAuto.Checked)
-				{
-					app.ForceRecheck();
-				}
+				// Remembered across restarts, and through the same path as the tray's switch.
+				app.SetAutoSaved(tgAuto.Checked);
 			}
 		};
 		tgStartup.CheckedChanged += () =>
@@ -1683,7 +1693,7 @@ internal class MainForm : Form
 		PillButton rel = pillButton2;
 		((Control)cfg).Click += (object? _, EventArgs _) =>
 		{
-			Process.Start("explorer.exe", Cfg.Dir);
+			Process.Start("explorer.exe", Cfg.Dir)?.Dispose();
 		};
 		((Control)rel).Click += (object? _, EventArgs _) =>
 		{
@@ -1964,7 +1974,7 @@ internal class MainForm : Form
 					Process.Start(new ProcessStartInfo("control.exe", "main.cpl")
 					{
 						UseShellExecute = true
-					});
+					})?.Dispose();
 				}
 				catch
 				{
@@ -2725,20 +2735,22 @@ internal class MainForm : Form
 		{
 			if (IsMouse)
 			{
-				app.Store.Mouse.Add(new MouseProfile
+				MouseProfile added = new MouseProfile
 				{
 					Name = n,
 					Dpi = (MP?.Dpi ?? 800),
 					PollingRate = (MP?.PollingRate ?? 1000)
-				});
+				};
+				app.Edit(() => app.Store.Mouse.Add(added));
 			}
 			else
 			{
-				app.Store.Keyboard.Add(new KbProfile
+				KbProfile addedKb = new KbProfile
 				{
 					Name = n,
 					Brightness = (KP?.Brightness ?? 100)
-				});
+				};
+				app.Edit(() => app.Store.Keyboard.Add(addedKb));
 			}
 			SaveProfiles();
 			SelectProfile(n);
@@ -2843,13 +2855,13 @@ internal class MainForm : Form
 		{
 			MouseProfile c = JsonSerializer.Deserialize<MouseProfile>(JsonSerializer.Serialize(app.Store.Mouse.First((MouseProfile p) => p.Name == cur), opt), opt);
 			c.Name = n;
-			app.Store.Mouse.Add(c);
+			app.Edit(() => app.Store.Mouse.Add(c));
 		}
 		else
 		{
 			KbProfile c2 = JsonSerializer.Deserialize<KbProfile>(JsonSerializer.Serialize(app.Store.Keyboard.First((KbProfile p) => p.Name == cur), opt), opt);
 			c2.Name = n;
-			app.Store.Keyboard.Add(c2);
+			app.Edit(() => app.Store.Keyboard.Add(c2));
 		}
 		SaveProfiles();
 		SelectProfile(n);
@@ -2923,8 +2935,11 @@ internal class MainForm : Form
 			}
 			if (IsMouse)
 			{
-				app.Store.Mouse.RemoveAll((MouseProfile p) => p.Name == cur);
-				app.Games.RemoveAll((GameRule g) => g.Profile == cur);
+				app.Edit(() =>
+				{
+					app.Store.Mouse.RemoveAll((MouseProfile p) => p.Name == cur);
+					app.Games.RemoveAll((GameRule g) => g.Profile == cur);
+				});
 				if (app.ActiveMouse == cur)
 				{
 					app.ApplyNames(app.DefaultMouse, app.ActiveKeyboard, inGame: false);
@@ -2932,11 +2947,14 @@ internal class MainForm : Form
 			}
 			else
 			{
-				app.Store.Keyboard.RemoveAll((KbProfile p) => p.Name == cur);
-				foreach (GameRule item in app.Games.Where((GameRule g) => g.KeyboardProfile == cur))
+				app.Edit(() =>
 				{
-					item.KeyboardProfile = "";
-				}
+					app.Store.Keyboard.RemoveAll((KbProfile p) => p.Name == cur);
+					foreach (GameRule item in app.Games.Where((GameRule g) => g.KeyboardProfile == cur))
+					{
+						item.KeyboardProfile = "";
+					}
+				});
 				if (app.ActiveKeyboard == cur)
 				{
 					app.ApplyNames(app.ActiveMouse, app.DefaultKeyboard, app.InGame);
@@ -3158,20 +3176,25 @@ internal class MainForm : Form
 		//IL_010b: Expected Obj, but got Unknown
 		//IL_017d: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0183: Invalid comparison between Unknown and I4
-		string[] procs = (from x in (from p in Process.GetProcesses().Where((Process p) =>
+		// Every process object is disposed once its name is read.
+		List<string> names = new List<string>();
+		foreach (Process p in Process.GetProcesses())
+		{
+			using (p)
+			{
+				try
 				{
-					try
+					if (p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrEmpty(p.MainWindowTitle))
 					{
-						return p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrEmpty(p.MainWindowTitle);
+						names.Add(p.ProcessName + ".exe");
 					}
-					catch
-					{
-						return false;
-					}
-				})
-				select p.ProcessName + ".exe").Distinct(StringComparer.OrdinalIgnoreCase)
-			orderby x
-			select x).ToArray();
+				}
+				catch
+				{
+				}
+			}
+		}
+		string[] procs = names.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy((string x) => x, StringComparer.OrdinalIgnoreCase).ToArray();
 		Form dlg = new Form
 		{
 			Text = "Pick the running game",

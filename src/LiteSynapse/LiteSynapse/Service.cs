@@ -109,7 +109,6 @@ internal sealed class Service
 	private readonly string[] slotLighting = new string[OnboardSlots.SlotCount + 1];
 
 	// Self-tests running in a second LiteSynapse process (they drive the mouse themselves).
-	private int selfTests;
 
 	private string lastMouseName;
 
@@ -233,6 +232,7 @@ internal sealed class Service
 		settings = Cfg.Load<AppSettings>(SettingsFile);
 		LiveWrite = settings.LiveWrite;
 		Reload();
+		Auto = settings.Auto;
 		ActiveMouse = DefaultMouse;
 		ActiveKeyboard = DefaultKeyboard;
 		// A slot write (live, pre-write or by hand) replaces that slot's stored lighting.
@@ -312,12 +312,26 @@ internal sealed class Service
 
 	public void Reload()
 	{
+		// settings.json too: RELOAD CONFIG after editing it by hand must pick the edit up, not let the next
+		// toggle save the old copy over it.
+		AppSettings st = Cfg.Load<AppSettings>(SettingsFile);
 		ProfileStore s = Cfg.Load<ProfileStore>(Cfg.Profiles);
+		bool gamesExist = File.Exists(Cfg.Games);
 		List<GameRule> g = Cfg.Load<List<GameRule>>(Cfg.Games);
-		if (g.Count == 0)
+		// Defaults only for a games.json that is not there at all. An empty list is the user having removed
+		// every link (it must stay empty), and an unreadable file is kept aside by Cfg.Load rather than
+		// replaced with defaults here.
+		if (!gamesExist)
 		{
 			g = DefaultGames.Make(s);
-			Cfg.Save(Cfg.Games, g);
+			try
+			{
+				Cfg.Save(Cfg.Games, g);
+			}
+			catch (Exception ex)
+			{
+				Cfg.Log("games: " + ex.Message);
+			}
 		}
 		try
 		{
@@ -366,6 +380,8 @@ internal sealed class Service
 		Dictionary<string, BaseKey> calibration = Cfg.Load<Dictionary<string, BaseKey>>(Cfg.Calib);
 		lock (stateLock)
 		{
+			settings = st;
+			LiveWrite = st.LiveWrite;
 			store = s;
 			games = g;
 			engine.Base = calibration;
@@ -570,29 +586,6 @@ internal sealed class Service
 	public void EnsureDevices()
 	{
 		worker.Post("devices", () => SyncDevices(reset: true));
-	}
-
-	// The self-test runs in a second LiteSynapse process and drives the mouse itself (slot writes, switches): device
-	// work here waits until it ends, then the devices are read and sent everything again. Blocks up to ~3 s for a
-	// device job that is running: call it off the UI thread.
-	public void BeginSelfTest()
-	{
-		if (Interlocked.Increment(ref selfTests) == 1)
-		{
-			worker.Cancel("prewrite");
-			worker.Pause(3000);
-			Cfg.Log("self-test started: LiteSynapse leaves the devices alone until it ends");
-		}
-	}
-
-	public void EndSelfTest()
-	{
-		if (Interlocked.Decrement(ref selfTests) == 0)
-		{
-			worker.Resume();
-			Cfg.Log("self-test ended: syncing the devices again");
-			EnsureDevices();
-		}
 	}
 
 	// Runs work on the device worker (e.g. reads for the UI). Only the latest pending request of a kind runs;
@@ -1017,8 +1010,10 @@ internal sealed class Service
 				string key = (rule == null) ? "" : (rule.Profile + "|" + kb);
 				if (force || key != currentKey)
 				{
-					currentKey = key;
+					// Recorded once applied: an apply that throws is tried again next time, instead of the key
+					// matching and the game running the desktop profile for the whole session.
 					ApplyLocked(rule?.Profile ?? DefaultMouse, kb, rule != null, debounce: true);
+					currentKey = key;
 					changed = true;
 				}
 			}
@@ -1045,6 +1040,27 @@ internal sealed class Service
 	{
 		Auto = false;
 		ApplyNames(ActiveMouse, (name == "(none)") ? "" : name, inGame: true);
+	}
+
+	// The Settings switch: remembered across restarts (a pick by hand is not).
+	public void SetAutoSaved(bool on)
+	{
+		lock (stateLock)
+		{
+			settings.Auto = on;
+		}
+		SaveSettings();
+		SetAuto(on);
+	}
+
+	// Runs a change to the profile and game lists under the lock the tray thread and the device worker read
+	// them under, so an edit in the window cannot break a game check running at the same moment.
+	public void Edit(Action change)
+	{
+		lock (stateLock)
+		{
+			change();
+		}
 	}
 
 	public void SetAuto(bool on)
@@ -1121,7 +1137,9 @@ internal sealed class Service
 		int delay = ServicePlan.MouseDelay(mouseShownGame, game, debounce);
 		mouseShownGame = game;
 		RequestMouse(delay);
-		RequestKeyboard(forceLighting: false);
+		// The keyboard's lighting waits as long as the mouse: a moment out of a game (an overlay, a quick
+		// alt-tab) must not rewrite it twice. The input engine above has already switched.
+		RequestKeyboard(forceLighting: false, delay);
 	}
 
 	// Caller holds stateLock. Gives the keyboard hook what the current state needs; unchanged inputs are not
@@ -1175,7 +1193,7 @@ internal sealed class Service
 		}
 	}
 
-	private void RequestKeyboard(bool forceLighting)
+	private void RequestKeyboard(bool forceLighting, int delayMs = 0)
 	{
 		if (DryRun)
 		{
@@ -1185,7 +1203,7 @@ internal sealed class Service
 		{
 			Interlocked.Exchange(ref kbForce, 1);
 		}
-		worker.Post("kb", SyncKeyboard);
+		worker.Post("kb", SyncKeyboard, delayMs);
 	}
 
 	private void SchedulePrewrite(string profile)
