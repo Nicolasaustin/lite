@@ -95,6 +95,8 @@ internal class InputEngine : IDisposable
 	// A macro with its send batches built ahead of time, so triggering it costs one SendInput per segment.
 	private sealed class PreparedMacro
 	{
+		public readonly string Name;
+
 		public readonly MacroPlan Plan;
 
 		public readonly Native.INPUT[][] Batches;
@@ -106,6 +108,7 @@ internal class InputEngine : IDisposable
 
 		public PreparedMacro(Macro m)
 		{
+			Name = m.Name ?? "";
 			Plan = new MacroPlan(m.Steps);
 			Batches = new Native.INPUT[Plan.Segments.Length][];
 			for (int i = 0; i < Batches.Length; i++)
@@ -138,6 +141,19 @@ internal class InputEngine : IDisposable
 
 	// Macro bound to each arrow key, indexed by vk - 37 (left, up, right, down).
 	private readonly PreparedMacro[] arrowMacros = new PreparedMacro[4];
+
+	// What the hook was last armed with, as logged ("macros: Up = W Jumpthrow ..."), so the line is written when it
+	// changes rather than on every alt-tab. Input thread only.
+	private string armedLogged;
+
+	// Macro runs logged so far this session: the first few are logged even when they went through, so a log
+	// shows whether a key press reached the macro at all. Macro thread only.
+	private int macrosLogged;
+
+	// Presses that arrived while a macro was still running and were dropped (the hook only counts them).
+	private int macroSkipped;
+
+	private static readonly string[] ArrowNames = new string[4] { "Left", "Up", "Right", "Down" };
 
 	private bool anyArrowMacro;
 
@@ -413,7 +429,12 @@ internal class InputEngine : IDisposable
 			hook = Native.SetWindowsHookEx(13, hookProc, Native.GetModuleHandle(null), 0u);
 			if (hook == IntPtr.Zero)
 			{
-				Cfg.Log("keyboard hook could not be installed");
+				Cfg.Log("keyboard hook could not be installed: error " + Marshal.GetLastPInvokeError());
+				armedLogged = null;
+			}
+			else
+			{
+				LogArmed();
 			}
 		}
 		else if (!needHook && hook != IntPtr.Zero)
@@ -424,6 +445,30 @@ internal class InputEngine : IDisposable
 			Cfg.Log("keyboard hook off");
 		}
 		GcMode(hook != IntPtr.Zero);
+	}
+
+	// One line saying what the keyboard hook now does, when that changes: without it a log could not tell a macro
+	// that never armed from one that armed and did nothing in the game.
+	private void LogArmed()
+	{
+		List<string> parts = new List<string>();
+		List<string> armed = new List<string>();
+		for (int i = 0; i < 4; i++)
+		{
+			if (arrowMacros[i] != null)
+			{
+				armed.Add(ArrowNames[i] + " arrow = " + arrowMacros[i].Name);
+			}
+		}
+		parts.Add(armed.Count > 0 ? "macros " + string.Join(", ", armed) : "no macros");
+		parts.Add(snapTapActive ? "Snap Tap on" : "Snap Tap off");
+		parts.Add(map.Count + " software remap(s)");
+		string line = "keyboard hook on: " + string.Join("; ", parts);
+		if (line != armedLogged)
+		{
+			armedLogged = line;
+			Cfg.Log(line);
+		}
 	}
 
 	// No gen-2 collections while the hook is live; restored as soon as it is removed.
@@ -862,6 +907,7 @@ internal class InputEngine : IDisposable
 	{
 		if (macroRunning)
 		{
+			Interlocked.Increment(ref macroSkipped);
 			return;
 		}
 		macroRunning = true;
@@ -901,6 +947,10 @@ internal class InputEngine : IDisposable
 				Native.timeBeginPeriod(1u);
 			}
 			int sent = -1;
+			int wanted = 0;
+			int took = 0;
+			int error = 0;
+			bool stopped = false;
 			try
 			{
 				MacroPlan.Segment[] segs = m.Plan.Segments;
@@ -908,12 +958,18 @@ internal class InputEngine : IDisposable
 				{
 					if (gen != Volatile.Read(ref macroGen) || disposed)
 					{
+						stopped = true;
 						break;
 					}
-					Native.SendKeys(m.Batches[i], m.Batches[i].Length);
+					int len = m.Batches[i].Length;
+					int n = Native.SendKeysChecked(m.Batches[i], len, out int e);
+					wanted += len;
+					took += n;
+					error = (n < len) ? e : error;
 					sent = i;
 					if (!timer.Sleep(segs[i].DelayMs, macroCancel))
 					{
+						stopped = true;
 						break;
 					}
 				}
@@ -928,13 +984,27 @@ internal class InputEngine : IDisposable
 				if (sent >= 0)
 				{
 					Native.INPUT[] up = m.ReleaseAfter[sent];
-					Native.SendKeys(up, up.Length);
+					int n = Native.SendKeysChecked(up, up.Length, out int e);
+					wanted += up.Length;
+					took += n;
+					error = (n < up.Length) ? e : error;
 				}
 				if (lowRes)
 				{
 					Native.timeEndPeriod(1u);
 				}
 				macroRunning = false;
+			}
+			// Logged after the macro, never between its steps. Every refusal is logged; a run that went through
+			// is logged for the first few of the session, so a log shows whether the key press reached it.
+			if (took < wanted || macrosLogged < 5)
+			{
+				macrosLogged++;
+				int skipped = Interlocked.Exchange(ref macroSkipped, 0);
+				Cfg.Log($"macro \"{m.Name}\": Windows took {took} of {wanted} key events" +
+					((took < wanted) ? $" (error {error}{(error == 5 ? ": the window in front runs as administrator" : "")})" : "") +
+					(stopped ? ", stopped early by a profile change" : "") +
+					((skipped > 0) ? $"; {skipped} press(es) dropped while a macro was still running" : ""));
 			}
 		}
 	}

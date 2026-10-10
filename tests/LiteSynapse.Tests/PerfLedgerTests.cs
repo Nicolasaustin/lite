@@ -181,10 +181,22 @@ public class PerfLedgerTests
 				File.Delete(file);
 			}
 		}
+		// Either way progress records are switched off first: they cost time and filled the log as CLIXML.
+		Assert.StartsWith(RazerLeftovers.Quiet, Encoding.Unicode.GetString(Convert.FromBase64String(encoded)));
 		// A small script stays on the command line and writes nothing.
 		(string small, string none) = RazerLeftovers.Command("$failed = 0\nexit $failed\n");
 		Assert.Null(none);
-		Assert.Equal("$failed = 0\nexit $failed\n", Encoding.Unicode.GetString(Convert.FromBase64String(small)));
+		Assert.Equal(RazerLeftovers.Quiet + "$failed = 0\nexit $failed\n", Encoding.Unicode.GetString(Convert.FromBase64String(small)));
+	}
+
+	[Fact]
+	public void ProgressOnlyStderrIsNotLoggedButErrorsAre()
+	{
+		const string progress = "#< CLIXML\n<Objs Version=\"1.1.0.1\" xmlns=\"http://schemas.microsoft.com/powershell/2004/04\"><Obj S=\"progress\" RefId=\"0\"><TN RefId=\"0\"><T>System.Management.Automation.PSCustomObject</T></TN><MS><I64 N=\"SourceId\">1</I64><PR N=\"Record\"><AV>Preparing modules for first use.</AV></PR></MS></Obj></Objs>";
+		Assert.True(RazerLeftovers.OnlyProgress(progress));
+		Assert.False(RazerLeftovers.OnlyProgress(progress.Replace("</Objs>", "<S S=\"Error\">Access is denied</S></Objs>")));
+		Assert.False(RazerLeftovers.OnlyProgress("Get-CimInstance : Access denied"));
+		Assert.False(RazerLeftovers.OnlyProgress(""));
 	}
 
 	[Fact]

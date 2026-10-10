@@ -921,11 +921,22 @@ public class RazerLeftovers
 		}
 		exitCode = p.ExitCode;
 		string output = stdout.Wait(2000) ? stdout.Result : "";
-		if (stderr.Wait(500) && !string.IsNullOrWhiteSpace(stderr.Result))
+		if (stderr.Wait(500) && !string.IsNullOrWhiteSpace(stderr.Result) && !OnlyProgress(stderr.Result))
 		{
 			Cfg.Log("powershell: " + stderr.Result.Trim());
 		}
 		return output;
+	}
+
+	// The error stream carried nothing but serialized progress records (an older PowerShell, or a module that
+	// ignores the preference): not an error, and not worth a screen of XML in the log.
+	internal static bool OnlyProgress(string stderr)
+	{
+		string s = (stderr ?? "").Trim();
+		return s.StartsWith("#< CLIXML", StringComparison.Ordinal)
+			&& s.IndexOf("S=\"progress\"", StringComparison.Ordinal) >= 0
+			&& s.IndexOf("S=\"Error\"", StringComparison.OrdinalIgnoreCase) < 0
+			&& s.IndexOf("S=\"warning\"", StringComparison.OrdinalIgnoreCase) < 0;
 	}
 
 	// Exit code of the script; -2 when it did not finish within waitMs.
@@ -970,17 +981,23 @@ public class RazerLeftovers
 	// Exit code of the loader when the file is not the one this process wrote.
 	internal const int Tampered = 97;
 
+	// First line of everything this app runs: no progress records. PowerShell otherwise draws a progress bar for
+	// module loading and each CIM call ("Preparing modules for first use"), which costs time in a hidden window
+	// and comes back on the error stream as CLIXML that filled the log.
+	internal const string Quiet = "$ProgressPreference = 'SilentlyContinue'\n";
+
 	internal static (string Encoded, string File) Command(string script)
 	{
 		string text = script ?? "";
-		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(text));
+		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(Quiet + text));
 		if (encoded.Length <= MaxEncoded)
 		{
 			return (encoded, null);
 		}
 		string file = Path.Combine(Cfg.Dir, "run-" + Guid.NewGuid().ToString("N") + ".ps1");
 		File.WriteAllText(file, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-		return (Convert.ToBase64String(Encoding.Unicode.GetBytes(Loader(file, Sha256(text)))), file);
+		// The loader dot-sources the script, so the preference set here holds for it too.
+		return (Convert.ToBase64String(Encoding.Unicode.GetBytes(Quiet + Loader(file, Sha256(text)))), file);
 	}
 
 	internal static string Loader(string file, string sha256)

@@ -73,7 +73,8 @@ internal static class Native
 
 	public static readonly nint MAGIC = new IntPtr(1280527961);
 
-	[DllImport("user32")]
+	// SetLastError: called once per install, and a refused install is logged with Windows' reason.
+	[DllImport("user32", SetLastError = true)]
 	public static extern nint SetWindowsHookEx(int id, HookProc p, nint m, uint t);
 
 	[DllImport("user32")]
@@ -240,6 +241,26 @@ internal static class Native
 		{
 			SendInput((uint)count, batch, InputSize);
 		}
+	}
+
+	// The same call for the macro thread, which says how many events Windows took and, when it refused some, why
+	// (5 = access denied: the window in front runs at a higher integrity level). Not used on the hook path.
+	[DllImport("user32", EntryPoint = "SendInput", SetLastError = true)]
+	private static extern uint SendInputChecked(uint n, INPUT[] i, int size);
+
+	public static int SendKeysChecked(INPUT[] batch, int count, out int error)
+	{
+		error = 0;
+		if (count <= 0)
+		{
+			return 0;
+		}
+		int took = (int)SendInputChecked((uint)count, batch, InputSize);
+		if (took < count)
+		{
+			error = Marshal.GetLastWin32Error();
+		}
+		return took;
 	}
 
 	[DllImport("kernel32")]

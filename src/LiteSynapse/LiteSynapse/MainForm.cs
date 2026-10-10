@@ -318,6 +318,10 @@ internal class MainForm : Form
 
 	private readonly Toggle tgSafe;
 
+	// The same switch on the BlackWidow page's Macro keys card, where someone looking for why a macro does not
+	// fire will be.
+	private readonly Toggle tgSafeKb;
+
 	// On the Macro keys and Snap Tap cards while Competitive safe keeps them off in anti-cheat games (CS2 among
 	// them): without it the cards look armed and nothing happens in the game.
 	private Label macroSafeWarn;
@@ -786,6 +790,8 @@ internal class MainForm : Form
 		Toggle toggle8 = new Toggle();
 		((Control)toggle8).BackColor = Theme.Card;
 		tgSafe = toggle8;
+		tgSafeKb = new Toggle();
+		((Control)tgSafeKb).BackColor = Theme.Card;
 		lblHome1 = new Label
 		{
 			AutoSize = true,
@@ -1138,15 +1144,36 @@ internal class MainForm : Form
 	}
 
 	// "Competitive safe is on" in the hurting colour, hidden until UpdateSafeWarnings shows it.
-	private static Label SafeWarning(string what)
+	private static Label SafeWarning(string what, string where)
 	{
-		Label w = Lbl("Competitive safe is ON (Settings): " + what + " in CS2 or other anti-cheat games. Turn it off in " +
-			"Settings for offline practice.", Color.FromArgb(240, 150, 60));
+		Label w = Lbl("Competitive safe is ON: " + what + " in CS2 or other anti-cheat games. Switch it off " + where +
+			" for offline practice.", Color.FromArgb(240, 150, 60));
 		((Control)w).MaximumSize = new Size(560, 0);
 		// Measured at its widest wrap, so the card is tall enough before the first refresh shows it.
 		((Control)w).Size = ((Control)w).PreferredSize;
 		((Control)w).Visible = false;
 		return w;
+	}
+
+	private const string CompetitiveSafeNote = "ON keeps macros and Snap Tap off while CS2 or another anti-cheat game is in " +
+		"front: Valve kicks for them on official servers and FACEIT bans for them. OFF lets them run - for offline practice.";
+
+	// Both switches (Settings and the Macro keys card) go through here, so they never disagree.
+	private void SetCompetitiveSafe(bool on)
+	{
+		app.SetCompetitiveSafe(on);
+		bool was = loading;
+		loading = true;
+		try
+		{
+			tgSafe.Checked = on;
+			tgSafeKb.Checked = on;
+		}
+		finally
+		{
+			loading = was;
+		}
+		UpdateSafeWarnings();
 	}
 
 	private void UpdateSafeWarnings()
@@ -1663,11 +1690,13 @@ internal class MainForm : Form
 		((Control)card).Height = 300;
 		Card card2 = card;
 		int y = 84;
+		// Competitive safe first: it decides whether macros and Snap Tap run at all, and as the last row it was
+		// the one a short window cut off.
+		Row("Competitive safe", (Control)(object)tgSafe, CompetitiveSafeNote);
 		Row("Switch profiles automatically when a game starts", (Control)(object)tgAuto);
 		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup);
 		Row("Run selected profiles on the mouse itself", (Control)(object)tgLive, "Writes the profile into the mouse's memory (slots 1-2) and switches to it, so it keeps working if LiteSynapse is closed.");
 		Row("Close this window when a game starts", (Control)(object)tgCloseOnGame, "A window on top of a game costs frames. With this on, the window gets out of the way by itself when a linked game comes to the front.");
-		Row("Competitive safe", (Control)(object)tgSafe, "Keeps macros and Snap Tap off while a game is in front. Valve kicks for them on official servers and FACEIT bans for them: leave this on outside offline practice.");
 		tgCloseOnGame.CheckedChanged += () =>
 		{
 			if (!loading)
@@ -1680,8 +1709,7 @@ internal class MainForm : Form
 		{
 			if (!loading)
 			{
-				app.SetCompetitiveSafe(tgSafe.Checked);
-				UpdateSafeWarnings();
+				SetCompetitiveSafe(tgSafe.Checked);
 			}
 		};
 		tgAuto.CheckedChanged += () =>
@@ -1745,6 +1773,10 @@ internal class MainForm : Form
 		((Control)pSettings).Controls.Add((Control)(object)logCard);
 		((Control)pSettings).Controls.Add((Control)(object)btns);
 		((Control)pSettings).Controls.Add((Control)(object)card2);
+		// A window shorter than the switches plus a few lines of log scrolls instead of cutting the card off.
+		((ScrollableControl)pSettings).AutoScroll = true;
+		((ScrollableControl)pSettings).AutoScrollMinSize = new Size(0, ((Control)card2).Height + ((Control)btns).Height + 220);
+		DarkScroll.Apply((Control)(object)pSettings);
 		void Row(string label, Control c, string note = null)
 		{
 			Label l = Lbl(label, Theme.Text, 10.5f);
@@ -2254,8 +2286,20 @@ internal class MainForm : Form
 			((Control)card2).Controls.Add((Control)(object)c);
 			y += 52;
 		}
-		macroSafeWarn = SafeWarning("these macros do not run");
-		((Control)macroSafeWarn).Location = new Point(40, y + 4);
+		Label safeLabel = Lbl("COMPETITIVE SAFE", Theme.Text, 10.5f, bold: true);
+		((Control)safeLabel).Location = new Point(40, y + 5);
+		((Control)tgSafeKb).Location = new Point(220, y + 2);
+		((Control)card2).Controls.Add((Control)(object)safeLabel);
+		((Control)card2).Controls.Add((Control)(object)tgSafeKb);
+		tgSafeKb.CheckedChanged += () =>
+		{
+			if (!loading)
+			{
+				SetCompetitiveSafe(tgSafeKb.Checked);
+			}
+		};
+		macroSafeWarn = SafeWarning("these macros do not run", "just above (or in Settings)");
+		((Control)macroSafeWarn).Location = new Point(40, y + 40);
 		((Control)card2).Controls.Add((Control)(object)macroSafeWarn);
 		((Control)card2).Height = Math.Max(((Control)card2).Height, ((Control)macroSafeWarn).Bottom + 24);
 		((Control)pKbCustom).Controls.Add((Control)(object)card2);
@@ -2272,7 +2316,7 @@ internal class MainForm : Form
 		((Control)sd).MaximumSize = new Size(560, 0);
 		// Under the text however many lines it wraps to, and the card grows to fit.
 		((Control)snap).Location = new Point(40, 78 + ((Control)sd).PreferredSize.Height + 12);
-		snapSafeWarn = SafeWarning("Snap Tap does not run");
+		snapSafeWarn = SafeWarning("Snap Tap does not run", "on the CUSTOMIZE page or in Settings");
 		((Control)snapSafeWarn).Location = new Point(40, ((Control)snap).Bottom + 12);
 		((Control)sc).Height = Math.Max(180, ((Control)snapSafeWarn).Bottom + 24);
 		((Control)sc).Controls.Add((Control)(object)sd);
@@ -3077,6 +3121,7 @@ internal class MainForm : Form
 				nagaBright.Value = 100;
 				nagaBrightOn.Checked = true;
 			}
+			tgSafeKb.Checked = app.CompetitiveSafe;
 			UpdateSafeWarnings();
 			KbProfile kp = KP;
 			// With no keyboard profile active there is nothing for these to change: greyed out, so a flip can

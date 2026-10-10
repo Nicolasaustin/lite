@@ -1,5 +1,46 @@
 # Testing LiteSynapse
 
+## Build 16 (1.2.5): your power plan is left alone, Competitive safe is easy to find, macros are logged
+
+**What to check first:** open CS2 (offline practice), press **Up arrow** and **Right arrow** a few times, leave CS2,
+then open Settings and read the log. Send the lines that start with `keyboard hook on:` and `macro "`.
+
+- `keyboard hook on: macros Up arrow = W Jumpthrow, Right arrow = Jumpthrow; ...` means the macros were armed.
+- `macro "W Jumpthrow": Windows took 9 of 9 key events` means LiteSynapse sent the whole macro and Windows took it.
+  If CS2 still does nothing, the numpad binds in your CS2 config are what to look at next.
+- `took 0 of 9 ... (error 5 ...)` means Windows blocked the keys: the game runs as administrator and LiteSynapse
+  does not.
+- No `macro "` line at all after pressing the arrows in CS2 means the key press never reached the macro.
+
+### Power plan: read only
+
+- LiteSynapse never creates, switches, edits or deletes a power plan any more - not from the Windows page, not from
+  FIX ALL, not from the Device page. Switch between your FR33THY / Frequency / FPSHEAVEN plans as you like; the row
+  reads whichever plan is active by what it sets (CPU minimum, core parking), not by its name.
+- USB selective suspend on the Device page is read only too (it lives inside the plan).
+- **Process Lasso on a 7950X3D:** when Process Lasso is running, it (not AMD's driver) is taken to keep games on
+  the cache cores, so a full-speed plan with core parking off reads **ON · HELPING**. Without Process Lasso, a
+  dual-chiplet X3D still wants core parking (Balanced) and such a plan reads HURTING.
+- LiteSynapse never sets CPU affinity, CPU sets or a priority class on itself or on games, so it never fights
+  Process Lasso's rules.
+
+### Competitive safe
+
+- First row of Settings, and the Settings page scrolls if the window is short.
+- Also on the BlackWidow page's Macro keys card, right under the arrow keys. When it is ON, both keyboard cards say
+  in orange that macros and Snap Tap are off in CS2.
+
+### Services
+
+- A service Windows refuses to change (Delivery Optimization is protected even from administrators) says so on its
+  row and points to the Windows-page switch that turns off its uploading. After APPLY, rows that were tried are no
+  longer left queued as "APPLY 1 CHANGE(S)".
+
+### Log
+
+- PowerShell progress messages (the screens of `#< CLIXML ... Preparing modules for first use`) are switched off at
+  the source and no longer logged.
+
 ## Build 15 (1.2.4): a Performance tab that says ON/OFF and HELPING/HURTING, and reads back what is set
 
 **What to check first:** open Performance > WINDOWS on your already-tuned PC and press **CHECK AS ADMIN** once.
