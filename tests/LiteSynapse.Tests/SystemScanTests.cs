@@ -644,6 +644,24 @@ public class DeviceTuningTests
 	}
 
 	[Fact]
+	public void AnApostropheInAnInstanceNameCannotEndTheLiteral()
+	{
+		// The instance name comes from WMI rather than from a person, so this is belt-and-braces - but it is
+		// the one string in these scripts that is not a catalog literal, and it costs nothing to be sure.
+		string crafted = "USB\\VID_1532&PID_008D\\6&x'; sc.exe delete WinDefend; '_0";
+		string script = DeviceTuning.Script(new[] { crafted }, powerPlan: false, allowPowerSaving: false);
+		// The text is of course still in the script - it is the data being matched. What matters is that it
+		// stays inside the literal: each apostrophe is doubled, so the quote count on every line is even and
+		// nothing after the name is read as a command.
+		Assert.Contains("''", script);
+		Assert.Contains("-eq '", script);
+		foreach (string line in script.Split('\n'))
+		{
+			Assert.True(line.Count((char c) => c == '\'') % 2 == 0, "unbalanced quotes: " + line);
+		}
+	}
+
+	[Fact]
 	public void TheSummarySaysWhatIsLeft()
 	{
 		// Read fine, found nothing: the mouse is probably unplugged.
