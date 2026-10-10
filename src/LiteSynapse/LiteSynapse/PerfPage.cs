@@ -120,7 +120,8 @@ internal sealed class PerfPage
 			b.Width = (int)Tx.Measure(text, b.Font).Width + 40;
 			b.Location = new Point(x, y);
 			Action handler = click;
-			b.Click += (object _1, EventArgs _2) => Guarded(handler);
+			int onPage = index;
+			b.Click += (object _1, EventArgs _2) => Guarded(onPage, handler);
 			head.Controls.Add(b);
 			buttons.Add(b);
 			x += b.Width + 10;
@@ -150,7 +151,7 @@ internal sealed class PerfPage
 	}
 
 	// Every button goes through here: one job at a time, and a failure reaches the user instead of the log.
-	private void Guarded(Action work)
+	private void Guarded(int index, Action work)
 	{
 		if (busy)
 		{
@@ -163,13 +164,13 @@ internal sealed class PerfPage
 		catch (Exception ex)
 		{
 			Cfg.Log("performance: " + ex);
-			Say(-1, "Something went wrong: " + ex.Message, problem: true);
+			Say(index, "Something went wrong: " + ex.Message, problem: true);
 		}
 	}
 
 	private void Say(int index, string text, bool problem = false)
 	{
-		int i = (index < 0) ? 0 : index;
+		int i = Math.Max(0, Math.Min(notes.Length - 1, index));
 		Label note = notes[i];
 		if (note == null || note.IsDisposed)
 		{
@@ -209,6 +210,11 @@ internal sealed class PerfPage
 				string message = t.IsFaulted
 					? ("Could not finish: " + (t.Exception?.GetBaseException().Message ?? "unknown error"))
 					: t.Result;
+				// The Windows, Services and Start-up pages all read the same scan, so a change made on one
+				// leaves the others showing the state from before it. Mark them for a re-fill and redraw the
+				// one in front now.
+				Invalidate();
+				loaded[index] = true;
 				Refresh(index);
 				Say(index, message, t.IsFaulted);
 			}));
@@ -260,9 +266,11 @@ internal sealed class PerfPage
 			rows.Add(Info("RzCommon folder", "Razer's shared files are still in ProgramData.", "on"));
 		}
 
-		rows.Add(Header("Services", r.Services.Count == 0
-			? "None of Razer's services are set to start."
-			: "Each of these starts with Windows. \"Turn off Razer services\" sets them all to disabled."));
+		rows.Add(Header("Services", !r.Deep
+			? "Not read yet: press Check again for the services."
+			: (r.Services.Count == 0
+				? "None of Razer's services are set to start."
+				: "Each of these starts with Windows. \"Turn off Razer services\" sets them all to disabled.")));
 		foreach (RazerService s in r.Services)
 		{
 			rows.Add(Info(s.Label ?? s.Name,
@@ -270,9 +278,11 @@ internal sealed class PerfPage
 				s.State, s.Driver ? Tweaks.Caution : Tweaks.Safe, s.Network ? "Uses the network" : ""));
 		}
 
-		rows.Add(Header("Starts with Windows", r.Autostart.Count == 0 && r.RunOnce.Count == 0
-			? "Nothing of Razer's starts with Windows."
-			: "Razer entries in this account's start-up list."));
+		rows.Add(Header("Starts with Windows", (!r.Deep && r.RunOnce.Count == 0)
+			? "The Run entries were read; press Check again for the RunOnce ones."
+			: (r.Autostart.Count == 0 && r.RunOnce.Count == 0
+				? "Nothing of Razer's starts with Windows."
+				: "Razer entries in this account's start-up list.")));
 		foreach (string a in r.Autostart)
 		{
 			rows.Add(Info(a, "A Run entry that starts Razer software.", "on"));
@@ -282,9 +292,13 @@ internal sealed class PerfPage
 			rows.Add(Info(a, "A RunOnce entry: it runs at the next sign-in and then removes itself.", "on"));
 		}
 
-		rows.Add(Header("Scheduled tasks", r.Tasks.Count == 0 && r.UpgradeTask == "absent"
-			? "No Razer scheduled tasks."
-			: "Tasks Razer's installers left behind."));
+		// A shallow check does not read the task cache or the firewall at all, so "none" would be a claim it
+		// has not earned. Say which it is.
+		rows.Add(Header("Scheduled tasks", !r.Deep
+			? "Not read yet: press Check again for the scheduled tasks."
+			: (r.Tasks.Count == 0 && r.UpgradeTask == "absent"
+				? "No Razer scheduled tasks."
+				: "Tasks Razer's installers left behind.")));
 		if (r.UpgradeTask != "absent")
 		{
 			rows.Add(Info("Razer upgrade task", "Checks for and installs Synapse updates on a schedule.", r.UpgradeTask));
@@ -295,10 +309,12 @@ internal sealed class PerfPage
 		}
 
 		rows.Add(Header("Firewall and drivers", ""));
-		rows.Add(Info("Firewall rules", r.FirewallRules == 0
-			? "No firewall rules for Razer software."
-			: $"{r.FirewallRules} rule(s) let Razer software through the firewall.",
-			r.FirewallRules == 0 ? "off" : "on"));
+		rows.Add(Info("Firewall rules", !r.Deep
+			? "Not read yet: press Check again for the firewall rules."
+			: (r.FirewallRules == 0
+				? "No firewall rules for Razer software."
+				: $"{r.FirewallRules} rule(s) let Razer software through the firewall."),
+			!r.Deep ? "" : (r.FirewallRules == 0 ? "off" : "on")));
 		if (r.FilterDrivers.Count == 0)
 		{
 			rows.Add(Info("Filter drivers", "None of Razer's filter drivers are on the devices.", "off"));
@@ -312,11 +328,6 @@ internal sealed class PerfPage
 					"Removing it is done by a script you run yourself, because a mistake here leaves you without a mouse.",
 					"on", Tweaks.Caution, "Remove by hand"));
 			}
-		}
-		if (!r.Deep)
-		{
-			rows.Add(Info("Tasks and firewall rules were not read",
-				"The full check reads every scheduled task and firewall rule. Press Check again for those.", ""));
 		}
 		lists[0].Items = rows;
 	}
@@ -453,11 +464,52 @@ internal sealed class PerfPage
 				return;
 			}
 		}
-		List<(string Id, bool On)> choices = ticked
-			.Select((CheckList.Row r) => (Id: r.Id.Contains(':') ? r.Id.Substring(r.Id.IndexOf(':') + 1) : r.Id, On: on))
-			.ToList();
+		// A row's id is "<kind>:<what>". Only the first colon is a separator: a file path has its own
+		// ("file:C:\\Program Files\\x.exe"), so splitting on the last one would mangle it.
+		List<(string Id, bool On)> choices = new List<(string, bool)>();
+		List<string> notSwitchable = new List<string>();
+		foreach (CheckList.Row r in ticked)
+		{
+			(string kind, string what) = Split(r.Id);
+			// A start-up entry LiteSynapse cannot switch is still tickable, so Defender can be pointed at its
+			// file. Pressing a turn-on/off button on one used to report "nothing was changed", which read as a
+			// failure rather than as "this one has no switch".
+			if (kind == "file")
+			{
+				notSwitchable.Add(r.Title);
+				continue;
+			}
+			choices.Add((what, on));
+		}
+		if (choices.Count == 0)
+		{
+			Say(index, Cannot(notSwitchable), problem: true);
+			return;
+		}
+		string trailer = (notSwitchable.Count > 0) ? " " + Cannot(notSwitchable) : "";
 		Work(index, on ? "Turning them on..." : "Turning them off...",
-			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult());
+			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult() + trailer);
+	}
+
+	// "tweak:accel" -> ("tweak", "accel"); "file:C:\\x.exe" -> ("file", "C:\\x.exe"). Only the first colon
+	// separates, because the rest of the id may be a Windows path.
+	private static (string Kind, string What) Split(string id)
+	{
+		string s = id ?? "";
+		int at = s.IndexOf(':');
+		return (at < 0) ? ("", s) : (s.Substring(0, at), s.Substring(at + 1));
+	}
+
+	private static string Cannot(List<string> names)
+	{
+		if (names == null || names.Count == 0)
+		{
+			return "Nothing that can be switched was ticked.";
+		}
+		string which = (names.Count == 1) ? names[0] : string.Join(", ", names);
+		return which + ": LiteSynapse cannot switch " + (names.Count == 1 ? "this one" : "these") +
+			" from here (it starts for every account, or from the Startup folder). " +
+			(names.Count == 1 ? "It can still be scanned with Defender." : "They can still be scanned with Defender.");
 	}
 
 	private void FillWindows()
@@ -591,21 +643,31 @@ internal sealed class PerfPage
 			})),
 			("TURN TICKED OFF", true, () => ApplyScan(4, on: false)),
 			("TURN TICKED BACK ON", false, () => ApplyScan(4, on: true)),
-			("SCAN TICKED WITH DEFENDER", false, DefenderScan));
+			("SCAN WITH DEFENDER", false, DefenderScan));
 	}
 
 	private void DefenderScan()
 	{
 		List<CheckList.Row> ticked = lists[4].Ticked.ToList();
-		string path = ticked.Select((CheckList.Row r) => r.Id)
-			.Where((string id) => id.StartsWith("file:", StringComparison.Ordinal))
-			.Select((string id) => id.Substring(5))
-			.FirstOrDefault();
-		if (path == null)
+		// Every start-up row carries its program's file, switchable or not, so any of them can be scanned.
+		List<string> paths = ticked.Select((CheckList.Row r) => r.Path)
+			.Where((string p) => !string.IsNullOrWhiteSpace(p))
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToList();
+		if (paths.Count == 0)
 		{
 			Say(4, "Tick a start-up program whose file you want Defender to scan.", problem: true);
 			return;
 		}
+		// A custom scan can take minutes. Doing several in a row would look like the window had hung, so this
+		// asks for one at a time rather than quietly scanning only the first.
+		if (paths.Count > 1)
+		{
+			Say(4, $"Defender scans one file at a time, and each can take a few minutes. {paths.Count} are " +
+				"ticked - untick all but one.", problem: true);
+			return;
+		}
+		string path = paths[0];
 		Work(4, "Asking Microsoft Defender to scan it...",
 			() => app.DefenderScanAsync(path).GetAwaiter().GetResult());
 	}
@@ -672,8 +734,10 @@ internal sealed class PerfPage
 		}
 		return new CheckList.Row
 		{
-			// The id carries the file path so Defender can be pointed at it, and the Run value name for the switch.
-			Id = (i.CanDisable || i.CanEnable) ? ("start:" + i.Id) : ("file:" + i.Path),
+			// "start:" is a row with a switch; "file:" is one LiteSynapse can only report on. Either way Path
+			// carries the program's file, so Defender can be pointed at it.
+			Id = (i.CanDisable || i.CanEnable) ? ("start:" + i.Id) : ("file:" + i.Id),
+			Path = i.Path,
 			Title = i.Name,
 			Desc = string.Join("  ", facts),
 			Cost = ScanRules.FlagText(i.Flag),

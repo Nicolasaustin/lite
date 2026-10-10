@@ -610,6 +610,10 @@ internal static class SystemScanner
 		ScanResult before = Check();
 		List<string> done = new List<string>();
 		List<string> refused = new List<string>();
+		List<string> already = new List<string>();
+		// An id is acted on once. A start-up entry whose Run value happens to be named like a catalog id
+		// would otherwise be handled by the start-up loop and again by the loop below it.
+		HashSet<string> handled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		bool reboot = false;
 
 		// Start-up entries: this account only, no administrator rights needed.
@@ -617,10 +621,19 @@ internal static class SystemScanner
 		{
 			ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
 				i.Kind == "startup" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
-			if (item == null || string.IsNullOrWhiteSpace(item.Id) || (on ? !item.CanEnable : !item.CanDisable))
+			if (item == null || string.IsNullOrWhiteSpace(item.Id))
 			{
 				continue;
 			}
+			if (on ? !item.CanEnable : !item.CanDisable)
+			{
+				// Already in the state that was asked for, or not ours to switch. Saying so beats reporting
+				// "nothing was changed", which reads like a failure.
+				handled.Add(item.Id);
+				already.Add(item.Name);
+				continue;
+			}
+			handled.Add(item.Id);
 			try
 			{
 				if (on)
@@ -646,17 +659,30 @@ internal static class SystemScanner
 		List<(string Id, bool On)> tweaks = new List<(string, bool)>();
 		foreach ((string id, bool on) in choices)
 		{
+			if (handled.Contains(id))
+			{
+				continue;
+			}
 			ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
 				i.Kind == "service" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
-			if (item != null && (on ? item.CanEnable : item.CanDisable))
+			if (item != null)
 			{
-				svc.Add((item.Id, on));
-				done.Add(item.Name + (on ? " (on)" : " (off)"));
+				handled.Add(id);
+				if (on ? item.CanEnable : item.CanDisable)
+				{
+					svc.Add((item.Id, on));
+					done.Add(item.Name + (on ? " (on)" : " (off)"));
+				}
+				else
+				{
+					already.Add(item.Name);
+				}
 				continue;
 			}
 			Tweaks.Tweak t = Tweaks.Find(id);
 			if (t != null)
 			{
+				handled.Add(id);
 				tweaks.Add((t.Id, on));
 				done.Add(t.Title + (on ? " (on)" : " (off)"));
 				reboot |= t.NeedsReboot;
@@ -710,7 +736,7 @@ internal static class SystemScanner
 				return "Could not finish: " + ex2.Message;
 			}
 		}
-		return Report(done, refused, reboot);
+		return Report(done, refused, already, reboot);
 	}
 
 	// Two scripts into one, so the whole selection costs a single consent prompt. Each half counts its own
@@ -738,12 +764,16 @@ internal static class SystemScanner
 		return body;
 	}
 
-	private static string Report(List<string> done, List<string> refused, bool reboot)
+	private static string Report(List<string> done, List<string> refused, List<string> already, bool reboot)
 	{
 		List<string> parts = new List<string>();
 		if (done.Count > 0)
 		{
 			parts.Add("Changed: " + string.Join(", ", done) + ".");
+		}
+		if (already != null && already.Count > 0)
+		{
+			parts.Add("Already like that: " + string.Join(", ", already) + ".");
 		}
 		if (refused.Count > 0)
 		{

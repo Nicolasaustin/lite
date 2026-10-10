@@ -33,6 +33,9 @@ internal static class Tweaks
 	// What a value should be set to, or Delete to remove it so Windows decides for itself again.
 	internal const string Delete = "\u0000delete";
 
+	// A command prefix: run it, but do not count a non-zero exit code as a failure (see Tweak.OnCommands).
+	internal const string Optional = "?";
+
 	// Risk, for the badge the window shows and the warning before it applies.
 	internal const string Safe = "safe";
 
@@ -109,6 +112,11 @@ internal static class Tweaks
 		public Reg[] Values = Array.Empty<Reg>();
 
 		// Extra commands, run after the registry values. Already-quoted PowerShell.
+		//
+		// A command may start with Optional ("?"), which means "run it, but do not count a non-zero exit as a
+		// failure". That is for the steps whose job is to remove something: bcdedit /deletevalue on a value
+		// that was never set, and powercfg /delete on a plan that is not there, both exit non-zero, and both
+		// mean the setting is already in the state we asked for.
 		public string[] OnCommands = Array.Empty<string>();
 
 		public string[] OffCommands = Array.Empty<string>();
@@ -141,7 +149,9 @@ internal static class Tweaks
 	// Setting GUIDs are Microsoft's documented ones (powercfg /q lists them).
 	private static readonly string[] PowerPlanOn = new string[]
 	{
-		"powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 " + PlanGuid,
+		// Already there from a previous run: the duplicate fails and everything after it still applies to the
+		// plan that exists, so this one does not count as a failure either.
+		Optional + "powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 " + PlanGuid,
 		// Processor: minimum state 100%, core parking off, no throttling.
 		Ac("54533251-82be-4824-96c1-47b60b740d00", "893dee8e-2bef-41e0-89c6-b55d0929964c", "100"),
 		Ac("54533251-82be-4824-96c1-47b60b740d00", "bc5038f7-23e0-4960-96da-33abaf5935ec", "100"),
@@ -304,7 +314,7 @@ internal static class Tweaks
 			NeedsAdmin = true,
 			NeedsReboot = true,
 			OnCommands = new[] { "bcdedit.exe /set disabledynamictick yes" },
-			OffCommands = new[] { "bcdedit.exe /deletevalue disabledynamictick" }
+			OffCommands = new[] { Optional + "bcdedit.exe /deletevalue disabledynamictick" }
 		},
 		new Tweak
 		{
@@ -321,9 +331,9 @@ internal static class Tweaks
 			NeedsReboot = true,
 			OnCommands = new[]
 			{
-				"bcdedit.exe /deletevalue useplatformclock",
-				"bcdedit.exe /deletevalue useplatformtick",
-				"bcdedit.exe /deletevalue tscsyncpolicy"
+				Optional + "bcdedit.exe /deletevalue useplatformclock",
+				Optional + "bcdedit.exe /deletevalue useplatformtick",
+				Optional + "bcdedit.exe /deletevalue tscsyncpolicy"
 			},
 			OffCommands = new[] { "bcdedit.exe /set useplatformclock true" }
 		},
@@ -356,7 +366,7 @@ internal static class Tweaks
 			OffCommands = new[]
 			{
 				"powercfg.exe /setactive scheme_balanced",
-				"powercfg.exe /delete " + PlanGuid
+				Optional + "powercfg.exe /delete " + PlanGuid
 			}
 		},
 		new Tweak
@@ -710,7 +720,7 @@ internal static class Tweaks
 			NeedsAdmin = true,
 			NeedsReboot = true,
 			OnCommands = new[] { "bcdedit.exe /set nx AlwaysOff" },
-			OffCommands = new[] { "bcdedit.exe /deletevalue nx" }
+			OffCommands = new[] { Optional + "bcdedit.exe /deletevalue nx" }
 		}
 	};
 
@@ -963,7 +973,9 @@ internal static class Tweaks
 		{
 			n = unchecked((int)n);
 		}
-		return n.ToString(CultureInfo.InvariantCulture);
+		string text = n.ToString(CultureInfo.InvariantCulture);
+		// -Value -1 binds correctly but reads like a parameter; the brackets remove the doubt.
+		return (n < 0) ? ("(" + text + ")") : text;
 	}
 
 	// Removing a value that is not there is not a failure: that is already the state we want.
@@ -973,12 +985,19 @@ internal static class Tweaks
 			"-Force -ErrorAction SilentlyContinue\n";
 	}
 
+	// $LASTEXITCODE is only set by an external program, and it keeps its old value otherwise. Several of these
+	// commands are .NET calls or PowerShell cmdlets, so without clearing it first the check below would read
+	// the exit code of whatever external command ran earlier in the script - an "sc.exe stop" on a service that
+	// was already stopped, for instance - and count a step as failed that did exactly what it was asked.
 	private static string Run(string command)
 	{
+		bool optional = command.StartsWith(Optional, StringComparison.Ordinal);
+		string cmd = optional ? command.Substring(Optional.Length) : command;
 		return "try {\n" +
-			$"  {command} 2>&1 | Out-Null\n" +
-			"  if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { $failed++ }\n" +
-			"} catch { $failed++ }\n";
+			"  $global:LASTEXITCODE = 0\n" +
+			$"  {cmd} 2>&1 | Out-Null\n" +
+			(optional ? "" : "  if ($LASTEXITCODE -ne 0) { $failed++ }\n") +
+			(optional ? "} catch { }\n" : "} catch { $failed++ }\n");
 	}
 
 	// SystemParametersInfo, so acceleration and pointer speed take effect now instead of at the next sign-in.

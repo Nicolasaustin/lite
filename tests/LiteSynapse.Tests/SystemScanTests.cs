@@ -290,13 +290,59 @@ public class TweaksTests
 	}
 
 	[Theory]
-	// 0xFFFFFFFF does not fit a signed int, and New-ItemProperty takes a signed one: it has to arrive as -1.
-	[InlineData("netthrottle", "-1")]
+	// 0xFFFFFFFF does not fit a signed int, and New-ItemProperty takes a signed one: it has to arrive as -1,
+	// bracketed so it cannot read as a parameter name.
+	[InlineData("netthrottle", "(-1)")]
 	// A hex value in the catalog is written as the decimal Windows expects.
 	[InlineData("priority", "38")]
 	public void NumbersAreWrittenAsWindowsWantsThem(string id, string expected)
 	{
 		Assert.Contains("-Value " + expected + " ", Tweaks.Script(new[] { (id, true) }));
+	}
+
+	[Fact]
+	public void RemovingSomethingThatIsNotThereIsNotAFailedStep()
+	{
+		// bcdedit /deletevalue on a value that was never set exits non-zero, and so does powercfg /delete on a
+		// plan that is not there. Both mean "already in the state you asked for", so neither may be counted.
+		foreach ((string Id, bool On, string Expect) step in new[]
+		{
+			("platformclock", true, "bcdedit.exe /deletevalue useplatformclock"),
+			("dynamictick", false, "bcdedit.exe /deletevalue disabledynamictick"),
+			("dep", false, "bcdedit.exe /deletevalue nx"),
+			("powerplan", false, "powercfg.exe /delete " + Tweaks.PlanGuid)
+		})
+		{
+			string script = Tweaks.Script(new[] { (step.Id, step.On) });
+			int at = script.IndexOf(step.Expect, StringComparison.Ordinal);
+			Assert.True(at >= 0, step.Id + " does not run " + step.Expect);
+			// The lines straight after the removal are its own try/catch, and must not check the exit code.
+			// (Turning the power plan off also puts Balanced back, and that step IS checked, so only the
+			// removal's own block is looked at here.)
+			string after = script.Substring(at, Math.Min(120, script.Length - at));
+			Assert.DoesNotContain("$failed++", after);
+		}
+		// The marker is never left in the script itself.
+		string all = Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
+			+ Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
+		Assert.DoesNotContain("  ?", all);
+		Assert.DoesNotContain("?bcdedit", all);
+		Assert.DoesNotContain("?powercfg", all);
+		// A step that really can fail is still checked: setting a boot value, and the power plan's own writes.
+		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Tweaks.Script(new[] { ("dynamictick", true) }));
+		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Tweaks.Script(new[] { ("powerplan", true) }));
+	}
+
+	[Fact]
+	public void AStaleExitCodeIsNotCountedAsAFailedStep()
+	{
+		// Run() clears $LASTEXITCODE first, because a .NET call or a cmdlet does not set it and the check
+		// would otherwise read whatever external command ran before it in the script.
+		string script = Tweaks.Script(new[] { ("accel", true) });
+		int clear = script.IndexOf("$global:LASTEXITCODE = 0", StringComparison.Ordinal);
+		int check = script.IndexOf("if ($LASTEXITCODE -ne 0)", StringComparison.Ordinal);
+		Assert.True(clear >= 0, "the exit code is never cleared");
+		Assert.True(clear < check, "the exit code is checked before it is cleared");
 	}
 
 	[Theory]

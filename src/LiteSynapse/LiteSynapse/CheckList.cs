@@ -24,6 +24,10 @@ internal sealed class CheckList : Control
 		// What Apply gets back for this row.
 		public string Id = "";
 
+		// The program's file, when the row has one. Kept apart from Id because Id is the key a change is made
+		// with (a Run value name, a service name, a tweak id) and a path is not interchangeable with it.
+		public string Path = "";
+
 		public string Title = "";
 
 		// What it does, wrapped under the title.
@@ -94,6 +98,9 @@ internal sealed class CheckList : Control
 		set
 		{
 			items = value ?? new List<Row>();
+			// The row under the cursor is gone with the old list; keeping its index would highlight whatever
+			// now sits at that position.
+			hover = -1;
 			bar.Value = 0;
 			Relayout();
 		}
@@ -125,57 +132,56 @@ internal sealed class CheckList : Control
 	{
 		int width = Math.Max(120, Width - bar.Width - Pad * 2 - Indent);
 		int y = 0;
-		using (Graphics g = CreateGraphics())
+		Font title = Theme.F(10.5f);
+		Font small = Theme.F(9f);
+		try
 		{
-			Font title = Theme.F(10.5f);
-			Font small = Theme.F(9f);
-			Font head = Theme.F(9f, FontStyle.Bold);
-			try
+			int lineHeight = 6 + (int)Tx.Measure("X", title).Height;
+			foreach (Row r in items)
 			{
-				foreach (Row r in items)
+				r.Y = y;
+				if (r.Header)
 				{
-					r.Y = y;
-					if (r.Header)
-					{
-						r.H = 30 + (r.Desc.Length > 0 ? Lines(g, r.Desc, small, width + Indent) : 0) + 8;
-					}
-					else
-					{
-						int h = 6 + (int)Tx.Measure("X", title).Height;
-						if (r.Desc.Length > 0)
-						{
-							h += Lines(g, r.Desc, small, width);
-						}
-						if (r.Cost.Length > 0)
-						{
-							h += Lines(g, r.Cost, small, width) + 2;
-						}
-						r.H = h + 12;
-					}
-					y += r.H;
+					r.H = 38 + (r.Desc.Length > 0 ? Lines(r.Desc, small, width + Indent) : 0);
 				}
+				else
+				{
+					int h = lineHeight;
+					if (r.Desc.Length > 0)
+					{
+						h += Lines(r.Desc, small, width);
+					}
+					if (r.Cost.Length > 0)
+					{
+						h += Lines(r.Cost, small, width) + 2;
+					}
+					r.H = h + 12;
+				}
+				y += r.H;
 			}
-			finally
-			{
-				title.Dispose();
-				small.Dispose();
-				head.Dispose();
-			}
+		}
+		finally
+		{
+			title.Dispose();
+			small.Dispose();
 		}
 		total = y;
 		int view = Math.Max(1, Height);
+		int maxScroll = Math.Max(0, total - view);
 		bar.Visible = total > view;
-		bar.Maximum = Math.Max(0, total - view + bar.LargeChange);
-		if (bar.Value > Math.Max(0, total - view))
+		// A VScrollBar's highest reachable Value is Maximum - LargeChange + 1, so Maximum has to be set past
+		// the end by LargeChange - 1 for the last row to be scrollable into view.
+		bar.Maximum = maxScroll + bar.LargeChange - 1;
+		if (bar.Value > maxScroll)
 		{
-			bar.Value = Math.Max(0, total - view);
+			bar.Value = maxScroll;
 		}
 		Invalidate();
 	}
 
-	private static int Lines(Graphics g, string text, Font f, int width)
+	private static int Lines(string text, Font f, int width)
 	{
-		return TextRenderer.MeasureText((IDeviceContext)g, text, f, new Size(width, int.MaxValue),
+		return TextRenderer.MeasureText(text, f, new Size(Math.Max(40, width), int.MaxValue),
 			TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height;
 	}
 
@@ -276,13 +282,13 @@ internal sealed class CheckList : Control
 		int descWidth = right - tx;
 		if (r.Desc.Length > 0)
 		{
-			int h = Lines(g, r.Desc, small, descWidth);
+			int h = Lines(r.Desc, small, descWidth);
 			Tx.Wrap(g, r.Desc, small, Theme.Dim, new RectangleF(tx, ty, descWidth, h));
 			ty += h;
 		}
 		if (r.Cost.Length > 0)
 		{
-			int h2 = Lines(g, r.Cost, small, descWidth);
+			int h2 = Lines(r.Cost, small, descWidth);
 			Tx.Wrap(g, r.Cost, small, CostColor(r.Risk), new RectangleF(tx, ty + 2, descWidth, h2));
 		}
 	}
@@ -425,6 +431,7 @@ internal sealed class CheckList : Control
 			return;
 		}
 		int step = -(e.Delta / 120) * 60;
-		bar.Value = Math.Max(bar.Minimum, Math.Min(bar.Maximum - bar.LargeChange + 1, bar.Value + step));
+		int maxScroll = Math.Max(0, bar.Maximum - bar.LargeChange + 1);
+		bar.Value = Math.Max(bar.Minimum, Math.Min(maxScroll, bar.Value + step));
 	}
 }
