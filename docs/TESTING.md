@@ -1,5 +1,22 @@
 # Testing LiteSynapse
 
+## Build 18 (1.2.7): installed in Program Files, profiles in your AppData
+
+LiteSynapse runs as administrator (build 17), so its program files now live where only an administrator can change
+them: `C:\Program Files\LiteSynapse`. Your profiles, settings and log move to `%LOCALAPPDATA%\LiteSynapse\data`
+(Settings > OPEN CONFIG FOLDER opens it).
+
+**What to check first:** after installing, your profiles, games and macros are all there, the tilt buttons and
+macros work, and LiteSynapse starts at sign-in.
+
+- Setup copies your profiles from the old per-user install (`%LOCALAPPDATA%\Programs\LiteSynapse\data`) into
+  the new folder - nothing already there is overwritten - then removes the old program files and its Apps &
+  features entry. The old `data` folder is kept as a backup; delete it once you have checked your profiles.
+- If Setup could not copy them, LiteSynapse does it itself on its first start (from the old install, a `data`
+  folder next to the exe, or `%APPDATA%\LiteSynapse`).
+- The sign-in task is registered again for the new path. Apps & features lists LiteSynapse for the machine.
+- There is no folder choice in Setup any more: Program Files is the point.
+
 ## Build 17 (1.2.6): LiteSynapse runs as administrator, so macros reach CS2; RESYNC MOUSE
 
 **Tilt left / right swapped after opening Razer Synapse:** Synapse writes its own profiles into the Naga's memory

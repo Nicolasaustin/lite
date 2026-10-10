@@ -33,25 +33,33 @@ public static class Cfg
 
 	public static string OldLogFile => Path.Combine(Dir, "log.old.txt");
 
+	// Profiles, settings and the log live in this Windows account's own folder (%LOCALAPPDATA%\LiteSynapse\data), not
+	// next to LiteSynapse.exe: the program is in Program Files, which only an administrator can change - it runs as
+	// one, so its own files must not be writable by programs that do not - and each account keeps its own profiles.
+	// Setup copies them over from where an earlier version kept them; this does the same when Setup did not.
 	private static string Init()
 	{
-		string dir = Path.Combine(AppContext.BaseDirectory, "data");
+		string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+		string dir = Path.Combine(local, "LiteSynapse", "data");
 		try
 		{
 			Directory.CreateDirectory(dir);
 			if (!File.Exists(Path.Combine(dir, "profiles.json")))
 			{
-				string old = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LiteSynapse");
-				if (Directory.Exists(old))
+				// Newest first: the per-user install's data folder (1.2.6 and earlier), a data folder next to this
+				// exe (a copy run from its own folder), and %APPDATA%\LiteSynapse (the first versions).
+				foreach (string old in new[]
 				{
-					string[] files = Directory.GetFiles(old);
-					foreach (string f in files)
+					Path.Combine(local, "Programs", "LiteSynapse", "data"),
+					Path.Combine(AppContext.BaseDirectory, "data"),
+					Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LiteSynapse")
+				})
+				{
+					if (!string.Equals(Path.GetFullPath(old).TrimEnd('\\', '/'), Path.GetFullPath(dir).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)
+						&& File.Exists(Path.Combine(old, "profiles.json")))
 					{
-						string target = Path.Combine(dir, Path.GetFileName(f));
-						if (!File.Exists(target) && !f.EndsWith("log.txt", StringComparison.OrdinalIgnoreCase))
-						{
-							File.Copy(f, target);
-						}
+						CopyMissing(old, dir);
+						break;
 					}
 				}
 			}
@@ -60,6 +68,25 @@ public static class Cfg
 		{
 		}
 		return dir;
+	}
+
+	// Copies what the target does not have yet, folders included; never overwrites, and leaves the logs behind.
+	internal static void CopyMissing(string from, string to)
+	{
+		Directory.CreateDirectory(to);
+		foreach (string f in Directory.GetFiles(from))
+		{
+			string name = Path.GetFileName(f);
+			string target = Path.Combine(to, name);
+			if (!File.Exists(target) && !name.StartsWith("log", StringComparison.OrdinalIgnoreCase))
+			{
+				File.Copy(f, target);
+			}
+		}
+		foreach (string d in Directory.GetDirectories(from))
+		{
+			CopyMissing(d, Path.Combine(to, Path.GetFileName(d)));
+		}
 	}
 
 	public static T Load<T>(string path) where T : new()

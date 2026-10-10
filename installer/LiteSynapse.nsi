@@ -1,8 +1,11 @@
 ; LiteSynapse installer (NSIS 3, Unicode, Modern UI 2).
 ;
-; Per-user install: nothing outside the user's own folders, HKCU and LiteSynapse's own sign-in task.
-; It runs as administrator because LiteSynapse does (app.manifest): closing a running copy and registering or
-; removing its sign-in task need it. It never installs or removes drivers or services.
+; Installs into Program Files (only an administrator can change it: LiteSynapse runs as administrator, so its own
+; files must not be writable by programs that do not), with this account's profiles and settings in
+; %LOCALAPPDATA%\LiteSynapse\data, this account's shortcuts and LiteSynapse's own sign-in task. It runs as
+; administrator for Program Files, for closing a running copy and for the sign-in task. It never installs or
+; removes drivers or services. An older per-user install (%LOCALAPPDATA%\Programs\LiteSynapse) is moved over:
+; its profiles are copied, its program files removed, its data folder kept as a backup.
 ;
 ; Build everything (tests, publish, installer):  bash tools/build-release.sh
 ; Compile only, after a publish to build/publish:  makensis installer/LiteSynapse.nsi
@@ -91,8 +94,7 @@ CRCCheck on
 
 Name "${APP_NAME}"
 OutFile "${OUTFILE}"
-InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
-InstallDirRegKey HKCU "${UNINST_KEY}" "InstallLocation"
+InstallDir "$PROGRAMFILES64\${APP_NAME}"
 BrandingText "${APP_NAME} ${VERSION}"
 ShowInstDetails show
 ShowUninstDetails show
@@ -106,6 +108,8 @@ VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "${PUBLISHER}"
 
+Var DataDir           ; this account's profiles and settings: $LOCALAPPDATA\LiteSynapse\data (Cfg.Dir)
+Var OldInstall        ; an older per-user install folder to move away from, or ""
 Var StartupState      ; ${BST_CHECKED} / ${BST_UNCHECKED}: "Start LiteSynapse with Windows"
 Var StartupBox
 Var DotNetVersion     ; "" when the .NET 10 Desktop Runtime is missing
@@ -121,12 +125,9 @@ Var FinishText
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Install ${APP_NAME} ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "Setup installs ${APP_NAME} ${VERSION} for your Windows account. It asks for administrator rights because ${APP_NAME} runs as administrator: that is what lets its macros and Snap Tap reach games that run as administrator.$\r$\n$\r$\nIf ${APP_NAME} is running, Setup closes it first. Your profiles and settings are kept or copied over; existing ones are never overwritten.$\r$\n$\r$\nSetup does not install or remove any drivers or services.$\r$\n$\r$\n$_CLICK"
+!define MUI_WELCOMEPAGE_TEXT "Setup installs ${APP_NAME} ${VERSION} in Program Files, with your profiles and settings in your own AppData folder. It asks for administrator rights because ${APP_NAME} runs as administrator: that is what lets its macros and Snap Tap reach games that run as administrator.$\r$\n$\r$\nIf ${APP_NAME} is running, Setup closes it first. Your profiles and settings are kept or copied over; existing ones are never overwritten.$\r$\n$\r$\nSetup does not install or remove any drivers or services.$\r$\n$\r$\n$_CLICK"
 !insertmacro MUI_PAGE_WELCOME
 
-!define MUI_DIRECTORYPAGE_TEXT_TOP "Setup will install ${APP_NAME} in the folder below. Your profiles and settings are stored in its $\"data$\" subfolder."
-!define MUI_PAGE_CUSTOMFUNCTION_LEAVE DirectoryLeave
-!insertmacro MUI_PAGE_DIRECTORY
 
 Page custom OptionsShow OptionsLeave
 
@@ -287,7 +288,7 @@ FunctionEnd
 
 ; ---- Installer helpers -----------------------------------------------------------------------------------
 
-; Stack: text -> appended to $INSTDIR\data\install.log (UTF-16) with a local timestamp, and shown in the details.
+; Stack: text -> appended to $DataDir\install.log (UTF-16) with a local timestamp, and shown in the details.
 Function WriteLog
   Exch $0
   Push $1
@@ -300,13 +301,13 @@ Function WriteLog
   Push $8
   DetailPrint "$0"
   ${GetTime} "" "L" $1 $2 $3 $4 $5 $6 $7
-  CreateDirectory "$INSTDIR\data"
+  CreateDirectory "$DataDir"
   ClearErrors
-  ${If} ${FileExists} "$INSTDIR\data\install.log"
-    FileOpen $8 "$INSTDIR\data\install.log" a
+  ${If} ${FileExists} "$DataDir\install.log"
+    FileOpen $8 "$DataDir\install.log" a
     FileSeek $8 0 END
   ${Else}
-    FileOpen $8 "$INSTDIR\data\install.log" w
+    FileOpen $8 "$DataDir\install.log" w
     FileWriteWord $8 0xFEFF
   ${EndIf}
   ${IfNot} ${Errors}
@@ -348,10 +349,13 @@ Function DetectPrereqs
   Pop $0
 FunctionEnd
 
-; Sets $DataSource for $INSTDIR: "keep" (data already there), an old data folder to copy, or "seed".
+; Sets $DataSource for $DataDir: "keep" (data already there), an old data folder to copy, or "seed".
 Function DetectDataSource
-  ${If} ${FileExists} "$INSTDIR\data\profiles.json"
+  ${If} ${FileExists} "$DataDir\profiles.json"
     StrCpy $DataSource "keep"
+  ${ElseIf} $OldInstall != ""
+  ${AndIf} ${FileExists} "$OldInstall\data\profiles.json"
+    StrCpy $DataSource "$OldInstall\data"
   ${ElseIf} ${FileExists} "$DOCUMENTS\${APP_NAME}\data\profiles.json"
     StrCpy $DataSource "$DOCUMENTS\${APP_NAME}\data"
   ${ElseIf} ${FileExists} "$PROFILE\Documents\${APP_NAME}\data\profiles.json"
@@ -425,30 +429,6 @@ Function CopyMissing
   Exch $0
 FunctionEnd
 
-; Stack: folder -> 1 when it has any file or subfolder, else 0.
-Function DirHasEntries
-  Exch $0
-  Push $1
-  Push $2
-  Push $3
-  StrCpy $3 0
-  FindFirst $1 $2 "$0\*.*"
-  ${DoWhile} $2 != ""
-    ${If} $2 != "."
-    ${AndIf} $2 != ".."
-      StrCpy $3 1
-      ${Break}
-    ${EndIf}
-    FindNext $1 $2
-  ${Loop}
-  FindClose $1
-  StrCpy $0 $3
-  Pop $3
-  Pop $2
-  Pop $1
-  Exch $0
-FunctionEnd
-
 ; ---- Installer callbacks ---------------------------------------------------------------------------------
 
 ; $0 = 1 when Task Manager's Startup apps has turned the LiteSynapse Run value off (the value stays, Windows
@@ -471,6 +451,20 @@ FunctionEnd
 
 Function .onInit
   SetShellVarContext current
+  SetRegView 64
+  StrCpy $DataDir "$LOCALAPPDATA\${APP_NAME}\data"
+  ; A per-user install from 1.2.6 or earlier, to move away from.
+  ReadRegStr $OldInstall HKCU "${UNINST_KEY}" "InstallLocation"
+  ${If} $OldInstall == ""
+    StrCpy $OldInstall "$LOCALAPPDATA\Programs\${APP_NAME}"
+  ${EndIf}
+  ${IfNot} ${FileExists} "$OldInstall\${APP_EXE}"
+  ${AndIfNot} ${FileExists} "$OldInstall\data\profiles.json"
+    StrCpy $OldInstall ""
+  ${EndIf}
+  ${If} $OldInstall == $INSTDIR
+    StrCpy $OldInstall ""
+  ${EndIf}
   System::Call 'kernel32::CreateMutexW(p 0, i 0, w "LiteSynapse.setup") p.r1 ?e'
   Pop $0
   ${If} $0 = 183
@@ -505,52 +499,6 @@ Function .onInit
   ${EndIf}
   StrCpy $PrereqsShown 0
   Call DetectPrereqs
-FunctionEnd
-
-Function DirectoryLeave
-  ; LiteSynapse should have its own folder: the uninstaller removes it only when it is empty, and
-  ; "data" inside it holds the profiles. Ask before using a folder that already holds other things.
-  StrCpy $0 "$INSTDIR" "" -12
-  ${If} $0 != "\${APP_NAME}"
-  ${AndIfNot} ${FileExists} "$INSTDIR\${APP_EXE}"
-  ${AndIfNot} ${FileExists} "$INSTDIR\${UNINST_EXE}"
-  ${AndIfNot} ${FileExists} "$INSTDIR\data\profiles.json"
-    Push "$INSTDIR"
-    Call DirHasEntries
-    Pop $0
-    ${If} $0 = 1
-      MessageBox MB_YESNO|MB_ICONQUESTION "$INSTDIR already contains other files.$\r$\n$\r$\nInstall into $INSTDIR\${APP_NAME} instead? (recommended)" IDNO checkWritable
-      StrCpy $INSTDIR "$INSTDIR\${APP_NAME}"
-      ; Show the new folder in the page's text box (control 1019) and stay on the page.
-      FindWindow $0 "#32770" "" $HWNDPARENT
-      GetDlgItem $0 $0 1019
-      SendMessage $0 ${WM_SETTEXT} 0 "STR:$INSTDIR"
-      Abort
-    ${EndIf}
-  ${EndIf}
-  checkWritable:
-  ; Per-user install: the folder must be writable without administrator rights.
-  StrCpy $1 0
-  ${IfNot} ${FileExists} "$INSTDIR\*.*"
-    StrCpy $1 1
-  ${EndIf}
-  ClearErrors
-  CreateDirectory "$INSTDIR"
-  FileOpen $0 "$INSTDIR\litesynapse-write-test.tmp" w
-  ${If} ${Errors}
-    StrCpy $2 0
-  ${Else}
-    FileClose $0
-    Delete "$INSTDIR\litesynapse-write-test.tmp"
-    StrCpy $2 1
-  ${EndIf}
-  ${If} $1 = 1
-    RMDir "$INSTDIR"
-  ${EndIf}
-  ${If} $2 = 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "Setup cannot write to $INSTDIR.$\r$\n$\r$\nChoose another folder, for example the default one." /SD IDOK
-    Abort
-  ${EndIf}
 FunctionEnd
 
 Function OptionsShow
@@ -619,6 +567,10 @@ Function FinishPre
   ${If} $OldCopyDir != ""
     StrCpy $FinishText "$FinishText$\r$\n$\r$\nThe old copy in $OldCopyDir is no longer used. Once you have checked your profiles, you can delete that folder yourself."
   ${EndIf}
+  ${If} $OldInstall != ""
+  ${AndIf} ${FileExists} "$OldInstall\data\*.*"
+    StrCpy $FinishText "$FinishText$\r$\n$\r$\nYour profiles and settings now live in $DataDir. The old copy in $OldInstall\data is kept as a backup; delete it once you have checked your profiles."
+  ${EndIf}
 FunctionEnd
 
 Function FinishShow
@@ -683,29 +635,49 @@ Section "${APP_NAME}" SecMain
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\${UNINST_EXE}"
 
-  ; Profiles and settings: first match wins; nothing that exists in $INSTDIR\data is overwritten.
+  ; Profiles and settings: first match wins; nothing that exists in $DataDir is overwritten.
   Call DetectDataSource
   ${If} $DataSource == "keep"
-    !insertmacro LOG "Profiles and settings: kept the existing $INSTDIR\data"
+    !insertmacro LOG "Profiles and settings: kept the existing $DataDir"
   ${ElseIf} $DataSource == "seed"
     InitPluginsDir
     SetOutPath "$PLUGINSDIR\seed"
     File "${SEED_DIR}\*.json"
     SetOutPath "$INSTDIR"
     Push "$PLUGINSDIR\seed"
-    Push "$INSTDIR\data"
+    Push "$DataDir"
     Call CopyMissing
     Pop $0
     !insertmacro LOG "Profiles and settings: none found; installed the bundled profiles ($0 files)"
   ${Else}
     Push "$DataSource"
-    Push "$INSTDIR\data"
+    Push "$DataDir"
     Call CopyMissing
     Pop $0
     !insertmacro LOG "Profiles and settings: copied $0 files/folders from $DataSource (log files skipped; the old folder was not changed)"
   ${EndIf}
 
-  ; Shortcuts (the Desktop one replaces the old copy's shortcut of the same name).
+  ; The per-user copy 1.2.6 and earlier installed: its program files go (any program could replace them, and they
+  ; were started as administrator), its data folder stays as a backup of the profiles copied above.
+  ${If} $OldInstall != ""
+    Delete "$OldInstall\${APP_EXE}"
+    Delete "$OldInstall\${UNINST_EXE}"
+    Delete "$OldInstall\*.dll"
+    Delete "$OldInstall\LiteSynapse.deps.json"
+    Delete "$OldInstall\LiteSynapse.runtimeconfig.json"
+    Delete "$OldInstall\LiteSynapse.pdb"
+    Delete "$OldInstall\tools\remove-razer-filter-drivers.ps1"
+    RMDir "$OldInstall\tools"
+    RMDir "$OldInstall"
+    DeleteRegKey HKCU "${UNINST_KEY}"
+    ${If} ${FileExists} "$OldInstall\${APP_EXE}"
+      !insertmacro LOG "Old per-user install in $OldInstall: LiteSynapse.exe could not be removed (in use?)"
+    ${Else}
+      !insertmacro LOG "Moved from the per-user install in $OldInstall: program files removed, data folder kept as a backup"
+    ${EndIf}
+  ${EndIf}
+
+  ; Shortcuts (they replace the old copy's shortcuts of the same name).
   SetOutPath "$INSTDIR"
   CreateShortcut "$SMPROGRAMS\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0 SW_SHOWNORMAL "" "Profiles for the Razer Naga Left-Handed and BlackWidow Lite"
   CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0 SW_SHOWNORMAL "" "Profiles for the Razer Naga Left-Handed and BlackWidow Lite"
@@ -756,22 +728,22 @@ Section "${APP_NAME}" SecMain
     System::Call 'kernel32::SetEnvironmentVariable(t "DOTNET_DISABLE_GUI_ERRORS", p 0)'
   ${EndIf}
 
-  ; Apps & features entry.
+  ; Apps & features entry (for the machine: the program is in Program Files).
   ${GetSize} "$INSTDIR" "/S=0K /G=0" $0 $1 $2
   ${GetSize} "$INSTDIR\tools" "/S=0K /G=1" $3 $1 $2
   IntOp $0 $0 + $3
   ${GetTime} "" "L" $3 $4 $5 $6 $7 $8 $9
-  WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" "${APP_NAME}"
-  WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "${UNINST_KEY}" "Publisher" "${PUBLISHER}"
-  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE},0"
-  WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" '"$INSTDIR\${UNINST_EXE}"'
-  WriteRegStr HKCU "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\${UNINST_EXE}" /S'
-  WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${UNINST_KEY}" "InstallDate" "$5$4$3"
-  WriteRegDWORD HKCU "${UNINST_KEY}" "EstimatedSize" $0
-  WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1
-  WriteRegDWORD HKCU "${UNINST_KEY}" "NoRepair" 1
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayName" "${APP_NAME}"
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayVersion" "${VERSION}"
+  WriteRegStr HKLM "${UNINST_KEY}" "Publisher" "${PUBLISHER}"
+  WriteRegStr HKLM "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKLM "${UNINST_KEY}" "UninstallString" '"$INSTDIR\${UNINST_EXE}"'
+  WriteRegStr HKLM "${UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\${UNINST_EXE}" /S'
+  WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "${UNINST_KEY}" "InstallDate" "$5$4$3"
+  WriteRegDWORD HKLM "${UNINST_KEY}" "EstimatedSize" $0
+  WriteRegDWORD HKLM "${UNINST_KEY}" "NoModify" 1
+  WriteRegDWORD HKLM "${UNINST_KEY}" "NoRepair" 1
 
   ${If} $DotNetVersion != ""
     StrCpy $1 "$DotNetVersion"
@@ -786,6 +758,8 @@ SectionEnd
 
 Function un.onInit
   SetShellVarContext current
+  SetRegView 64
+  StrCpy $DataDir "$LOCALAPPDATA\${APP_NAME}\data"
 FunctionEnd
 
 Section "Uninstall"
@@ -797,8 +771,8 @@ Section "Uninstall"
   ${EndIf}
 
   StrCpy $8 0
-  ${If} ${FileExists} "$INSTDIR\data\*.*"
-    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also delete your profiles and settings?$\r$\n$\r$\n$INSTDIR\data$\r$\n$\r$\nChoose No to keep them for a later reinstall." /SD IDNO IDNO keepData
+  ${If} ${FileExists} "$DataDir\*.*"
+    MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "Also delete your profiles and settings?$\r$\n$\r$\n$DataDir$\r$\n$\r$\nChoose No to keep them for a later reinstall." /SD IDNO IDNO keepData
     StrCpy $8 1
   keepData:
   ${EndIf}
@@ -810,7 +784,7 @@ Section "Uninstall"
   ; (no runtime, file missing), the task is deleted by the name LiteSynapse recorded. Running it may create
   ; data\log.txt, so whether data existed before is noted for the clean-up below.
   StrCpy $7 0
-  ${IfNot} ${FileExists} "$INSTDIR\data\*.*"
+  ${IfNot} ${FileExists} "$DataDir\*.*"
     StrCpy $7 1
   ${EndIf}
   System::Call 'kernel32::SetEnvironmentVariable(t "DOTNET_DISABLE_GUI_ERRORS", t "1")'
@@ -830,7 +804,7 @@ Section "Uninstall"
   DeleteRegKey HKCU "${APP_REG_KEY}"
   ${If} $7 = 1
     ; There was no data before: anything there now is the log LiteSynapse just wrote.
-    RMDir /r "$INSTDIR\data"
+    RMDir /r "$DataDir"
   ${EndIf}
 
   !insertmacro LS_UNINSTALL_FILES
@@ -850,6 +824,8 @@ Section "Uninstall"
       DeleteRegValue HKCU "${APPROVED_KEY}" "${RUN_VALUE}"
     ${EndIf}
   ${EndIf}
+  DeleteRegKey HKLM "${UNINST_KEY}"
+  ; And an older per-user install's entry, if one is still there.
   DeleteRegKey HKCU "${UNINST_KEY}"
 
   ; The browser cache an older LiteSynapse left behind, when its window still used WebView2. Nothing writes
@@ -861,17 +837,17 @@ Section "Uninstall"
   RMDir "$LOCALAPPDATA\${APP_NAME}"
 
   ${If} $8 = 1
-    RMDir /r "$INSTDIR\data"
-    DetailPrint "Deleted $INSTDIR\data"
-  ${ElseIf} ${FileExists} "$INSTDIR\data\*.*"
-    DetailPrint "Kept your profiles and settings in $INSTDIR\data"
+    RMDir /r "$DataDir"
+    DetailPrint "Deleted $DataDir"
+  ${ElseIf} ${FileExists} "$DataDir\*.*"
+    DetailPrint "Kept your profiles and settings in $DataDir"
     ${GetTime} "" "L" $1 $2 $3 $4 $5 $6 $7
     ClearErrors
-    ${If} ${FileExists} "$INSTDIR\data\install.log"
-      FileOpen $0 "$INSTDIR\data\install.log" a
+    ${If} ${FileExists} "$DataDir\install.log"
+      FileOpen $0 "$DataDir\install.log" a
       FileSeek $0 0 END
     ${Else}
-      FileOpen $0 "$INSTDIR\data\install.log" w
+      FileOpen $0 "$DataDir\install.log" w
       FileWriteWord $0 0xFEFF
     ${EndIf}
     ${IfNot} ${Errors}
