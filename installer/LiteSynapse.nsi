@@ -1,7 +1,8 @@
 ; LiteSynapse installer (NSIS 3, Unicode, Modern UI 2).
 ;
-; Per-user install: no administrator rights, nothing outside the user's own folders and HKCU.
-; It never installs or removes drivers or services.
+; Per-user install: nothing outside the user's own folders, HKCU and LiteSynapse's own sign-in task.
+; It runs as administrator because LiteSynapse does (app.manifest): closing a running copy and registering or
+; removing its sign-in task need it. It never installs or removes drivers or services.
 ;
 ; Build everything (tests, publish, installer):  bash tools/build-release.sh
 ; Compile only, after a publish to build/publish:  makensis installer/LiteSynapse.nsi
@@ -13,7 +14,7 @@
 
 Unicode true
 ManifestDPIAware true
-RequestExecutionLevel user
+RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 CRCCheck on
 
@@ -28,6 +29,9 @@ CRCCheck on
 !define APPROVED_KEY "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
 ; The app holds this mutex while it runs (Program.cs).
 !define APP_MUTEX "LiteSynapse.single"
+; LiteSynapse's own HKCU key: StartWithWindows mirrors the sign-in task for the checkbox below, and StartupRequest
+; asks the app to set the task on its next start when it could not be done here (StartupTask.cs).
+!define APP_REG_KEY "Software\LiteSynapse"
 !define DOTNET_URL "https://dotnet.microsoft.com/download/dotnet/10.0"
 
 !define ROOT ".."
@@ -472,10 +476,15 @@ Function .onInit
     MessageBox MB_OK|MB_ICONSTOP "${APP_NAME} needs 64-bit Windows." /SD IDOK
     Abort
   ${EndIf}
-  ; "Start with Windows" starts checked when a LiteSynapse Run value already exists and Task Manager's
-  ; Startup apps has not turned it off.
-  ReadRegStr $0 HKCU "${RUN_KEY}" "${RUN_VALUE}"
-  ${If} $0 != ""
+  ; "Start with Windows" starts as the sign-in task is now (mirrored by the app), or, coming from a version that
+  ; used the Run key, checked when that value exists and Task Manager's Startup apps has not turned it off.
+  ReadRegStr $0 HKCU "${APP_REG_KEY}" "StartWithWindows"
+  ReadRegStr $1 HKCU "${RUN_KEY}" "${RUN_VALUE}"
+  ${If} $0 == "1"
+    StrCpy $StartupState ${BST_CHECKED}
+  ${ElseIf} $0 == "0"
+    StrCpy $StartupState ${BST_UNCHECKED}
+  ${ElseIf} $1 != ""
     Call StartupTurnedOff
     ${If} $0 = 1
       StrCpy $StartupState ${BST_UNCHECKED}
@@ -689,15 +698,12 @@ Section "${APP_NAME}" SecMain
   CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}" "" "$INSTDIR\${APP_EXE}" 0 SW_SHOWNORMAL "" "Profiles for the Razer Naga Left-Handed and BlackWidow Lite"
   !insertmacro LOG "Shortcuts: Start Menu and Desktop"
 
-  ; Start with Windows.
+  ; Start with Windows: a Task Scheduler task that starts LiteSynapse at sign-in as administrator - the Run key
+  ; cannot start a program that asks for administrator rights. LiteSynapse registers it itself, so the task is
+  ; defined in one place; when it cannot run yet (no .NET runtime), it does it on its next start instead.
   ReadRegStr $1 HKCU "${RUN_KEY}" "${RUN_VALUE}"
-  ${If} $StartupState == ${BST_CHECKED}
-    WriteRegStr HKCU "${RUN_KEY}" "${RUN_VALUE}" '"$INSTDIR\${APP_EXE}" --tray'
-    ; Turned off in Task Manager's Startup apps before: the ticked box turns it back on.
-    DeleteRegValue HKCU "${APPROVED_KEY}" "${RUN_VALUE}"
-    !insertmacro LOG "Start with Windows: on"
-  ${ElseIf} $1 != ""
-    ; Only remove the value when it starts a LiteSynapse.exe (this or an older copy).
+  ${If} $1 != ""
+    ; An older version's Run value, only when it starts a LiteSynapse.exe.
     Push $1
     Push "\${APP_EXE}"
     Call StrContains
@@ -705,12 +711,25 @@ Section "${APP_NAME}" SecMain
     ${If} $0 = 1
       DeleteRegValue HKCU "${RUN_KEY}" "${RUN_VALUE}"
       DeleteRegValue HKCU "${APPROVED_KEY}" "${RUN_VALUE}"
-      !insertmacro LOG "Start with Windows: off (removed $1)"
-    ${Else}
-      !insertmacro LOG "Start with Windows: off (left the unrelated Run value $1)"
+      !insertmacro LOG "Start with Windows: removed the old Run value $1"
     ${EndIf}
+  ${EndIf}
+  ${If} $StartupState == ${BST_CHECKED}
+    StrCpy $2 "--register-startup"
+    StrCpy $3 "1"
   ${Else}
-    !insertmacro LOG "Start with Windows: off"
+    StrCpy $2 "--unregister-startup"
+    StrCpy $3 "0"
+  ${EndIf}
+  ClearErrors
+  ExecWait '"$INSTDIR\${APP_EXE}" $2' $0
+  ${If} ${Errors}
+  ${OrIf} $0 != 0
+    WriteRegStr HKCU "${APP_REG_KEY}" "StartupRequest" "$3"
+    !insertmacro LOG "Start with Windows: left for LiteSynapse's next start ($2 returned $0)"
+  ${Else}
+    DeleteRegValue HKCU "${APP_REG_KEY}" "StartupRequest"
+    !insertmacro LOG "Start with Windows: $2"
   ${EndIf}
 
   ; Apps & features entry.
@@ -762,6 +781,10 @@ Section "Uninstall"
 
   Call un.CloseApp
   Pop $9
+
+  ; The sign-in task runs as administrator: LiteSynapse removes it (before its files go).
+  ExecWait '"$INSTDIR\${APP_EXE}" --unregister-startup'
+  DeleteRegKey HKCU "${APP_REG_KEY}"
 
   !insertmacro LS_UNINSTALL_FILES
   Delete "$INSTDIR\${UNINST_EXE}"

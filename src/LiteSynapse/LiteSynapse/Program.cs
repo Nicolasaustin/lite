@@ -168,6 +168,14 @@ internal static class Program
 			Status();
 			return 0;
 		}
+		// The installer's and uninstaller's "Start with Windows": the sign-in task runs as administrator, so only an
+		// elevated process can register or remove it - this one is (app.manifest), and it does nothing else.
+		if (args.Length >= 1 && (args[0] == "--register-startup" || args[0] == "--unregister-startup"))
+		{
+			string error = Service.SetStartup(args[0] == "--register-startup");
+			Cfg.FlushLog();
+			return (error == null) ? 0 : 1;
+		}
 		bool first;
 		Mutex single;
 		try
@@ -189,13 +197,8 @@ internal static class Program
 				// doing nothing. The autostart copy (--tray) just leaves.
 				if (!args.Contains("--tray"))
 				{
+					// Every copy runs as administrator now (app.manifest), so the running one simply shows its window.
 					TrayHost.ShowRunningInstance();
-					// An elevated second start cannot take over: the running copy keeps the devices and the hook.
-					// (The reverse, a normal start while an elevated one runs, only shows that window.)
-					if (Native.IsProcessElevated((uint)Environment.ProcessId) == true)
-					{
-						System.Windows.Forms.MessageBox.Show("LiteSynapse is already running. To run it as administrator, exit it first (right-click the tray icon > Exit), then start it again with Run as administrator.", "LiteSynapse", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
-					}
 				}
 				return 0;
 			}

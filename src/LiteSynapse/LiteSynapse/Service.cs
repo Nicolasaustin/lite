@@ -228,7 +228,8 @@ internal sealed class Service
 
 	public Service()
 	{
-		RepointStartup();
+		// Off the UI thread: it may register or re-point the sign-in task through Task Scheduler.
+		Task.Run(SyncStartup);
 		settings = Cfg.Load<AppSettings>(SettingsFile);
 		LiveWrite = settings.LiveWrite;
 		Reload();
@@ -243,10 +244,7 @@ internal sealed class Service
 				slotLighting[slot] = null;
 			}
 		};
-		if (selfElevated)
-		{
-			Cfg.Log("running as administrator");
-		}
+		Cfg.Log("LiteSynapse " + AppInfo.Text + " started" + (selfElevated ? ", running as administrator" : ""));
 	}
 
 	private static bool SafeIsElevated()
@@ -1610,43 +1608,103 @@ internal sealed class Service
 
 	// ---- Start with Windows ----------------------------------------------------------------------------------
 
-	private static void RepointStartup()
+	// The sign-in task's state as last read or set: -1 not read yet, 0 off, 1 on. Read once, off the UI thread
+	// (SyncStartup), so the Settings page and the tray menu never wait on Task Scheduler.
+	private static int startupState = -1;
+
+	// Brings "Start with Windows" over to the sign-in task (StartupTask): the installer's choice when it left one,
+	// an older LiteSynapse's Run value (which cannot start a program that asks for administrator rights), and a
+	// task left pointing at a copy of LiteSynapse that has since moved.
+	private static void SyncStartup()
 	{
 		try
 		{
-			using RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-			string v = k?.GetValue("LiteSynapse") as string;
 			string me = Environment.ProcessPath;
-			if (v != null && me != null && v.Contains("scratch-workspaces", StringComparison.OrdinalIgnoreCase) && !me.Contains("scratch-workspaces", StringComparison.OrdinalIgnoreCase))
+			bool? want = null;
+			using (RegistryKey req = Registry.CurrentUser.OpenSubKey(StartupTask.RequestKey, writable: true))
 			{
-				k.SetValue("LiteSynapse", "\"" + me + "\" --tray");
-				Cfg.Log("startup entry re-pointed to " + me);
+				if (req?.GetValue(StartupTask.RequestValue) is string r)
+				{
+					want = r == "1";
+					req.DeleteValue(StartupTask.RequestValue, throwOnMissingValue: false);
+					Cfg.Log("start with Windows: the installer asked for " + (want.Value ? "on" : "off"));
+				}
+			}
+			using (RegistryKey run = Registry.CurrentUser.OpenSubKey(RunKey, writable: true))
+			{
+				if (run?.GetValue("LiteSynapse") is string old && old.IndexOf("LiteSynapse", StringComparison.OrdinalIgnoreCase) >= 0)
+				{
+					// On unless Task Manager had turned it off.
+					want ??= StartupApproved.State("LiteSynapse") == "enabled";
+					run.DeleteValue("LiteSynapse", throwOnMissingValue: false);
+					// Task Manager's entry for a Run value that is gone: removed with it.
+					StartupApproved.Enable("LiteSynapse");
+					Cfg.Log("start with Windows: moved from the Run key to the sign-in task (" + (want.Value ? "on" : "off") + ")");
+				}
+			}
+			if (want.HasValue)
+			{
+				SetStartup(want.Value);
+				return;
+			}
+			bool? state = StartupTask.State(me, out bool otherPath);
+			if (otherPath)
+			{
+				// Installed somewhere else since: the task follows this copy.
+				SetStartup(true);
+				Cfg.Log("start with Windows: sign-in task re-pointed to " + me);
+				return;
+			}
+			if (state.HasValue)
+			{
+				Volatile.Write(ref startupState, state.Value ? 1 : 0);
+				Mirror(state.Value);
 			}
 		}
-		catch
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
 		{
+			Cfg.Log("start with Windows: " + ex.Message);
 		}
 	}
 
-	// On when the Run value exists and Task Manager's Startup apps has not turned it off.
 	public static bool IsStartup()
 	{
-		return StartupApproved.State("LiteSynapse") == "enabled";
+		int s = Volatile.Read(ref startupState);
+		if (s < 0)
+		{
+			bool? state = StartupTask.State(Environment.ProcessPath, out _);
+			s = (state == true) ? 1 : 0;
+			if (state.HasValue)
+			{
+				Volatile.Write(ref startupState, s);
+			}
+		}
+		return s == 1;
 	}
 
-	public static void SetStartup(bool on)
+	// Registers or removes the sign-in task. Returns null when it worked, else why not (also logged).
+	public static string SetStartup(bool on)
 	{
-		if (on)
+		string error = StartupTask.Set(on, Environment.ProcessPath);
+		if (error == null)
 		{
-			using RegistryKey k = Registry.CurrentUser.CreateSubKey(RunKey);
-			k.SetValue("LiteSynapse", "\"" + Environment.ProcessPath + "\" --tray");
-			// Turned off in Task Manager before: Windows would keep skipping it.
-			StartupApproved.Enable("LiteSynapse");
+			Volatile.Write(ref startupState, on ? 1 : 0);
+			Mirror(on);
+			Cfg.Log("start with Windows: " + (on ? "on (sign-in task, as administrator)" : "off"));
 		}
-		else
+		return error;
+	}
+
+	// For the installer's "Start with Windows" checkbox, which cannot read an administrator's task itself.
+	private static void Mirror(bool on)
+	{
+		try
 		{
-			using RegistryKey k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-			k?.DeleteValue("LiteSynapse", throwOnMissingValue: false);
+			using RegistryKey k = Registry.CurrentUser.CreateSubKey(StartupTask.RequestKey);
+			k.SetValue(StartupTask.MirrorValue, on ? "1" : "0");
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
+		{
 		}
 	}
 }

@@ -808,7 +808,7 @@ internal class MainForm : Form
 		};
 		MainForm mainForm = this;
 		this.app = app;
-		base.Text = "LiteSynapse";
+		base.Text = "LiteSynapse " + AppInfo.Text;
 		base.Icon = AppIcon.Icon();
 		// Remembered size, scaled for this display's DPI and clamped to the work area: at 125% on a 1366x768
 		// laptop the old fixed 1180x780 opened taller than the screen every time.
@@ -1689,12 +1689,17 @@ internal class MainForm : Form
 		((Control)card).Dock = (DockStyle)1;
 		((Control)card).Height = 300;
 		Card card2 = card;
+		// Which build this is, beside the card's title.
+		Label ver = Lbl("LiteSynapse " + AppInfo.Text, Theme.Dim, 9.5f);
+		((Control)ver).BackColor = Theme.Card;
+		((Control)ver).Location = new Point(40 + (int)Tx.Measure("GENERAL", Theme.P(11f, (FontStyle)0)).Width + 18, 37);
+		((Control)card2).Controls.Add((Control)(object)ver);
 		int y = 84;
 		// Competitive safe first: it decides whether macros and Snap Tap run at all, and as the last row it was
 		// the one a short window cut off.
 		Row("Competitive safe", (Control)(object)tgSafe, CompetitiveSafeNote);
 		Row("Switch profiles automatically when a game starts", (Control)(object)tgAuto);
-		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup);
+		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup, "LiteSynapse runs as administrator, so games that run as administrator take its macros and Snap Tap. At sign-in it starts from a Task Scheduler task with those rights, so there is no UAC prompt then.");
 		Row("Run selected profiles on the mouse itself", (Control)(object)tgLive, "Writes the profile into the mouse's memory (slots 1-2) and switches to it, so it keeps working if LiteSynapse is closed.");
 		Row("Close this window when a game starts", (Control)(object)tgCloseOnGame, "A window on top of a game costs frames. With this on, the window gets out of the way by itself when a linked game comes to the front.");
 		tgCloseOnGame.CheckedChanged += () =>
@@ -1724,7 +1729,21 @@ internal class MainForm : Form
 		{
 			if (!loading)
 			{
-				Service.SetStartup(tgStartup.Checked);
+				string error = Service.SetStartup(tgStartup.Checked);
+				if (error != null)
+				{
+					// Show what is really set, and why the switch did not take.
+					loading = true;
+					try
+					{
+						tgStartup.Checked = Service.IsStartup();
+					}
+					finally
+					{
+						loading = false;
+					}
+					MessageBox.Show((IWin32Window)(object)this, "Windows would not change the sign-in task: " + error, "LiteSynapse");
+				}
 			}
 		};
 		tgLive.CheckedChanged += () =>

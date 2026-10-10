@@ -166,6 +166,7 @@ internal sealed class TrayHost
 	[DllImport("user32", SetLastError = true)]
 	private static extern bool ChangeWindowMessageFilterEx(nint hwnd, uint msg, uint action, nint changeInfo);
 
+
 	[DllImport("user32")]
 	private static extern bool AllowSetForegroundWindow(int processId);
 
@@ -226,6 +227,8 @@ internal sealed class TrayHost
 		// Run as administrator, Windows blocks these from Explorer and from a normal second start unless allowed.
 		ChangeWindowMessageFilterEx(hwnd, taskbarCreated, MSGFLT_ALLOW, IntPtr.Zero);
 		ChangeWindowMessageFilterEx(hwnd, showWindowMsg, MSGFLT_ALLOW, IntPtr.Zero);
+		// And the icon's own clicks, which Explorer (not elevated) sends to this window.
+		ChangeWindowMessageFilterEx(hwnd, CALLBACK, MSGFLT_ALLOW, IntPtr.Zero);
 		nint[] small = new nint[1];
 		ExtractIconEx(Environment.ProcessPath, 0, null, small, 1u);
 		icon = small[0];
@@ -444,7 +447,7 @@ internal sealed class TrayHost
 			hWnd = hwnd,
 			uID = 1u,
 			uFlags = flags,
-			uCallbackMessage = 32769u,
+			uCallbackMessage = CALLBACK,
 			hIcon = icon,
 			szTip = svc.TrayText,
 			szInfo = "",
