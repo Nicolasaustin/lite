@@ -236,6 +236,14 @@ scenario('main', async browser => {
   await shot(p, '32c-razer-services-done', 400);
   await p.keyboard.press('Escape');
   await shot(p, '32d-settings-performance-after', 400);
+  await tab(p, 'System scan');
+  await shot(p, '32e-system-scan', 500);
+  await p.click('input[data-fk="scan:UpdaterSvcHost"]');
+  await p.click('input[data-fk="scan:DiagTrack"]');
+  await p.click('input[data-fk="scan:delivery"]');
+  await p.click('button[data-fk="scan:off"]');
+  await shot(p, '32f-system-scan-confirm', 400);
+  await p.keyboard.press('Escape');
   await tab(p, 'Appearance');
   await p.click('.accent-opt:has-text("Violet")');
   await shot(p, '33-settings-appearance-violet');

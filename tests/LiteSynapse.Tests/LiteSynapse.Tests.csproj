@@ -40,6 +40,7 @@
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\RazerLeftovers.cs" Link="App\RazerLeftovers.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\StartupApproved.cs" Link="App\StartupApproved.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\DeviceTuning.cs" Link="App\DeviceTuning.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\SystemScan.cs" Link="App\SystemScan.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\LiveProfile.cs" Link="App\LiveProfile.cs" />
   </ItemGroup>
   <ItemGroup>

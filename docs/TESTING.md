@@ -1,3 +1,92 @@
+# LiteSynapse 1.1.8 test build 9: System scan
+
+New tab: **Settings → System scan**. It looks at everything that starts with Windows, the background services
+worth turning off, and what is using your connection — and lets you switch things off from one list.
+
+## First, what it is not
+
+**LiteSynapse is not an antivirus and never calls a file a virus.** A homemade "this looks like malware"
+guess is worse than useless: it is wrong often enough to make you switch off something you needed, and it
+makes you feel covered when you are not.
+
+So the scan reports **facts** and hands the verdict to the real thing:
+
+- where a program lives
+- whether it carries a digital signature, and whose name is on it
+- whether it starts itself
+
+Three of those facts make something **worth a look**, shown with an orange tag:
+
+| Tag | What it means |
+|---|---|
+| Starts from a temporary or downloads folder | Normal programs do not do this. Very common for things you did not install on purpose. |
+| Carries no digital signature | Windows cannot tell you who made it. |
+| Its program file is gone | A leftover entry that does nothing. |
+
+Every flagged item gets a **Check** button that runs a real **Microsoft Defender** scan of that exact file and
+tells you what Defender said. Defender decides; LiteSynapse does not.
+
+The card also shows whether Defender's real-time protection is on.
+
+## Network, upload and download
+
+- **Windows Update uploads.** Windows ships with Delivery Optimization sharing updates with other PCs — on
+  your network, and in some settings **with strangers on the internet**. It uses your upload, which is what
+  makes a game feel laggy while Windows is busy. The scan shows the mode in plain words and can set it to
+  "download from Microsoft only, upload nothing".
+- **What is on the network right now.** Anything holding a connection gets a **network** tag, so you can see
+  which of your start-up programs is actually talking.
+- **Known background uploaders** are listed by name: Google and Adobe updaters, NVIDIA telemetry and
+  container, Steam, Epic, Dropbox, OneDrive, Google Drive, Creative Cloud, Discord, Razer.
+
+## What it can turn off
+
+Only two kinds of things, and nothing else is ever offered:
+
+- **Start-up entries for your account.** Turned off exactly the way Task Manager's Startup apps does. No
+  administrator prompt, and you can turn them back on in Task Manager.
+- **Services from a fixed allowlist**: telemetry (DiagTrack, dmwappushservice), SysMain, Windows Search, the
+  three Xbox services and the Print Spooler. Each row says what it costs you *and what you give up* — the
+  Xbox ones break Game Pass, the Spooler breaks printing, and the list says so before you tick it. They are
+  set to Disabled, not removed; services.msc puts them back.
+
+Anything not on that allowlist is not shown a button, so the scan cannot talk you into breaking Windows.
+There is a test that asserts the allowlist never contains Defender, the firewall, networking, audio, event
+log, Windows Update or the HID stack.
+
+## Install
+
+1. Run `LiteSynapse-Setup-1.1.8.exe`. It keeps your profiles, games and macros.
+   - SmartScreen: **More info → Run anyway**.
+2. Quit Razer Synapse fully.
+3. Click **Finish** with "Launch" ticked.
+
+## Checklist
+
+| # | Try this | Expected |
+|---|---|---|
+| 1 | **Settings → System scan → Scan now** | A second or so, then the lists fill in |
+| 2 | Read "Starts with Windows" | Matches Task Manager's Startup apps, with publisher and path added |
+| 3 | Anything tagged **Worth a look** | Read why. Press **Check** to have Defender scan that file |
+| 4 | Read "Windows Update uploads" | Says whether Windows is uploading updates to other PCs |
+| 5 | Tick a start-up entry you don't want, then **Turn off selected** | Lists what you lose, then turns it off with no UAC prompt |
+| 6 | Open Task Manager → Startup apps | That entry shows as Disabled |
+| 7 | Tick a service (e.g. telemetry) and the Windows Update uploads box | One UAC prompt, then both are off |
+| 8 | **Scan again** | The changes show up |
+| 9 | Everything from build 8 | Unchanged |
+
+**Don't test Snap Tap or macros in Valve matchmaking or FACEIT.**
+
+## Undoing anything
+
+- Start-up entries: Task Manager → Startup apps → Enable.
+- Services: services.msc → the service → Startup type → Automatic or Manual → Start.
+- Windows Update uploads: Settings → Windows Update → Advanced options → Delivery Optimization.
+
+**Settings → Open config folder** opens `%LOCALAPPDATA%\Programs\LiteSynapse\data`. Send me `log.txt`.
+
+---
+
 # LiteSynapse 1.1.7 test build 8: Razer off for good, and the mouse at its fastest
 
 Settings → Performance now has two cards: **Device latency** (new) and **Razer leftovers** (wider).

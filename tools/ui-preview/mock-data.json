@@ -4697,6 +4697,80 @@
       ],
       "firewallRules": 2
     },
+    "scan": {
+      "checked": true,
+      "defender": "on",
+      "items": [
+        {
+          "kind": "startup",
+          "id": "UpdaterSvcHost",
+          "name": "UpdaterSvcHost",
+          "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\updtsvc.exe",
+          "publisher": "",
+          "flag": "location",
+          "costs": "Starts with Windows.",
+          "lose": "It no longer starts by itself. You can still open it yourself.",
+          "state": "on",
+          "canDisable": true,
+          "network": true
+        },
+        {
+          "kind": "startup",
+          "id": "OldToolbar",
+          "name": "OldToolbar",
+          "path": "C:\\Program Files\\OldTool\\tool.exe",
+          "publisher": "",
+          "flag": "unsigned",
+          "costs": "Starts with Windows.",
+          "lose": "It no longer starts by itself. You can still open it yourself.",
+          "state": "on",
+          "canDisable": true,
+          "network": false
+        },
+        {
+          "kind": "startup",
+          "id": "Discord",
+          "name": "Discord",
+          "path": "C:\\Users\\admin\\AppData\\Local\\Discord\\Update.exe",
+          "publisher": "Discord Inc.",
+          "flag": "",
+          "costs": "Starts with Windows.",
+          "lose": "It no longer starts by itself. You can still open it yourself.",
+          "state": "on",
+          "canDisable": true,
+          "network": true
+        },
+        {
+          "kind": "service",
+          "id": "DiagTrack",
+          "name": "Connected User Experiences and Telemetry",
+          "path": "C:\\Windows\\System32\\svchost.exe",
+          "publisher": "",
+          "flag": "",
+          "costs": "Collects usage data and uploads it to Microsoft in the background, which uses your connection.",
+          "lose": "Nothing you use. Some feedback and diagnostics features stop reporting.",
+          "state": "auto",
+          "canDisable": true,
+          "network": true
+        },
+        {
+          "kind": "service",
+          "id": "SysMain",
+          "name": "SysMain (Superfetch)",
+          "path": "C:\\Windows\\System32\\svchost.exe",
+          "publisher": "",
+          "flag": "",
+          "costs": "Reads programs into memory ahead of time; on an SSD it mostly means background disk work.",
+          "lose": "Nothing noticeable on an SSD. On a hard disk, programs may open a little slower.",
+          "state": "auto",
+          "canDisable": true,
+          "network": false
+        }
+      ],
+      "deliveryMode": 3,
+      "uploadsUpdates": true,
+      "deliveryText": "Shares updates with PCs on the internet: it uploads to strangers, which eats your upload."
+    },
     "tuning": {
       "checked": true,
       "devices": [

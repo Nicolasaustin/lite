@@ -217,7 +217,7 @@ public class BridgeProtocolTests
 			"version", "mouse", "keyboard", "auto", "inGame", "liveWrite", "startup", "liveStatus", "activeMouse",
 			"activeKeyboard", "defaultMouse", "defaultKeyboard", "mouseProfiles", "keyboardProfiles", "macros", "games",
 			"calibration", "buttonIds", "onboard", "liveSlots", "accent", "competitiveSafe", "gameKeyboardDefault",
-			"lastGameExe", "elevatedGame", "razer", "tuning",
+			"lastGameExe", "elevatedGame", "razer", "tuning", "scan",
 			// Addition (setCloseOnGame).
 			"closeOnGame"
 		};
@@ -225,6 +225,9 @@ public class BridgeProtocolTests
 		Assert.Equal(new[] { "connected", "name" }, Keys(s["mouse"].AsObject()));
 		Assert.Equal(new[] { "autostart", "checked", "filterDrivers", "firewallRules", "gmsService", "runOnce", "rzCommon", "services", "synapseInstalled", "synapseRunning", "tasks", "upgradeTask" }, Keys(s["razer"].AsObject()));
 		Assert.Equal(new[] { "acceleration", "backgroundCap", "checked", "devices", "pointerSpeed", "usbSuspend" }, Keys(s["tuning"].AsObject()));
+		Assert.Equal(new[] { "checked", "defender", "deliveryMode", "deliveryText", "items", "uploadsUpdates" }, Keys(s["scan"].AsObject()));
+		Assert.False((bool)s["scan"]["checked"]);
+		Assert.Equal("unknown", (string)s["scan"]["defender"]);
 		Assert.Equal(10, (int)s["tuning"]["pointerSpeed"]);
 		Assert.Equal("unknown", (string)s["tuning"]["usbSuspend"]);
 		Assert.Equal("absent", (string)s["razer"]["upgradeTask"]);

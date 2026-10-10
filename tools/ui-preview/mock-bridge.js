@@ -349,6 +349,28 @@
       if (a.action === 'driverGuide') return delay(400).then(() => ({ message: 'Opened the driver removal guide in an administrator PowerShell window (dry run first).' }));
       return fail(`Unknown action "${a.action}".`);
     },
+    systemScan: () => delay(1200).then(() => { st.scan = Object.assign({}, st.scan, { checked: true }); return st; }),
+    scanTurnOff: a => {
+      const ids = a.ids || [];
+      if (!ids.length && !a.delivery) fail('Nothing was selected.');
+      return delay(900).then(() => {
+        const names = [];
+        st.scan = Object.assign({}, st.scan, {
+          items: (st.scan.items || []).map(i => {
+            if (!ids.includes(i.id)) return i;
+            names.push(i.name);
+            return Object.assign({}, i, { state: i.kind === 'service' ? 'disabled' : 'off', canDisable: false });
+          }),
+          uploadsUpdates: a.delivery ? false : st.scan.uploadsUpdates,
+          deliveryMode: a.delivery ? 0 : st.scan.deliveryMode,
+          deliveryText: a.delivery ? 'Downloads from Microsoft only. Nothing is uploaded.' : st.scan.deliveryText
+        });
+        if (a.delivery) names.push('Windows Update uploading to other PCs');
+        pushState();
+        return { message: 'Turned off: ' + names.join(', ') + '. Sign out and back in for the start-up changes to take effect.' };
+      });
+    },
+    defenderScan: a => delay(1500).then(() => ({ message: `Microsoft Defender scanned "${a.id}" and found nothing.` })),
     tuneDevices: () => delay(900).then(() => {
       const t = st.tuning || {};
       st.tuning = Object.assign({}, t, { backgroundCap: false, acceleration: false, pointerSpeed: 10, usbSuspend: 'off', devices: (t.devices || []).map(d => Object.assign({}, d, { powerSaving: false })) });
@@ -366,7 +388,7 @@
     setCloseOnGame: a => { st.closeOnGame = bool(a.on, 'on'); return st; }
   };
   // Commands whose reply is followed by a state push (contract: "after every mutating command").
-  const MUTATING = /^(select|set|add|rename|delete|reset|remove|save|reload|razerCheck)/;
+  const MUTATING = /^(select|set|add|rename|delete|reset|remove|save|reload|razerCheck|systemScan)/;
 
   function handle(msg) {
     if (typeof msg === 'string') { try { msg = JSON.parse(msg); } catch (e) { return; } }

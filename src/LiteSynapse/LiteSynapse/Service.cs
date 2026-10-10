@@ -197,6 +197,9 @@ internal sealed class Service
 	// Windows power saving that would make the mouse answer late (checked with the Razer leftovers).
 	public DeviceTuningState Tuning { get; private set; } = new DeviceTuningState();
 
+	// What starts with Windows and what uses the network (only when the user runs the scan).
+	public ScanResult Scan { get; private set; } = new ScanResult();
+
 	// The keyboard hook is on (a game or a profile picked by hand): nothing may pause the process now.
 	public bool EngineBusy => engineSet && !engineInputs.IsOff;
 
@@ -770,6 +773,34 @@ internal sealed class Service
 	public Task<string> RazerCleanupAsync(string action)
 	{
 		return Task.Run(() => RazerCleanup(action));
+	}
+
+	// Looks at the start-up programs, the optional services and the network (a second or so). On demand only.
+	public Task RunScanAsync()
+	{
+		return Task.Run(() =>
+		{
+			Scan = SystemScanner.Check();
+			Notify();
+		});
+	}
+
+	// Turns the chosen start-up entries and services off, then scans again.
+	public Task<string> ScanApplyAsync(IReadOnlyList<string> ids, bool delivery)
+	{
+		return Task.Run(() =>
+		{
+			string msg = SystemScanner.Apply(ids, delivery);
+			Scan = SystemScanner.Check();
+			Notify();
+			return msg;
+		});
+	}
+
+	// Asks Microsoft Defender to scan one program's file.
+	public Task<string> DefenderScanAsync(string path)
+	{
+		return Task.Run(() => SystemScanner.DefenderScan(path));
 	}
 
 	// Turns Windows' USB power saving off for the Naga and the BlackWidow Lite (UAC prompt), then checks again.

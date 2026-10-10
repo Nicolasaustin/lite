@@ -99,6 +99,9 @@ internal sealed class Bridge
 			["razerCheck"] = RazerCheck,
 			["razerCleanup"] = RazerCleanup,
 			["tuneDevices"] = TuneDevices,
+			["systemScan"] = SystemScanCmd,
+			["scanTurnOff"] = ScanTurnOff,
+			["defenderScan"] = DefenderScan,
 			["runSelfTest"] = RunSelfTest,
 			["openConfigFolder"] = Now(_ =>
 			{
@@ -221,6 +224,7 @@ internal sealed class Bridge
 			ElevatedGame = svc.ElevatedGame,
 			Razer = Razer(svc.Razer),
 			Tuning = Tuning(svc.Tuning),
+			Scan = Scan(svc.Scan),
 			CloseOnGame = prefs.CloseOnGame
 		};
 		WebState.FillStore(s, svc.Store, svc.Games);
@@ -254,6 +258,36 @@ internal sealed class Bridge
 			Cfg.Log("window: onboard slots: " + ex.Message);
 			return new Dictionary<string, string>();
 		}
+	}
+
+	private static ScanDto Scan(ScanResult r)
+	{
+		if (r == null)
+		{
+			return new ScanDto();
+		}
+		return new ScanDto
+		{
+			Checked = r.Checked,
+			Defender = string.IsNullOrEmpty(r.Defender) ? "unknown" : r.Defender,
+			DeliveryMode = r.DeliveryMode,
+			UploadsUpdates = r.UploadsUpdates,
+			DeliveryText = r.DeliveryText ?? "",
+			Items = (r.Items ?? new List<ScanItem>()).Where((ScanItem i) => i != null).Select((ScanItem i) => new ScanItemDto
+			{
+				Kind = i.Kind ?? "startup",
+				Id = i.Id ?? "",
+				Name = i.Name ?? "",
+				Path = i.Path ?? "",
+				Publisher = i.Publisher ?? "",
+				Flag = i.Flag ?? "",
+				Costs = i.Costs ?? "",
+				Lose = i.Lose ?? "",
+				State = i.State ?? "on",
+				CanDisable = i.CanDisable,
+				Network = i.Network
+			}).ToList()
+		};
 	}
 
 	private static TuningDto Tuning(DeviceTuningState t)
@@ -962,6 +996,39 @@ internal sealed class Bridge
 			throw new BridgeException($"Unknown clean-up step \"{action}\".");
 		}
 		string message = await svc.RazerCleanupAsync(action);
+		return new MessageResult(message ?? "");
+	}
+
+	// Looks at what starts with Windows, the optional services and what uses the network. Result: State.
+	private async Task<object> SystemScanCmd(WebArgs a)
+	{
+		await svc.RunScanAsync();
+		return State();
+	}
+
+	// Turns the chosen start-up entries and services off. Result: { message }.
+	private async Task<object> ScanTurnOff(WebArgs a)
+	{
+		List<string> ids = a.Has("ids") ? a.Strings("ids") : new List<string>();
+		bool delivery = a.Has("delivery") && a.Bool("delivery");
+		if (ids.Count == 0 && !delivery)
+		{
+			throw new BridgeException("Nothing was selected.");
+		}
+		string message = await svc.ScanApplyAsync(ids, delivery);
+		return new MessageResult(message ?? "");
+	}
+
+	// Asks Microsoft Defender to scan one program's file. Result: { message }.
+	private async Task<object> DefenderScan(WebArgs a)
+	{
+		string id = a.Str("id");
+		ScanItem item = (svc.Scan?.Items ?? new List<ScanItem>()).FirstOrDefault((ScanItem i) => i != null && i.Id == id);
+		if (item == null)
+		{
+			throw new BridgeException("Run the scan again and then pick the item.");
+		}
+		string message = await svc.DefenderScanAsync(item.Path);
 		return new MessageResult(message ?? "");
 	}
 

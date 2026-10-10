@@ -64,6 +64,8 @@ internal sealed class StateDto
 
 	public TuningDto Tuning { get; set; } = new TuningDto();
 
+	public ScanDto Scan { get; set; } = new ScanDto();
+
 	// Not in the v1.2 contract yet: the "close this window when a game starts" setting (setCloseOnGame).
 	public bool CloseOnGame { get; set; } = true;
 }
@@ -180,6 +182,50 @@ internal sealed class RazerDto
 
 	// Windows Firewall rules that let a Razer program reach the network.
 	public int FirewallRules { get; set; }
+}
+
+// What the system scan found: start-up programs, optional services and what uses the network.
+internal sealed class ScanDto
+{
+	public bool Checked { get; set; }
+
+	// on | off | unknown
+	public string Defender { get; set; } = "unknown";
+
+	public List<ScanItemDto> Items { get; set; } = new List<ScanItemDto>();
+
+	public int DeliveryMode { get; set; } = 1;
+
+	public bool UploadsUpdates { get; set; }
+
+	public string DeliveryText { get; set; } = "";
+}
+
+internal sealed class ScanItemDto
+{
+	// startup | service
+	public string Kind { get; set; } = "startup";
+
+	public string Id { get; set; } = "";
+
+	public string Name { get; set; } = "";
+
+	public string Path { get; set; } = "";
+
+	public string Publisher { get; set; } = "";
+
+	// "" | unsigned | location | missing. Never a claim that something is malware.
+	public string Flag { get; set; } = "";
+
+	public string Costs { get; set; } = "";
+
+	public string Lose { get; set; } = "";
+
+	public string State { get; set; } = "on";
+
+	public bool CanDisable { get; set; }
+
+	public bool Network { get; set; }
 }
 
 internal sealed class RazerTaskDto

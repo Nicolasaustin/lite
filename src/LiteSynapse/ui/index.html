@@ -751,6 +751,7 @@ details.adv summary:hover { color: var(--text); }
 .leftover .ico { color: var(--muted); }
 .leftover .t { font-size: 13px; font-weight: 600; }
 .leftover .d { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.ck { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
 .plain-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
 .plain-list b { font-weight: 600; color: var(--text); }
 .modal .plain-list { margin: 0; font-size: 13px; }
@@ -1194,6 +1195,8 @@ function normalize(s) {
   d.razer.firewallRules = d.razer.firewallRules || 0;
   d.tuning = Object.assign({ checked: false, devices: [], usbSuspend: 'unknown', backgroundCap: false, acceleration: false, pointerSpeed: 10 }, s.tuning || {});
   d.tuning.devices = (d.tuning.devices || []).filter(Boolean);
+  d.scan = Object.assign({ checked: false, defender: 'unknown', items: [], deliveryMode: 1, uploadsUpdates: false, deliveryText: '' }, s.scan || {});
+  d.scan.items = (d.scan.items || []).filter(Boolean);
   return d;
 }
 
@@ -1323,7 +1326,7 @@ const PAGE_IDS = ['overview', 'mouse', 'keyboard', 'macros', 'games', 'settings'
 const TABS = {
   mouse: [['buttons', 'Customize'], ['performance', 'Performance'], ['lighting', 'Lighting'], ['onboard', 'Onboard memory']],
   keyboard: [['macrokeys', 'Macro keys'], ['snaptap', 'Snap Tap'], ['lighting', 'Lighting']],
-  settings: [['general', 'General'], ['gaming', 'Gaming'], ['performance', 'Performance'], ['appearance', 'Appearance'], ['maintenance', 'Maintenance'], ['log', 'Log']]
+  settings: [['general', 'General'], ['gaming', 'Gaming'], ['performance', 'Performance'], ['scan', 'System scan'], ['appearance', 'Appearance'], ['maintenance', 'Maintenance'], ['log', 'Log']]
 };
 const TAB_ALIASES = { customize: 'buttons', onboardmemory: 'onboard', memory: 'onboard', macros: 'macrokeys', keys: 'macrokeys', snap: 'snaptap', logs: 'log', logviewer: 'log', dpi: 'performance' };
 
@@ -3419,7 +3422,7 @@ async function removeGame(profile) {
    Page: Settings
    ============================================================================================= */
 function pageSettings() {
-  const tabs = { general: setGeneral, gaming: setGaming, performance: setPerformance, appearance: setAppearance, maintenance: setMaintenance, log: setLog };
+  const tabs = { general: setGeneral, gaming: setGaming, performance: setPerformance, scan: setScan, appearance: setAppearance, maintenance: setMaintenance, log: setLog };
   return (tabs[ui.tabs.settings] || setGeneral)();
 }
 function setGeneral() {
@@ -3617,6 +3620,109 @@ function setAppearance() {
         act('setAccent', { accent: id }).then(r => { if (r === FAILED) { ui.accent = ''; applyAccent(); } });
       }
     }, h('i', { style: `background:${c}` }, cur === id ? icon('check', 16) : null), label))));
+}
+/* ---- System scan: what starts with Windows, what uses the network ---------------------------- */
+const FLAG_TEXT = {
+  location: 'Starts from a temporary or downloads folder, which a normal program does not do.',
+  unsigned: 'Carries no digital signature, so Windows cannot tell you who made it.',
+  missing: 'Its program file is gone: the entry does nothing but is left over.'
+};
+function setScan() {
+  const sc = S.scan;
+  const busy = ui.scanBusy || '';
+  const picked = ui.scanPick || (ui.scanPick = {});
+  const flagged = sc.items.filter(i => i.flag);
+  const startup = sc.items.filter(i => i.kind === 'startup');
+  const services = sc.items.filter(i => i.kind === 'service');
+  const chosen = () => sc.items.filter(i => i.canDisable && picked[i.id]);
+  const run = async () => {
+    ui.scanBusy = 'scan';
+    requestRender();
+    await act('systemScan', {}, { timeout: 120000 });
+    ui.scanBusy = '';
+    requestRender();
+  };
+  const turnOff = async () => {
+    const items = chosen();
+    const delivery = !!picked['__delivery'];
+    if (!items.length && !delivery) return;
+    const ok = await confirmModal({
+      title: 'Turn these off?', icon: 'power', ok: 'Turn off',
+      body: h('div', { class: 'stack tight' },
+        h('ul', { class: 'plain-list' },
+          items.map(i => h('li', null, h('b', null, i.name), ' — ', i.lose)),
+          delivery ? h('li', null, h('b', null, 'Windows Update uploads'), ' — Windows downloads updates from Microsoft only and stops uploading them to other PCs.') : null),
+        h('div', { class: 'muted small' }, 'Start-up entries are turned off the same way Task Manager does, for your account only. Services are set to Disabled, not removed: set them back in services.msc. Services ask for administrator permission once.'))
+    });
+    if (!ok) return;
+    ui.scanBusy = 'off';
+    requestRender();
+    const res = await act('scanTurnOff', { ids: items.map(i => i.id), delivery }, { timeout: 180000 });
+    ui.scanBusy = '';
+    ui.scanPick = {};
+    requestRender();
+    if (res !== FAILED && res && res.message) infoModal('Turned off', res.message, 'power');
+  };
+  const defender = async (item) => {
+    ui.scanBusy = 'def:' + item.id;
+    requestRender();
+    const res = await act('defenderScan', { id: item.id }, { timeout: 240000 });
+    ui.scanBusy = '';
+    requestRender();
+    if (res !== FAILED && res && res.message) infoModal('Microsoft Defender', res.message, 'shield');
+  };
+  const row = (i) => h('div', { class: 'leftover' },
+    i.canDisable
+      ? h('input', { type: 'checkbox', class: 'ck', checked: !!picked[i.id], 'data-fk': 'scan:' + i.id, 'aria-label': 'Turn off ' + i.name,
+          onchange: e => { picked[i.id] = e.target.checked; requestRender(); } })
+      : icon(i.kind === 'service' ? 'grid' : 'play', 18),
+    h('div', { style: 'min-width:0' },
+      h('div', { class: 't' }, i.name,
+        i.flag ? h('span', { class: 'badge warn', style: 'margin-left:8px' }, 'Worth a look') : null,
+        i.network ? h('span', { class: 'badge', style: 'margin-left:6px' }, 'network') : null,
+        i.state === 'off' || i.state === 'disabled' ? h('span', { class: 'badge ok', style: 'margin-left:6px' }, 'Off') : null),
+      h('div', { class: 'd' }, i.costs, i.flag ? ' ' + FLAG_TEXT[i.flag] : ''),
+      h('div', { class: 'd faint ellipsis', title: i.path }, i.publisher ? 'Signed by ' + i.publisher + ' · ' : '', i.path || '(no program path)')),
+    i.flag && i.flag !== 'missing'
+      ? h('button', { class: cx('btn sm', busy === 'def:' + i.id && 'busy'), disabled: !!busy, 'data-fk': 'scan:def:' + i.id, onclick: () => defender(i) },
+          busy === 'def:' + i.id ? h('span', { class: 'spin' }) : icon('shield', 14), 'Check')
+      : null);
+  const count = chosen().length + (picked['__delivery'] ? 1 : 0);
+  return h('div', { class: 'stack' },
+    h('div', { class: 'card' },
+      cardHead(['System scan', sc.checked ? (flagged.length ? h('span', { class: 'badge warn' }, plural(flagged.length, 'item') + ' worth a look') : h('span', { class: 'badge ok' }, icon('check', 12), 'Nothing odd')) : null],
+        'What starts with Windows, what runs in the background and what uses your connection.',
+        h('button', { class: cx('btn sm', busy === 'scan' && 'busy'), disabled: !!busy, onclick: run, 'data-fk': 'scan:run' },
+          busy === 'scan' ? h('span', { class: 'spin' }) : icon('search', 16), sc.checked ? 'Scan again' : 'Scan now'), 'search'),
+      banner('info', 'shield', 'LiteSynapse is not an antivirus',
+        'It never decides that a file is a virus. It tells you what it can see — where a program lives, whether it is signed and by whom, whether it starts itself — and hands anything odd to Microsoft Defender, which is the one that decides.'),
+      !sc.checked
+        ? emptyBlock('search', 'Not scanned yet', 'The scan reads the registry and the list of running programs. It changes nothing on its own.')
+        : h('div', null,
+          h('div', { class: 'leftover' }, icon('shieldCheck', 18),
+            h('div', { style: 'min-width:0' }, h('div', { class: 't' }, 'Microsoft Defender'),
+              h('div', { class: 'd' }, sc.defender === 'on' ? 'Real-time protection is on.'
+                : sc.defender === 'off' ? 'Real-time protection is off. Turn it back on in Windows Security unless another antivirus is running.'
+                : 'Its state could not be read, which is normal when another antivirus is installed or tamper protection hides it.')),
+            h('span', { class: cx('badge', sc.defender === 'on' ? 'ok' : sc.defender === 'off' ? 'warn' : '') }, sc.defender === 'on' ? 'On' : sc.defender === 'off' ? 'Off' : 'Unknown')),
+          h('div', { class: 'leftover' },
+            h('input', { type: 'checkbox', class: 'ck', checked: !!picked['__delivery'], disabled: !sc.uploadsUpdates, 'data-fk': 'scan:delivery',
+              'aria-label': 'Stop Windows uploading updates', onchange: e => { picked['__delivery'] = e.target.checked; requestRender(); } }),
+            h('div', { style: 'min-width:0' }, h('div', { class: 't' }, 'Windows Update uploads'),
+              h('div', { class: 'd' }, sc.deliveryText, sc.uploadsUpdates ? ' This uses your upload, which is what makes a game feel laggy while Windows is busy.' : '')),
+            h('span', { class: cx('badge', sc.uploadsUpdates ? 'warn' : 'ok') }, sc.uploadsUpdates ? 'Uploading' : 'Off'))),
+      sc.checked ? h('div', { class: 'row wrap', style: 'margin-top:16px;padding-top:16px;border-top:1px solid var(--line)' },
+        h('button', { class: cx('btn primary', busy === 'off' && 'busy'), disabled: !!busy || !count, 'data-fk': 'scan:off', onclick: turnOff },
+          busy === 'off' ? h('span', { class: 'spin' }) : icon('power', 16), count ? `Turn off ${count} selected` : 'Turn off selected'),
+        h('span', { class: 'small faint' }, 'Tick what you want off. Nothing is removed and everything can be set back in Windows.')) : null),
+    sc.checked && startup.length ? h('div', { class: 'card' },
+      cardHead(['Starts with Windows', h('span', { class: 'badge' }, startup.length)],
+        'Every one of these runs at sign-in, before and while you play.', null, 'play'),
+      h('div', null, startup.map(row))) : null,
+    sc.checked && services.length ? h('div', { class: 'card' },
+      cardHead(['Background services', h('span', { class: 'badge' }, services.length)],
+        'Services LiteSynapse knows are safe to turn off on a gaming PC, and known background uploaders. Anything not on that list is not shown and is never touched.', null, 'grid'),
+      h('div', null, services.map(row))) : null);
 }
 function setMaintenance() {
   const item = (ic, title, desc, run) => h('button', { onclick: run }, icon(ic, 20), h('div', null, h('div', { class: 't' }, title), h('div', { class: 'd' }, desc)));
