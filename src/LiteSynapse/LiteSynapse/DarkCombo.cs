@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace LiteSynapse;
@@ -140,48 +141,31 @@ internal class DarkCombo : Control
 		Graphics g = e.Graphics;
 		Theme.Quality(g);
 		g.Clear(base.BackColor);
-		Rectangle r = new Rectangle(0, 0, base.Width - 1, base.Height - 1);
-		SolidBrush b = new SolidBrush(base.Enabled ? Color.FromArgb(40, 40, 40) : Color.FromArgb(34, 34, 34));
-		try
+		// Rounded field, like every other control on the page now.
+		using (GraphicsPath r = Theme.Round(new RectangleF(0.5f, 0.5f, base.Width - 1.5f, base.Height - 1.5f), 6f))
 		{
-			g.FillRectangle((Brush)(object)b, r);
-		}
-		finally
-		{
-			((IDisposable)b)?.Dispose();
-		}
-		Pen p = new Pen(open ? Theme.Green : Color.FromArgb(110, 110, 110));
-		try
-		{
-			g.DrawRectangle(p, r);
-		}
-		finally
-		{
-			((IDisposable)p)?.Dispose();
+			using (SolidBrush b = new SolidBrush(base.Enabled ? Color.FromArgb(40, 40, 44) : Color.FromArgb(34, 34, 36)))
+			{
+				g.FillPath(b, r);
+			}
+			using Pen p = new Pen(open ? Theme.Green : Color.FromArgb(78, 78, 84));
+			g.DrawPath(p, r);
 		}
 		Tx.Left(g, SelectedItem?.ToString() ?? "", base.Font, base.Enabled ? Theme.Text : Theme.Dim, new RectangleF(10f, 0f, base.Width - 34, base.Height));
 		float ax = base.Width - 18;
 		float ay = (float)base.Height / 2f;
-		PointF[] tri = ((!open) ? new PointF[3]
+		// A thin chevron rather than a filled triangle.
+		float dy = open ? -2.5f : 2.5f;
+		using Pen chev = new Pen(Color.FromArgb(200, 200, 200), 1.6f);
+		chev.StartCap = LineCap.Round;
+		chev.EndCap = LineCap.Round;
+		chev.LineJoin = LineJoin.Round;
+		g.DrawLines(chev, new PointF[3]
 		{
-			new PointF(ax - 5f, ay - 2.5f),
-			new PointF(ax + 5f, ay - 2.5f),
-			new PointF(ax, ay + 3f)
-		} : new PointF[3]
-		{
-			new PointF(ax - 5f, ay + 2.5f),
-			new PointF(ax + 5f, ay + 2.5f),
-			new PointF(ax, ay - 3f)
+			new PointF(ax - 4.5f, ay - dy),
+			new PointF(ax, ay + dy),
+			new PointF(ax + 4.5f, ay - dy)
 		});
-		SolidBrush ab = new SolidBrush(Color.FromArgb(200, 200, 200));
-		try
-		{
-			g.FillPolygon((Brush)(object)ab, tri);
-		}
-		finally
-		{
-			((IDisposable)ab)?.Dispose();
-		}
 	}
 
 	protected override void OnMouseClick(MouseEventArgs e)

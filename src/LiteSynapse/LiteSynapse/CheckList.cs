@@ -251,22 +251,37 @@ internal sealed class CheckList : Control
 	{
 		if (isHover && r.Can)
 		{
-			using SolidBrush hb = new SolidBrush(Color.FromArgb(26, 26, 26));
-			g.FillRectangle(hb, 0, y, width, r.H);
+			using GraphicsPath hp = Theme.Round(new RectangleF(4f, y + 1f, width - 8, r.H - 2), 8f);
+			using SolidBrush hb = new SolidBrush(Color.FromArgb(40, 40, 44));
+			g.FillPath(hb, hp);
 		}
-		// Checkbox.
+		// Checkbox: rounded, and a filled accent square with a tick when checked, as Windows 11 draws one.
 		int bx = Pad + 4;
 		int by = y + 8;
 		if (r.Can)
 		{
-			using (Pen border = new Pen(r.Checked ? Theme.Green : Theme.Line, 1.4f))
-			{
-				g.DrawRectangle(border, bx, by, BoxSize, BoxSize);
-			}
+			using GraphicsPath box = Theme.Round(new RectangleF(bx, by, BoxSize, BoxSize), 4f);
 			if (r.Checked)
 			{
-				using SolidBrush fill = new SolidBrush(Theme.Green);
-				g.FillRectangle(fill, bx + 4, by + 4, BoxSize - 7, BoxSize - 7);
+				using (SolidBrush fill = new SolidBrush(Theme.Green))
+				{
+					g.FillPath(fill, box);
+				}
+				using Pen tick = new Pen(Color.Black, 2f);
+				tick.StartCap = LineCap.Round;
+				tick.EndCap = LineCap.Round;
+				tick.LineJoin = LineJoin.Round;
+				g.DrawLines(tick, new PointF[3]
+				{
+					new PointF(bx + 4.5f, by + 9f),
+					new PointF(bx + 7.5f, by + 12f),
+					new PointF(bx + 12.5f, by + 5.5f)
+				});
+			}
+			else
+			{
+				using Pen border = new Pen(Color.FromArgb(120, 120, 126), 1.2f);
+				g.DrawPath(border, box);
 			}
 		}
 		int tx = Pad + Indent - 10;

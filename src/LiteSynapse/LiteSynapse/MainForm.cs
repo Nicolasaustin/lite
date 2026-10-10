@@ -3179,6 +3179,7 @@ internal class MainForm : Form
 			BackColor = Theme.Bg,
 			ForeColor = Theme.Text
 		};
+		Ui.Dialog(dlg);
 		try
 		{
 			ListBox list = new ListBox
@@ -3189,6 +3190,7 @@ internal class MainForm : Form
 				BorderStyle = (BorderStyle)0,
 				Font = Theme.F(11f, (FontStyle)0)
 			};
+			DarkScroll.Apply(list);
 			ListBox.ObjectCollection items = list.Items;
 			object[] array = procs;
 			items.AddRange(array);

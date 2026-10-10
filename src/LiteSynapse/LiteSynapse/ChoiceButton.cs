@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace LiteSynapse;
@@ -21,31 +22,21 @@ internal class ChoiceButton : Control
 
 	protected override void OnPaint(PaintEventArgs e)
 	{
-		//IL_0042: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0048: Expected Obj, but got Unknown
-		//IL_007b: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0081: Expected Obj, but got Unknown
 		Graphics g = e.Graphics;
+		Theme.Quality(g);
 		g.Clear(base.BackColor);
-		SolidBrush b = new SolidBrush(Color.FromArgb(hover ? 55 : 45, hover ? 55 : 45, hover ? 55 : 45));
-		try
+		// Rounded; the chosen one is tinted with the accent as well as outlined in it.
+		using GraphicsPath path = Theme.Round(new RectangleF(0.5f, 0.5f, base.Width - 1.5f, base.Height - 1.5f), 6f);
+		Color fill = Selected ? Color.FromArgb(30, 58, 26) : (hover ? Theme.Hover : Theme.Raised);
+		using (SolidBrush b = new SolidBrush(fill))
 		{
-			g.FillRectangle((Brush)(object)b, 0, 0, base.Width - 1, base.Height - 1);
-			Pen p = new Pen(Selected ? Theme.Green : Color.FromArgb(90, 90, 90));
-			try
-			{
-				g.DrawRectangle(p, 0, 0, base.Width - 1, base.Height - 1);
-				Tx.Center(g, base.Text, base.Font, Theme.Text, new RectangleF(0f, 0f, base.Width, base.Height));
-			}
-			finally
-			{
-				((IDisposable)p)?.Dispose();
-			}
+			g.FillPath(b, path);
 		}
-		finally
+		using (Pen p = new Pen(Selected ? Theme.Green : Theme.Edge))
 		{
-			((IDisposable)b)?.Dispose();
+			g.DrawPath(p, path);
 		}
+		Tx.Center(g, base.Text, base.Font, Selected ? Color.White : Theme.Text, new RectangleF(0f, 0f, base.Width, base.Height));
 	}
 
 	protected override void OnMouseEnter(EventArgs e)

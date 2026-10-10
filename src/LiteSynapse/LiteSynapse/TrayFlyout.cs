@@ -49,6 +49,12 @@ internal sealed class TrayFlyout : Form
 		}
 	}
 
+	protected override void OnHandleCreated(EventArgs e)
+	{
+		base.OnHandleCreated(e);
+		Ui.RoundCorners(this);
+	}
+
 	internal void TestDeactivate()
 	{
 		base.OnDeactivate(EventArgs.Empty);

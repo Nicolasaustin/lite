@@ -254,6 +254,7 @@ internal static class UiHost
 				ForeColor = Theme.Text,
 				Icon = AppIcon.Icon()
 			};
+			Ui.Dialog(form);
 			Label label = new Label
 			{
 				Dock = DockStyle.Top,

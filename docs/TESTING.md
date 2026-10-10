@@ -1,5 +1,35 @@
 # Testing LiteSynapse
 
+## Build 14 (1.2.3): latency audit, bug check, modern look
+
+**What to check first:** the window looks different (below), and nothing about play should feel different
+at all. If anything about input timing changed, that is a bug: say so.
+
+- **Latency audit of the input path.** Injected keys no longer make a win32k round trip each for their
+  scan code (cached per key); Snap Tap is six flags instead of three hash sets; the hook-path lists are
+  sized up front; tiered compilation is off, so there is no JIT burst a few seconds into the first match.
+  No timer runs while a game is in front, and the window's full memory clean-up is skipped when it closes
+  because a game came to the front.
+- **Settings: two switches were hidden.** "Close this window when a game starts" was cut in half and
+  "Competitive safe" was below the bottom of its card. Both are visible now. Check they are there.
+- **GDI leak fixed.** The macro list and two badges made a font every time they painted and never gave it
+  back. Every paint-time font is now made once and reused.
+- **Maximized is remembered** even when you maximize after opening and then close from the taskbar.
+- **Modern look**, all drawn by the same code as before, so no new cost per frame and no animation timers:
+  - Windows 11: rounded window corners, and a title bar and border in the app's own dark colours instead
+    of the system accent. Windows 10 keeps the dark title bar and ignores the rest.
+  - Cards are rounded with a hairline edge; the two home cards light their edge under the pointer.
+  - Buttons are filled surfaces with a hairline edge; toggles are Windows 11 style (outlined when off).
+  - The selected top tab has a short green bar along its bottom instead of a green box around it.
+  - Rounded drop-downs with a thin chevron, rounded choice buttons (the chosen one tinted green),
+    rounded checkboxes with a tick on the Performance tab.
+  - The tray flyout has rounded corners on Windows 11; dialogs get the dark title bar.
+
+None of the look was seen on a real screen before shipping (it was built on Linux). If anything is clipped,
+misaligned or hard to read, a screenshot of it is the fastest fix.
+
+## Build 13 (1.2.2)
+
 Build 13 (1.2.2) is the first build with **no WebView2**. The window is WinForms throughout, which is the
 change to look at first: if frame times in CS2 were worse with the window open before, they should not be now,
 because nothing renders a browser any more.

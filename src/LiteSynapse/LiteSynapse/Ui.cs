@@ -31,10 +31,56 @@ internal static class Ui
 	[DllImport("dwmapi.dll")]
 	private static extern int DwmSetWindowAttribute(nint h, int attr, ref int v, int size);
 
+	private const int DwmUseImmersiveDarkMode = 20;
+
+	private const int DwmWindowCornerPreference = 33;
+
+	private const int DwmBorderColor = 34;
+
+	private const int DwmCaptionColor = 35;
+
+	private const int DwmTextColor = 36;
+
+	private const int DwmCornerRound = 2;
+
+	// Window chrome that matches the page: dark title bar, Windows 11 rounded corners, and a caption and
+	// border in the app's own colours instead of the system accent. All of it is drawn by DWM, which composes
+	// the frame anyway, so none of it costs this process anything per frame. Windows 10 ignores the
+	// attributes it does not know (the call just fails) and keeps the dark title bar.
 	public static void DarkTitleBar(Form f)
 	{
+		nint h = ((Control)f).Handle;
 		int v = 1;
-		DwmSetWindowAttribute(((Control)f).Handle, 20, ref v, 4);
+		DwmSetWindowAttribute(h, DwmUseImmersiveDarkMode, ref v, 4);
+		v = DwmCornerRound;
+		DwmSetWindowAttribute(h, DwmWindowCornerPreference, ref v, 4);
+		v = ColorRef(Theme.Top);
+		DwmSetWindowAttribute(h, DwmCaptionColor, ref v, 4);
+		v = ColorRef(Theme.Edge);
+		DwmSetWindowAttribute(h, DwmBorderColor, ref v, 4);
+		v = ColorRef(Theme.Text);
+		DwmSetWindowAttribute(h, DwmTextColor, ref v, 4);
+	}
+
+	// Rounded corners and the system drop shadow for a borderless popup (the tray flyout), on Windows 11.
+	public static void RoundCorners(Form f)
+	{
+		int v = DwmCornerRound;
+		DwmSetWindowAttribute(((Control)f).Handle, DwmWindowCornerPreference, ref v, 4);
+	}
+
+	// The same chrome for a dialog, applied as soon as it has a window.
+	public static void Dialog(Form f)
+	{
+		((Control)f).HandleCreated += (object? _, EventArgs _) =>
+		{
+			DarkTitleBar(f);
+		};
+	}
+
+	private static int ColorRef(Color c)
+	{
+		return c.R | (c.G << 8) | (c.B << 16);
 	}
 
 	public static ContextMenuStrip Menu()
@@ -102,6 +148,7 @@ internal static class Ui
 			MinimizeBox = false,
 			Font = Theme.F(10f, (FontStyle)0)
 		};
+		Dialog(dlg);
 		try
 		{
 			Label l = new Label

@@ -118,34 +118,21 @@ internal class TopTabs : Control
 					float x = xs[i];
 					RectangleF r = new RectangleF(x, 3f, w[i], base.Height - 4);
 					bool lifted = dragging && i == downIdx;
-					if ((i == Selected) | lifted)
+					bool sel = i == Selected;
+					// The selected tab is a soft raised surface with a short accent bar along its bottom, the way
+					// Windows 11 marks the current page; the tab under the pointer gets the surface alone.
+					if (sel || lifted || i == hover)
 					{
-						GraphicsPath p = Theme.Round(r, 3f);
-						try
-						{
-							SolidBrush fb = new SolidBrush(lifted ? Color.FromArgb(40, 40, 40) : Theme.Deep);
-							try
-							{
-								g.FillPath((Brush)(object)fb, p);
-								Pen pen = new Pen(Theme.Green, 1.2f);
-								try
-								{
-									g.DrawPath(pen, p);
-								}
-								finally
-								{
-									((IDisposable)pen)?.Dispose();
-								}
-							}
-							finally
-							{
-								((IDisposable)fb)?.Dispose();
-							}
-						}
-						finally
-						{
-							((IDisposable)p)?.Dispose();
-						}
+						using GraphicsPath p = Theme.Round(r, 6f);
+						using SolidBrush fb = new SolidBrush(lifted ? Color.FromArgb(40, 40, 40) : (sel ? Theme.Deep : Theme.Hover));
+						g.FillPath(fb, p);
+					}
+					if (sel && !lifted)
+					{
+						float bw = Math.Min(28f, w[i] - 16f);
+						using GraphicsPath bar = Theme.Round(new RectangleF(x + (w[i] - bw) / 2f, base.Height - 5f, bw, 3f), 1.5f);
+						using SolidBrush gb2 = new SolidBrush(Theme.Green);
+						g.FillPath(gb2, bar);
 					}
 					float cx = x + 24f;
 					float cy = (float)base.Height / 2f + 1f;

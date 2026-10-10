@@ -24,62 +24,31 @@ internal class PillButton : Control
 
 	protected override void OnPaint(PaintEventArgs e)
 	{
-		//IL_0084: Unknown result type (might be due to invalid IL or missing references)
-		//IL_008a: Expected Obj, but got Unknown
-		//IL_00ae: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00b5: Expected Obj, but got Unknown
 		Graphics g = e.Graphics;
 		Theme.Quality(g);
 		g.Clear(base.BackColor);
 		bool lit = Selected || Primary;
-		GraphicsPath path = Theme.Round(new RectangleF(1f, 1f, base.Width - 3, base.Height - 3), (float)(base.Height - 3) / 2f);
-		try
+		using GraphicsPath path = Theme.Round(new RectangleF(1f, 1f, base.Width - 3, base.Height - 3), (float)(base.Height - 3) / 2f);
+		// A filled surface with a hairline edge rather than an empty outline: reads as a button at a glance.
+		// Selected is the accent fill; Primary and hover light the edge in the accent.
+		Color fill = Selected ? Theme.Green : ((hover && base.Enabled) ? Theme.Hover : Theme.Raised);
+		using (SolidBrush b = new SolidBrush(fill))
 		{
-			Color color;
-			if (Selected)
-			{
-				color = Theme.Green;
-			}
-			else
-			{
-				color = (hover ? Theme.Panel2 : Theme.Bg);
-			}
-			SolidBrush fill = new SolidBrush(color);
-			try
-			{
-				g.FillPath((Brush)(object)fill, path);
-				Pen pen = new Pen((lit || hover) ? Theme.Green : Theme.Line, 1.5f);
-				try
-				{
-					g.DrawPath(pen, path);
-					Graphics g2 = g;
-					string text = base.Text;
-					Font font = base.Font;
-					Color c;
-					if (Selected)
-					{
-						c = Color.Black;
-					}
-					else
-					{
-						c = (base.Enabled ? Theme.Text : Theme.Dim);
-					}
-					Tx.Center(g2, text, font, c, new RectangleF(0f, 0f, base.Width, base.Height));
-				}
-				finally
-				{
-					((IDisposable)pen)?.Dispose();
-				}
-			}
-			finally
-			{
-				((IDisposable)fill)?.Dispose();
-			}
+			g.FillPath(b, path);
 		}
-		finally
+		if (!Selected)
 		{
-			((IDisposable)path)?.Dispose();
+			using Pen pen = new Pen((lit || (hover && base.Enabled)) ? Theme.Green : Theme.Edge, 1f);
+			g.DrawPath(pen, path);
 		}
+		Color c = Selected ? Color.Black : (base.Enabled ? Theme.Text : Theme.Dim);
+		Tx.Center(g, base.Text, base.Font, c, new RectangleF(0f, 0f, base.Width, base.Height));
+	}
+
+	protected override void OnEnabledChanged(EventArgs e)
+	{
+		base.OnEnabledChanged(e);
+		base.Invalidate();
 	}
 
 	protected override void OnMouseEnter(EventArgs e)

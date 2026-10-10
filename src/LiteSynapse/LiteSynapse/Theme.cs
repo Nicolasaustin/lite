@@ -20,6 +20,18 @@ internal static class Theme
 
 	public static readonly Color Line = Color.FromArgb(70, 70, 70);
 
+	// Hairline edge around cards and the window: just enough to separate a surface from the one behind it.
+	public static readonly Color Edge = Color.FromArgb(50, 50, 54);
+
+	// Resting fill of a button: one step up from the surface it sits on.
+	public static readonly Color Raised = Color.FromArgb(38, 38, 42);
+
+	// Quiet fill for a control under the pointer.
+	public static readonly Color Hover = Color.FromArgb(50, 50, 55);
+
+	// Corner radius of a card.
+	public const float Radius = 10f;
+
 	public static readonly Color Text = Color.FromArgb(240, 240, 240);
 
 	public static readonly Color Dim = Color.FromArgb(150, 150, 150);
