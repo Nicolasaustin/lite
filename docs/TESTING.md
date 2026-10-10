@@ -33,6 +33,30 @@ because nothing renders a browser any more.
 3. `system scan: start-up "" turned off` - a Run key's own unnamed default value was being listed as a
    start-up entry. It is skipped.
 
+## Also in this build (found by reviewing the new code, not reported)
+
+- The risky-change confirmation was backwards for services: the green "turn ticked off" button disabled
+  Defender, the firewall or Windows Update with no confirmation, while turning them *back on* warned about
+  giving up security. Which direction costs something is now decided per row.
+- The settings list could not be scrolled to its last two rows until the window was resized.
+- Any mouse button ticked a row, so a reflex right-click selected one silently.
+- The mouse wheel stopped scrolling the list after the first tab switch.
+- Several steps reported a failure for something that worked: a `bcdedit /deletevalue` on a value that was
+  never set, a `powercfg /delete` on a plan that is not there, and any .NET call that followed an
+  `sc.exe stop` on an already-stopped service.
+- `KeyboardDelay` was being written as a DWord; Windows ships that value as `REG_SZ`, so the setting was
+  being ignored.
+
+## Three things the WebView2 removal had dropped, now back
+
+- **The window closes again when a linked game comes to the front.** This is the one that matters: a window
+  on top of a game costs frames. Settings has the switch.
+- **Window size and maximized state are remembered**, scaled for the display and clamped to the work area.
+- **"Competitive safe" is a toggle again.** It was still gating macros and Snap Tap but had no UI at all, so
+  it could only be changed by hand-editing `settings.json`.
+
+The accent colour is deliberately not coming back - the window has one theme now.
+
 ## Checks to run on the hardware
 
 1. Open the window, switch through every tab, and watch frame times in CS2 with the window open. This is the
@@ -45,7 +69,13 @@ because nothing renders a browser any more.
    back on and confirm it returns to Automatic and running.
 5. Performance > Start-up: the list should match Task Manager's Startup apps, and turning one off should show
    as Disabled there.
-6. Anything in the Security trade-offs group should ask you to confirm by name before it applies.
+6. Anything in the Security trade-offs group should ask you to confirm by name before it applies - and on
+   the Services page, the confirmation should appear when turning something **off**, not on.
+7. Performance > Windows: scroll to the very bottom of the list. The last rows of the last group should be
+   reachable without resizing the window. Hover the list and use the wheel after switching pills a few times.
+8. Start a linked game (CS2) with the window open: the window should close by itself. Then turn
+   "Close this window when a game starts" off in Settings and check it stays open.
+9. Resize the window, close it, reopen it: it should come back the size you left it.
 
 ## Windows limits your network while a game runs
 

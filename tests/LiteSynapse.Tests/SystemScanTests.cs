@@ -213,6 +213,33 @@ public class TweaksTests
 	}
 
 	[Fact]
+	public void TheLegacyControlPanelValuesAreWrittenAsStrings()
+	{
+		// Everything under Control Panel\Mouse, Control Panel\Keyboard and Control Panel\Desktop that
+		// Windows itself writes is REG_SZ - they are win.ini settings the registry inherited. A DWord written
+		// over one of them is a value of the wrong type, which Windows reads as absent and the Control Panel
+		// slider cannot display. These are also the settings most likely to be copied from a guide that got
+		// the type wrong, so the rule is asserted rather than trusted.
+		string[] mustBeStrings =
+		{
+			"MouseSpeed", "MouseThreshold1", "MouseThreshold2", "MouseSensitivity",
+			"KeyboardDelay", "KeyboardSpeed", "MenuShowDelay", "DragFullWindows", "MinAnimate"
+		};
+		foreach (Tweaks.Tweak t in Tweaks.Catalog)
+		{
+			foreach (Tweaks.Reg r in t.Values)
+			{
+				if (Array.IndexOf(mustBeStrings, r.Name) >= 0)
+				{
+					Assert.Equal("string", r.Kind);
+				}
+			}
+		}
+		// And the one value under Control Panel\Mouse that genuinely is a DWord stays one.
+		Assert.Equal("dword", Tweaks.Find("rawthrottle").Values.Single().Kind);
+	}
+
+	[Fact]
 	public void EveryEntryThatGivesSomethingUpSaysWhat()
 	{
 		foreach (Tweaks.Tweak t in Tweaks.Catalog.Where((Tweaks.Tweak x) => x.Risk != Tweaks.Safe))

@@ -257,7 +257,10 @@ internal static class Tweaks
 			Title = "Keyboard repeat delay at the shortest setting",
 			What = "Shortens the pause before a held key starts repeating.",
 			Source = "winutil",
-			Values = new[] { new Reg("HKCU", "Control Panel\\Keyboard", "KeyboardDelay", "dword", "0", "1") }
+			// REG_SZ, not a DWord: everything under Control Panel\Keyboard and Control Panel\Mouse is a
+			// legacy win.ini-mapped string. Writing a DWord over Windows' own REG_SZ leaves a value of the
+			// wrong type that Windows and the Control Panel slider both ignore.
+			Values = new[] { new Reg("HKCU", "Control Panel\\Keyboard", "KeyboardDelay", "string", "0", "1") }
 		},
 
 		// ---- sched ----------------------------------------------------------------------------------
