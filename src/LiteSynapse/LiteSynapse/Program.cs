@@ -161,7 +161,19 @@ internal static class Program
 			return 0;
 		}
 		bool first;
-		using (new Mutex(initiallyOwned: true, "LiteSynapse.single", out first))
+		Mutex single;
+		try
+		{
+			single = new Mutex(initiallyOwned: true, "LiteSynapse.single", out first);
+		}
+		catch (UnauthorizedAccessException)
+		{
+			// The mutex exists but belongs to an elevated LiteSynapse, so this process may not even open it.
+			// Same as "already running".
+			single = null;
+			first = false;
+		}
+		using (single)
 		{
 			if (!first)
 			{
@@ -170,6 +182,8 @@ internal static class Program
 				if (!args.Contains("--tray"))
 				{
 					TrayHost.ShowRunningInstance();
+					// An elevated second start cannot take over: the running copy keeps the devices and the hook.
+					// (The reverse, a normal start while an elevated one runs, only shows that window.)
 					if (Native.IsProcessElevated((uint)Environment.ProcessId) == true)
 					{
 						System.Windows.Forms.MessageBox.Show("LiteSynapse is already running. To run it as administrator, exit it first (right-click the tray icon > Exit), then start it again with Run as administrator.", "LiteSynapse", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);

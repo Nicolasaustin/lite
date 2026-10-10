@@ -863,7 +863,8 @@ internal class MainForm : Form
 				((Control)mainForm).BeginInvoke((Action)(() =>
 				{
 					mainForm.Sync();
-					if (mainForm.top.Selected == 5)
+					// Not while minimized: a profile switch in a game must not cost a log read.
+					if (mainForm.top.Selected == 5 && ((Form)mainForm).WindowState != FormWindowState.Minimized && ((Control)mainForm).Visible)
 					{
 						mainForm.LoadLog();
 					}
@@ -2862,9 +2863,13 @@ internal class MainForm : Form
 					BaseLabel(id) ?? "not calibrated"
 				});
 			}
-			string dpiNow = app.Mouse?.GetDpi()?.x.ToString() ?? "?";
-			string hz = app.Mouse?.GetPolling()?.ToString() ?? "?";
-			string br = app.Kb?.GetBrightness()?.ToString() ?? "?";
+			// The profile's own values, not HID reads: this runs on the UI thread on every profile change (also
+			// while a game is in front), and every device transfer belongs to the Service's device worker.
+			MouseProfile mpNow = app.Store.Mouse.FirstOrDefault((MouseProfile x) => x.Name == app.ActiveMouse);
+			KbProfile kpNow = app.Store.Keyboard.FirstOrDefault((KbProfile x) => x.Name == app.ActiveKeyboard);
+			string dpiNow = (mpNow != null) ? mpNow.Dpi.ToString() : "?";
+			string hz = (mpNow != null) ? mpNow.PollingRate.ToString() : "?";
+			string br = (kpNow != null) ? kpNow.Brightness.ToString() : "?";
 			if (top.Selected == 0)
 			{
 				((Control)lblHome1).Text = $"Profile: {app.ActiveMouse}\nDPI {dpiNow}   -   {hz} Hz\n{app.Base.Count}/{InputEngine.ButtonIds.Length} buttons calibrated";
@@ -2926,8 +2931,8 @@ internal class MainForm : Form
 				((Control)txtLog).Text = "(empty)";
 				return;
 			}
-			using FileStream fs = new FileStream(Cfg.LogFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-			string text = string.Join(Environment.NewLine, new StreamReader(fs).ReadToEnd().Split('\n').TakeLast(200));
+			// Only the last lines, not the whole file (it grows to 1 MB): this is the UI thread.
+			string text = Cfg.ReadLogTail(200).Replace("\n", Environment.NewLine);
 			if (text != ((Control)txtLog).Text)
 			{
 				((Control)txtLog).Text = text;

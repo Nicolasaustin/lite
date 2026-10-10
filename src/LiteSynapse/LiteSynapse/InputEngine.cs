@@ -157,6 +157,9 @@ internal class InputEngine : IDisposable
 
 	private readonly Action<int, bool> sendPlain = (int vk, bool down) => Native.SendKey(vk, ext: false, down);
 
+	// A software remap to middle click is holding the middle button down, so ReleaseAll can lift it.
+	private bool middleDown;
+
 	// Keys held down by remapped output (not Snap Tap), so ReleaseAll only lifts what we pressed.
 	private readonly HashSet<int> injected = new HashSet<int>();
 
@@ -717,6 +720,7 @@ internal class InputEngine : IDisposable
 		if (t.Key == KeyTarget.MouseMiddle)
 		{
 			Native.SendMiddleButton(!up);
+			middleDown = !up;
 			return;
 		}
 		int vk = Keys2.Vk(t.Key);
@@ -774,6 +778,13 @@ internal class InputEngine : IDisposable
 		Interlocked.Increment(ref macroGen);
 		macroCancel.Set();
 		snap.Reset(sendPlain);
+		if (middleDown)
+		{
+			// A button remapped to middle click was held when the profile changed: the mouse's own release goes to
+			// its native key, so the middle button would stay down for every program.
+			Native.SendMiddleButton(down: false);
+			middleDown = false;
+		}
 		foreach (int item in injected)
 		{
 			Native.SendKey(item, Keys2.IsExt(item), down: false);
