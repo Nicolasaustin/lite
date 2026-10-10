@@ -172,6 +172,34 @@ public class ServiceCatalogTests
 	}
 
 	[Fact]
+	public void TheScriptOnlyEverNamesTheCatalogsOwnSpelling()
+	{
+		// The id that reaches Script() comes from a registry subkey name, so this is the place an injection
+		// would arrive. Script() looks the name up and emits the catalog's string, not the caller's: a name
+		// that does not match an entry exactly produces nothing, and one that does is written as the catalog
+		// spells it. Both halves matter, so both are asserted.
+		foreach (string crafted in new[]
+		{
+			"DiagTrack'; Remove-Item -Recurse C:\\ #",
+			"DiagTrack`; evil",
+			"DiagTrack ; evil",
+			"DiagTrack\nevil",
+			"$(evil)",
+			"'; sc.exe delete WinDefend; '"
+		})
+		{
+			string script = ServiceCatalog.Script(new[] { (crafted, false) });
+			Assert.Equal("$failed = 0\nexit $failed\n", script);
+		}
+		// Matched case-insensitively, but written out as the catalog has it.
+		string ok = ServiceCatalog.Script(new[] { ("  diagtrack  ", false) });
+		Assert.Contains("'DiagTrack'", ok);
+		Assert.DoesNotContain("diagtrack", ok);
+		// And a name carrying an apostrophe that somehow did match would still be quoted, never bare.
+		Assert.DoesNotContain("sc.exe config DiagTrack", ok);
+	}
+
+	[Fact]
 	public void NothingSelectedChangesNothing()
 	{
 		Assert.Equal("$failed = 0\nexit $failed\n", ServiceCatalog.Script(null));
