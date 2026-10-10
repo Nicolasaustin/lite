@@ -30,6 +30,10 @@ internal sealed class Service
 
 	private volatile RazerDevice mouse = RazerDevice.Find(NagaPid, "Naga");
 
+	// The next live-profile write goes to the mouse whatever the slot records say (true at start and whenever the
+	// mouse reconnects; false once a write went through). Device worker only.
+	private bool firstMouseWrite = true;
+
 	private volatile RazerDevice keyboard = RazerDevice.Find(KeyboardPid, "BlackWidow Lite");
 
 	private ProfileStore store;
@@ -1334,7 +1338,10 @@ internal sealed class Service
 		string status = "";
 		if (useSlots)
 		{
-			string err = liveProfile.Apply(m, mp);
+			// The first write after a start, and after the mouse comes back, never trusts the slot records: Razer
+			// Synapse (a reinstall writes its stock layout) or a driver reset may have changed the mouse's memory
+			// while LiteSynapse was not watching, and a trusted record then left the mouse on the wrong layout.
+			string err = liveProfile.Apply(m, mp, force: firstMouseWrite);
 			switched = liveProfile.Switched;
 			if (err != null)
 			{
@@ -1343,6 +1350,7 @@ internal sealed class Service
 			}
 			else
 			{
+				firstMouseWrite = false;
 				status = liveProfile.Status;
 				Cfg.Log("live: " + status);
 				// The slot write just put this lighting into the slot: sending it again would be six more
@@ -1546,6 +1554,8 @@ internal sealed class Service
 				mouse = found;
 				m?.Dispose();
 				changed = true;
+				// A mouse that comes back may have been on another PC's Synapse in between: its first write is forced.
+				firstMouseWrite = true;
 				Cfg.Log((found != null) ? "Naga connected" : "Naga disconnected");
 			}
 		}

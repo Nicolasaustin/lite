@@ -157,12 +157,18 @@ internal static class PerfModel
 	}
 
 	// Start-up programs that help a gaming PC rather than cost it: a process-priority tool is the reason
-	// someone's games run well, and LiteSynapse itself does the profile switching. Shown as helping when on,
-	// and "fix all" turns them back on rather than off.
+	// someone's games run well, LiteSynapse itself does the profile switching, and the tools that drive gaming
+	// hardware (MSI Afterburner / RivaTuner for the GPU's fan curve and frame cap, GoXLR for the mixer) have to be
+	// running for that hardware to work as set up. Shown as helping when on, and "fix all" turns them back on
+	// rather than off.
 	public static bool HelpsAtSignIn(string name, string path)
 	{
 		string text = (name ?? "") + "|" + (path ?? "");
-		foreach (string word in new[] { "ProcessLasso", "Process Lasso", "ProcessGovernor", "Bitsum", "LiteSynapse" })
+		foreach (string word in new[]
+		{
+			"ProcessLasso", "Process Lasso", "ProcessGovernor", "Bitsum", "LiteSynapse",
+			"MSIAfterburner", "MSI Afterburner", "RTSS", "RivaTuner", "GoXLR"
+		})
 		{
 			if (text.IndexOf(word, StringComparison.OrdinalIgnoreCase) >= 0)
 			{

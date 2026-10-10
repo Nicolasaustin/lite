@@ -686,30 +686,47 @@ internal sealed class RazerDevice : IDisposable
 			{
 				return true;
 			}
-			// Same bytes (including transaction id 0x41) as the switch that was verified on the mouse.
-			int s = Transact(65, 5, 4, 1, stackalloc byte[1] { (byte)slot }, null);
 			// A slot switch loads that slot's own DPI, so what was last sent no longer holds. The polling rate is
 			// not part of a slot: its command (00/05) and its read (00/85) take no slot byte, and an onboard write
 			// never stores one, so the rate stays as it was and its cache is still good.
 			dpi = null;
 			this.slot = null;
-			bool ok = s == StatusOk;
-			if (!ok && s != IoError)
+			// Up to three tries: the mouse can answer "busy" for a moment right after it comes back (a reconnect, or
+			// a driver reset), and a single miss used to surface as "could not activate the slot" and leave a
+			// left-handed profile's click swap un-applied. A short wait between tries, off the input hot path.
+			int s = 0;
+			for (int attempt = 0; attempt < 3; attempt++)
 			{
-				// The previous transport ignored this command's status and read the slot back; do the same
-				// whenever the answer is not a clean success.
-				byte[] a = new byte[RazerReport.ArgsLength];
-				ok = TransactAuto(5, 132, 1, ReadOnlySpan<byte>.Empty, a) == StatusOk && a[0] == slot;
+				// Same bytes (including transaction id 0x41) as the switch that was verified on the mouse.
+				s = Transact(65, 5, 4, 1, stackalloc byte[1] { (byte)slot }, null);
+				bool ok = s == StatusOk;
+				if (!ok && s != IoError)
+				{
+					// The previous transport ignored this command's status and read the slot back; do the same
+					// whenever the answer is not a clean success.
+					byte[] a = new byte[RazerReport.ArgsLength];
+					ok = TransactAuto(5, 132, 1, ReadOnlySpan<byte>.Empty, a) == StatusOk && a[0] == slot;
+					if (ok)
+					{
+						Cfg.Log($"{Name}: slot switch answered status {s}, read-back shows slot {slot}");
+					}
+				}
 				if (ok)
 				{
-					Cfg.Log($"{Name}: slot switch answered status {s}, read-back shows slot {slot}");
+					this.slot = slot;
+					if (attempt > 0)
+					{
+						Cfg.Log($"{Name}: slot {slot} activated on try {attempt + 1}");
+					}
+					return true;
+				}
+				if (attempt < 2)
+				{
+					System.Threading.Thread.Sleep(25);
 				}
 			}
-			if (ok)
-			{
-				this.slot = slot;
-			}
-			return ok;
+			Cfg.Log($"{Name}: could not activate slot {slot} after 3 tries (last status {s})");
+			return false;
 		}
 	}
 

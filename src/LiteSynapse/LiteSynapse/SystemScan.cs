@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -79,6 +80,18 @@ internal static class ScanRules
 			return "unsigned";
 		}
 		return "";
+	}
+
+	// The flag for an entry of a Startup folder. A shortcut is judged by the program it points to (target; null
+	// when it could not be read, which flags nothing): a shortcut there is the normal way to start something, and
+	// the .lnk file itself carries no signature. A program file dropped into the folder is judged by where it is.
+	internal static string FolderEntryFlag(string file, bool isShortcut, string target, bool exists, bool signed, string publisher)
+	{
+		if (isShortcut)
+		{
+			return (target == null) ? "" : Flag(exists, signed, publisher, target);
+		}
+		return IsLooseLocation(file) ? "location" : "";
 	}
 
 	// Items with a flag are listed first, then by name.
@@ -481,18 +494,33 @@ internal static class SystemScanner
 					continue;
 				}
 				bool off = StartupApproved.IsDisabledElsewhere(approvedIn, "StartupFolder", System.IO.Path.GetFileName(file));
+				// A shortcut is judged by the program it points to (ScanRules.FolderEntryFlag): the row shows that
+				// program's path and signature, and Defender can be pointed at it.
+				bool isShortcut = file.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase);
+				string target = isShortcut ? ShortcutTarget(file) : null;
+				string program = target ?? file;
+				bool exists = false;
+				try
+				{
+					exists = program.Length > 0 && File.Exists(program);
+				}
+				catch
+				{
+				}
+				string publisher = (exists && (target != null || !isShortcut)) ? Signer(program) : "";
 				list.Add(new ScanItem
 				{
 					Kind = "startup",
 					Name = name,
 					Id = file,
 					Scope = "folder",
-					Path = file,
-					Costs = "Starts with Windows from the Startup folder.",
+					Path = program,
+					Publisher = publisher,
+					Costs = "Starts with Windows from the Startup folder" + ((target != null) ? " (a shortcut to " + program + ")." : "."),
 					Lose = "It no longer starts by itself. You can still open it yourself.",
 					State = off ? "off" : "on",
 					CanDisable = false,
-					Flag = ScanRules.IsLooseLocation(file) ? "location" : ""
+					Flag = ScanRules.FolderEntryFlag(file, isShortcut, target, exists, publisher.Length > 0, publisher)
 				});
 			}
 		}
@@ -531,6 +559,43 @@ internal static class SystemScanner
 			CanDisable = scope == "HKCU" && state != "disabled",
 			CanEnable = scope == "HKCU" && state == "disabled"
 		};
+	}
+
+	// The program a .lnk shortcut points to (environment variables expanded), or null when it cannot be read.
+	// Through the Windows Script Host shell object, late bound: it resolves the link the way Explorer does.
+	private static string ShortcutTarget(string lnk)
+	{
+		object shell = null;
+		object link = null;
+		try
+		{
+			Type t = Type.GetTypeFromProgID("WScript.Shell", throwOnError: false);
+			if (t == null)
+			{
+				return null;
+			}
+			shell = Activator.CreateInstance(t);
+			link = t.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[1] { lnk });
+			string target = link?.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, link, null) as string;
+			return string.IsNullOrWhiteSpace(target) ? null : Environment.ExpandEnvironmentVariables(target.Trim());
+		}
+		catch (Exception ex) when (ex is COMException || ex is TargetInvocationException || ex is MissingMethodException
+			|| ex is InvalidCastException || ex is ArgumentException || ex is NotSupportedException)
+		{
+			Cfg.Log("scan (shortcut " + lnk + "): " + (ex.InnerException ?? ex).Message);
+			return null;
+		}
+		finally
+		{
+			if (link != null && Marshal.IsComObject(link))
+			{
+				Marshal.FinalReleaseComObject(link);
+			}
+			if (shell != null && Marshal.IsComObject(shell))
+			{
+				Marshal.FinalReleaseComObject(shell);
+			}
+		}
 	}
 
 	// Who signed the file ("" when it carries no signature). This reads the signature's subject; it does not

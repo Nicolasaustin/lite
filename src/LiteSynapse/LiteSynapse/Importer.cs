@@ -45,6 +45,17 @@ internal static class Importer
 		return JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(item["payload"].GetValue<string>())));
 	}
 
+	// One macro from a file for the macro page's IMPORT: a Synapse macro export (.xml) or a LiteSynapse export
+	// (.json, MacroEdit.ToJson). Nothing is stored; the page decides what to do with a name that exists.
+	public static Macro ImportMacroFile(string path)
+	{
+		if (path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+		{
+			return ImportMacroXml(path);
+		}
+		return MacroEdit.FromJson(File.ReadAllText(path));
+	}
+
 	public static string Run(string[] files)
 	{
 		ProfileStore store = Cfg.Load<ProfileStore>(Cfg.Profiles);

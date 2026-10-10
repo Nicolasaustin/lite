@@ -8,6 +8,12 @@ internal class KeyCapture : Control
 {
 	public string KeyName;
 
+	// The virtual-key code behind KeyName (left Shift/Ctrl/Alt for the generic ones), and whether it needs the
+	// extended-key flag when injected. Set together with KeyName.
+	public int Vk;
+
+	public bool Ext;
+
 	public event Action Captured;
 
 	public KeyCapture()
@@ -53,6 +59,8 @@ internal class KeyCapture : Control
 		if (n != null)
 		{
 			KeyName = n;
+			Vk = vk;
+			Ext = Keys2.IsExt(vk);
 			base.Invalidate();
 			Captured?.Invoke();
 		}

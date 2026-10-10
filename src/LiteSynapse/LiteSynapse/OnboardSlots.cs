@@ -101,16 +101,19 @@ internal sealed class OnboardSlots
 
 	// What to do so the mouse runs the profile with this hash. lastUse[slot] orders the live slots by when they
 	// were last written or switched to (bigger = more recent); the least recently used one is overwritten.
-	public SlotPlan PlanApply(int active, string hash, IReadOnlyList<long> lastUse)
+	// force: write whatever the records say. The records only know what LiteSynapse wrote; Razer Synapse (or a
+	// driver reset) may have changed the mouse's memory while LiteSynapse was closed, so its first write after a
+	// start, and the first after the mouse comes back, must not trust them.
+	public SlotPlan PlanApply(int active, string hash, IReadOnlyList<long> lastUse, bool force = false)
 	{
 		// Nothing to send when the active live slot already holds the profile. A user slot (3..5) never counts,
 		// even with the same content: while LiteSynapse runs the mouse runs from a live slot, so changes made in
 		// LiteSynapse never touch the user's own slots.
-		if (hash != null && IsLiveSlot(active) && HashOf(active) == hash)
+		if (!force && hash != null && IsLiveSlot(active) && HashOf(active) == hash)
 		{
 			return new SlotPlan(SlotAction.None, active);
 		}
-		if (hash != null)
+		if (!force && hash != null)
 		{
 			foreach (int s in LiveSlots)
 			{

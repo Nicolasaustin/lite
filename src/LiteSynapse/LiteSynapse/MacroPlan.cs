@@ -15,11 +15,15 @@ internal sealed class MacroPlan
 
 		public readonly bool Down;
 
-		public Key(int vk, bool ext, bool down)
+		// A mouse button (MacroStep.Mouse) instead of a key; 0 for a key.
+		public readonly int Mouse;
+
+		public Key(int vk, bool ext, bool down, int mouse = 0)
 		{
 			Vk = vk;
 			Ext = ext;
 			Down = down;
+			Mouse = mouse;
 		}
 	}
 
@@ -53,10 +57,11 @@ internal sealed class MacroPlan
 		List<(int, bool)> order = new List<(int, bool)>();
 		foreach (MacroStep s in steps)
 		{
-			if (s.Vk != 0)
+			if (s.Vk != 0 || s.Mouse != 0)
 			{
-				cur.Add(new Key(s.Vk, s.Ext, s.Down));
-				(int, bool) k = (s.Vk, s.Ext);
+				cur.Add(new Key(s.Vk, s.Ext, s.Down, s.Mouse));
+				// Held set: a mouse button counts as a negative "key" so it can never collide with a vk.
+				(int, bool) k = ((s.Mouse != 0) ? (-s.Mouse) : s.Vk, s.Ext);
 				if (s.Down)
 				{
 					if (held.Add(k))
@@ -88,6 +93,8 @@ internal sealed class MacroPlan
 
 	private static Key[] Ups(List<(int, bool)> order)
 	{
-		return order.ConvertAll(((int, bool) k) => new Key(k.Item1, k.Item2, down: false)).ToArray();
+		return order.ConvertAll(((int, bool) k) => (k.Item1 < 0)
+			? new Key(0, k.Item2, down: false, -k.Item1)
+			: new Key(k.Item1, k.Item2, down: false)).ToArray();
 	}
 }

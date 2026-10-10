@@ -218,6 +218,42 @@ internal static class Native
 		SendInput(1u, a, InputSize);
 	}
 
+	// A mouse-button event for a macro step: 1 left, 2 right, 3 middle, 4 back (X1), 5 forward (X2).
+	public static INPUT MouseInput(int button, bool down)
+	{
+		uint flags;
+		uint data = 0u;
+		switch (button)
+		{
+		case 1:
+			flags = down ? 0x0002u : 0x0004u;
+			break;
+		case 2:
+			flags = down ? 0x0008u : 0x0010u;
+			break;
+		case 3:
+			flags = down ? 0x0020u : 0x0040u;
+			break;
+		default:
+			flags = down ? 0x0080u : 0x0100u;
+			data = (button == 5) ? 2u : 1u;
+			break;
+		}
+		INPUT i = new INPUT
+		{
+			type = 0u
+		};
+		i.u.mi = new MOUSEINPUT
+		{
+			data = data,
+			flags = flags,
+			extra = MAGIC
+		};
+		return i;
+	}
+
+	public const int WH_MOUSE_LL = 14;
+
 	// Middle mouse button for remapped Naga buttons (software-remap mode only; onboard remaps need nothing).
 	public static void SendMiddleButton(bool down)
 	{

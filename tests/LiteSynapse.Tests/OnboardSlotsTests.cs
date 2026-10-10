@@ -137,6 +137,24 @@ public class OnboardSlotsTests
 	}
 
 	[Fact]
+	public void AForcedApplyWritesWhateverTheRecordsSay()
+	{
+		// The records say slot 1 (active) holds the profile: trusted, nothing is sent; forced, the other live slot
+		// is written and switched to. Razer Synapse may have changed the mouse while LiteSynapse was closed.
+		OnboardSlots t = new OnboardSlots();
+		t.Set(1, "CS2", "H");
+		Assert.Equal(new SlotPlan(SlotAction.None, 1), t.PlanApply(1, "H", NoUse));
+		Assert.Equal(new SlotPlan(SlotAction.Write, 2), t.PlanApply(1, "H", NoUse, force: true));
+		// A live slot that is recorded as holding it is not switched to either: it is written.
+		OnboardSlots u = new OnboardSlots();
+		u.Set(2, "CS2", "H");
+		Assert.Equal(new SlotPlan(SlotAction.Switch, 2), u.PlanApply(3, "H", NoUse));
+		Assert.Equal(new SlotPlan(SlotAction.Write, 1), u.PlanApply(3, "H", NoUse, force: true));
+		// Never the active slot, forced or not.
+		Assert.Equal(new SlotPlan(SlotAction.Write, 1), u.PlanApply(2, "H", NoUse, force: true));
+	}
+
+	[Fact]
 	public void ALiveSlotHoldingTheProfileIsSwitchedToWithoutWriting()
 	{
 		OnboardSlots t = new OnboardSlots();

@@ -300,9 +300,7 @@ internal class MainForm : Form
 
 	private readonly TextBox txtSearch;
 
-	private readonly ListBox lstMacros;
-
-	private readonly TextBox txtMacro;
+	private MacroPage macroPage;
 
 	private readonly TextBox txtLog;
 
@@ -743,26 +741,6 @@ internal class MainForm : Form
 			BackColor = Color.FromArgb(45, 45, 45),
 			ForeColor = Theme.Text,
 			Font = Theme.F(10.5f, (FontStyle)0)
-		};
-		lstMacros = new ListBox
-		{
-			Dock = (DockStyle)3,
-			Width = 240,
-			BackColor = Theme.Card,
-			ForeColor = Theme.Text,
-			BorderStyle = (BorderStyle)0,
-			Font = Theme.F(11f, (FontStyle)0),
-			IntegralHeight = false
-		};
-		txtMacro = new TextBox
-		{
-			Dock = (DockStyle)5,
-			Multiline = true,
-			ReadOnly = true,
-			BackColor = Theme.Card,
-			ForeColor = Theme.Text,
-			BorderStyle = (BorderStyle)0,
-			Font = new Font("Consolas", 11f)
 		};
 		txtLog = new TextBox
 		{
@@ -1274,76 +1252,10 @@ internal class MainForm : Form
 
 	private void BuildMacro()
 	{
-		//IL_0008: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0032: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0063: Unknown result type (might be due to invalid IL or missing references)
-		//IL_006d: Expected Obj, but got Unknown
-		//IL_009b: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00a0: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00a7: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00af: Unknown result type (might be due to invalid IL or missing references)
-		//IL_00bf: Expected Obj, but got Unknown
-		((Control)pMacro).Padding = new Padding(24);
-		Card card = new Card
-		{
-			Title = "Macros"
-		};
-		((Control)card).Dock = (DockStyle)5;
-		((Control)card).Padding = new Padding(30, 70, 30, 30);
-		Card card2 = card;
-		lstMacros.DrawMode = (DrawMode)1;
-		lstMacros.ItemHeight = 30;
-		lstMacros.DrawItem += (object? s, DrawItemEventArgs d) =>
-		{
-			//IL_000b: Unknown result type (might be due to invalid IL or missing references)
-			//IL_0011: Unknown result type (might be due to invalid IL or missing references)
-			//IL_0013: Invalid comparison between Unknown and I4
-			//IL_002b: Unknown result type (might be due to invalid IL or missing references)
-			//IL_0031: Expected Obj, but got Unknown
-			//IL_004b: Unknown result type (might be due to invalid IL or missing references)
-			//IL_0051: Expected Obj, but got Unknown
-			if (d.Index < 0)
-			{
-				return;
-			}
-			bool flag = (d.State & DrawItemState.Selected) != 0;
-			SolidBrush val = new SolidBrush(flag ? Color.FromArgb(40, 40, 40) : Theme.Card);
-			try
-			{
-				d.Graphics.FillRectangle((Brush)(object)val, d.Bounds);
-				if (flag)
-				{
-					SolidBrush val2 = new SolidBrush(Theme.Green);
-					try
-					{
-						d.Graphics.FillRectangle((Brush)(object)val2, d.Bounds.X, d.Bounds.Y, 3, d.Bounds.Height);
-					}
-					finally
-					{
-						((IDisposable)val2)?.Dispose();
-					}
-				}
-				Tx.Left(d.Graphics, lstMacros.Items[d.Index].ToString(), Theme.P(11f, (FontStyle)0), flag ? Theme.Green : Theme.Text, new RectangleF(d.Bounds.X + 12, d.Bounds.Y, d.Bounds.Width - 14, d.Bounds.Height));
-			}
-			finally
-			{
-				((IDisposable)val)?.Dispose();
-			}
-		};
-		lstMacros.SelectedIndexChanged += (object? _, EventArgs _) =>
-		{
-			Macro macro = app.Store.Macros.FirstOrDefault((Macro x) => x.Name == (string)lstMacros.SelectedItem);
-			((Control)txtMacro).Text = ((macro == null) ? "" : ("  " + string.Join(Environment.NewLine + "  ", macro.Steps.Select((MacroStep s) => (s.Vk == 0) ? $"wait {s.DelayMs} ms" : ((s.Down ? "press  " : "release") + "  " + VkName(s.Vk, s.Ext))))));
-		};
-		((Control)card2).Controls.Add((Control)(object)txtMacro);
-		((Control)card2).Controls.Add((Control)new Panel
-		{
-			Dock = (DockStyle)3,
-			Width = 16,
-			BackColor = Theme.Card
-		});
-		((Control)card2).Controls.Add((Control)(object)lstMacros);
-		((Control)pMacro).Controls.Add((Control)(object)card2);
+		// The whole MACRO page is MacroPage (new/edit/record/import/export). It fills pMacro.
+		((Control)pMacro).Padding = new Padding(0);
+		macroPage = new MacroPage(app, this);
+		((Control)pMacro).Controls.Add((Control)(object)macroPage);
 	}
 
 	private void BuildGames()
@@ -1428,8 +1340,6 @@ internal class MainForm : Form
 		((Control)pGames).Controls.Add((Control)(object)bar2);
 		DarkScroll.Apply((Control)(object)gamesList);
 		DarkScroll.Apply((Control)(object)txtLog);
-		DarkScroll.Apply((Control)(object)txtMacro);
-		DarkScroll.Apply((Control)(object)lstMacros);
 		((Control)pGames).Resize += (object? _, EventArgs _) =>
 		{
 			//IL_001e: Unknown result type (might be due to invalid IL or missing references)
@@ -3248,15 +3158,7 @@ internal class MainForm : Form
 			{
 				return;
 			}
-			lstMacros.Items.Clear();
-			foreach (Macro m in app.Store.Macros)
-			{
-				lstMacros.Items.Add((object)m.Name);
-			}
-			if (lstMacros.Items.Count > 0)
-			{
-				((ListControl)lstMacros).SelectedIndex = 0;
-			}
+			macroPage?.Reload();
 		}
 		finally
 		{

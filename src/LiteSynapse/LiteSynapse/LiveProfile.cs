@@ -197,7 +197,8 @@ internal class LiveProfile
 
 	// Makes the mouse run p from a slot: nothing is sent when the active slot already holds it, a live slot that
 	// holds it is switched to, otherwise the least recently used live slot that is not active is written first.
-	public string Apply(RazerDevice dev, MouseProfile p)
+	// force: write regardless of what the records say (see OnboardSlots.PlanApply).
+	public string Apply(RazerDevice dev, MouseProfile p, bool force = false)
 	{
 		Switched = false;
 		Wrote = false;
@@ -211,7 +212,7 @@ internal class LiveProfile
 			Remember(active);
 		}
 		string hash = OnboardSlots.ContentHash(p);
-		SlotPlan plan = Table().PlanApply(active, hash, lastUse);
+		SlotPlan plan = Table().PlanApply(active, hash, lastUse, force);
 		int slot = plan.Slot;
 		if (plan.Action == SlotAction.Write)
 		{
@@ -242,7 +243,7 @@ internal class LiveProfile
 		{
 			SlotAction.None => "already active",
 			SlotAction.Switch => "switched, no write",
-			_ => "written and switched",
+			_ => force ? "written and switched (first write, the records were not trusted)" : "written and switched",
 		};
 		Cfg.Log($"live slot {slot} <- {p.Name}: {how}");
 		return null;

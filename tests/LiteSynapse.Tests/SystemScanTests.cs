@@ -47,6 +47,27 @@ public class SystemScanTests
 		Assert.Equal(new[] { "location", "unsigned", "missing", "" }, flags.OrderBy(ScanRules.Rank).ToArray());
 	}
 
+	[Fact]
+	public void AStartupShortcutIsJudgedByTheProgramItPointsTo()
+	{
+		string lnk = "C:\\Users\\admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\GoXLR Control Panel.lnk";
+		// A shortcut to a signed program in a normal folder is clean, even though the .lnk itself has no signature
+		// and sits in the Startup folder - that is the normal way to start something at sign-in.
+		Assert.Equal("", ScanRules.FolderEntryFlag(lnk, isShortcut: true,
+			target: "C:\\Program Files\\TC-HELICON\\GoXLR App\\GoXLR App.exe", exists: true, signed: true, publisher: "TC-HELICON"));
+		// A shortcut whose target is unsigned is only "unsigned", not "location".
+		Assert.Equal("unsigned", ScanRules.FolderEntryFlag(lnk, isShortcut: true,
+			target: "C:\\Program Files\\App\\app.exe", exists: true, signed: false, publisher: ""));
+		// A shortcut whose target is gone is "missing".
+		Assert.Equal("missing", ScanRules.FolderEntryFlag(lnk, isShortcut: true,
+			target: "C:\\gone\\app.exe", exists: false, signed: false, publisher: ""));
+		// A shortcut whose target could not be read flags nothing (we will not guess).
+		Assert.Equal("", ScanRules.FolderEntryFlag(lnk, isShortcut: true, target: null, exists: false, signed: false, publisher: ""));
+		// A real program file (not a shortcut) dropped into the Startup folder is still a "location" find.
+		string exe = "C:\\Users\\admin\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\thing.exe";
+		Assert.Equal("location", ScanRules.FolderEntryFlag(exe, isShortcut: false, target: null, exists: true, signed: true, publisher: "x"));
+	}
+
 	[Theory]
 	[InlineData("GoogleUpdate", true)]
 	[InlineData("OneDrive", true)]

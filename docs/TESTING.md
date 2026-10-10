@@ -1,5 +1,30 @@
 # Testing LiteSynapse
 
+## Build 23 (1.2.12): a real macro editor, start-up page fixes, click-swap that lands
+
+- **MACRO page is a full editor now.** Left: your macros, with NEW, DUPLICATE, RENAME, DELETE, IMPORT, EXPORT.
+  Right: the selected macro's steps, with RECORD, ADD KEY, ADD MOUSE, ADD DELAY, ADD TEXT, MOVE UP / DOWN,
+  REMOVE, SAVE and REVERT. Edits are on a copy; SAVE writes them and makes them live at once, REVERT drops them.
+  Double-click a key/mouse step to flip it between press and release, or a wait to change its time. Macros can now
+  include mouse-button steps (left/right/middle/back/forward). IMPORT takes a Synapse `.xml` export or a
+  LiteSynapse `.json`; EXPORT writes the `.json`. The page shows which key each macro is bound to.
+  - Macros are sent through Windows' standard SendInput, so they work in normal programs, offline and on servers
+    that allow them; the Competitive-safe toggle still holds them off in anti-cheat games.
+- **Start-up page reads shortcuts by what they point to.** A Startup-folder shortcut (GoXLR, MSI Afterburner, ...)
+  is judged by its target program's location and signature, not by the `.lnk` sitting in the Startup folder, so a
+  normal app no longer shows "Worth a look" just for starting at sign-in. GoXLR, MSI Afterburner and RivaTuner
+  (RTSS) now count as HELPING (like Process Lasso and LiteSynapse): FIX ALL HURTING leaves them on.
+- **Left/right click swap lands after a reset.** The first mouse write after LiteSynapse starts, and after the
+  mouse reconnects, no longer trusts the slot records (Razer Synapse or a driver reset may have changed the
+  mouse's memory while LiteSynapse was closed), so a flipped-click profile is written again instead of being
+  assumed present. The slot switch now retries up to three times rather than failing on the first miss (the
+  "could not activate the slot" error), so the swap is not silently dropped.
+
+To test: MACRO page - NEW makes a macro; ADD KEY / ADD MOUSE / ADD DELAY / ADD TEXT add steps; RECORD captures a
+sequence; SAVE makes it live (bind it on the BlackWidow page, press the key in Notepad, the text appears);
+EXPORT then IMPORT the `.json` round-trips. Performance > START-UP shows GoXLR / MSI Afterburner as HELPING, not
+"Worth a look". A left-handed (swapped) mouse profile comes up swapped after a restart.
+
 ## Build 22 (1.2.11): FIX DEAD RAZER DEVICES, and TURN ON RAZER SERVICES made safe
 
 What happened: with Razer's filter drivers removed (the driver guide) and Synapse still installed, TURN ON RAZER

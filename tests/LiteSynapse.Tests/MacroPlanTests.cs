@@ -28,6 +28,53 @@ public class MacroPlanTests
 		};
 	}
 
+	private static MacroStep Mouse(int button, bool down, int delay = 0)
+	{
+		return new MacroStep { Mouse = button, Down = down, DelayMs = delay };
+	}
+
+	[Fact]
+	public void AMouseButtonMacroPlansAsOneSegmentAndReleasesWhatItHeld()
+	{
+		// Hold left, hold a key, release both at the end with no waits: one segment, both released after.
+		MacroPlan plan = new MacroPlan(new[]
+		{
+			Mouse(1, down: true),
+			Key('W', down: true),
+			Key('W', down: false),
+			Mouse(1, down: false)
+		});
+		Assert.Single(plan.Segments);
+		Assert.Equal(4, plan.Segments[0].Keys.Length);
+		Assert.Equal(1, plan.Segments[0].Keys[0].Mouse);
+		// Nothing is left held (both were released inside the macro).
+		Assert.Empty(plan.LeftDown);
+	}
+
+	[Fact]
+	public void AMouseButtonLeftDownIsReleasedAfter()
+	{
+		// Press and hold the forward button, never release it: the plan releases it so it cannot stick.
+		MacroPlan plan = new MacroPlan(new[] { Mouse(5, down: true) });
+		Assert.Single(plan.LeftDown);
+		Assert.Equal(5, plan.LeftDown[0].Mouse);
+		Assert.False(plan.LeftDown[0].Down);
+	}
+
+	[Fact]
+	public void AMouseButtonAndAKeyWithTheSameNumberDoNotCollide()
+	{
+		// Mouse button 1 and vk 1 must be tracked apart (the held set keys mouse buttons negatively).
+		MacroPlan plan = new MacroPlan(new[]
+		{
+			Mouse(1, down: true),
+			Key(1, down: true)
+		});
+		Assert.Equal(2, plan.LeftDown.Length);
+		Assert.Contains(plan.LeftDown, (MacroPlan.Key k) => k.Mouse == 1);
+		Assert.Contains(plan.LeftDown, (MacroPlan.Key k) => k.Vk == 1 && k.Mouse == 0);
+	}
+
 	// The user's real macros, read from the data folder that ships with the repo.
 	private static List<Macro> UserMacros()
 	{

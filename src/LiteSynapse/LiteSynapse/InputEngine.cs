@@ -117,7 +117,7 @@ internal class InputEngine : IDisposable
 				Batches[i] = new Native.INPUT[keys.Length];
 				for (int j = 0; j < keys.Length; j++)
 				{
-					Batches[i][j] = Native.KeyInput(keys[j].Vk, keys[j].Ext, keys[j].Down);
+					Batches[i][j] = Input(keys[j]);
 				}
 			}
 			Release = Ups(Plan.LeftDown);
@@ -133,9 +133,15 @@ internal class InputEngine : IDisposable
 			Native.INPUT[] ups = new Native.INPUT[keys.Length];
 			for (int k = 0; k < ups.Length; k++)
 			{
-				ups[k] = Native.KeyInput(keys[k].Vk, keys[k].Ext, down: false);
+				ups[k] = Input(new MacroPlan.Key(keys[k].Vk, keys[k].Ext, down: false, keys[k].Mouse));
 			}
 			return ups;
+		}
+
+		// A key step as a keyboard event, a mouse-button step as a mouse event.
+		private static Native.INPUT Input(MacroPlan.Key k)
+		{
+			return (k.Mouse != 0) ? Native.MouseInput(k.Mouse, k.Down) : Native.KeyInput(k.Vk, k.Ext, k.Down);
 		}
 	}
 
