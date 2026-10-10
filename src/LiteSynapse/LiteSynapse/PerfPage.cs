@@ -393,7 +393,10 @@ internal sealed class PerfPage
 		}
 		foreach (RazerTask t in r.Tasks)
 		{
-			rows.Add(Info(t.Path, "A scheduled task in a Razer folder.", t.State));
+			// Whether a task is enabled is not in the task cache, so this does not claim to know. The
+			// clean-up disables it either way, which costs nothing if it was off already.
+			rows.Add(Info(t.Path, "A scheduled task in a Razer folder. Whether Windows has it enabled is not " +
+				"readable from here; the clean-up disables it either way.", ""));
 		}
 
 		rows.Add(Header("Firewall and drivers", ""));
@@ -561,7 +564,9 @@ internal sealed class PerfPage
 		}
 		// A row's id is "<kind>:<what>". Only the first colon is a separator: a file path has its own
 		// ("file:C:\\Program Files\\x.exe"), so splitting on the last one would mangle it.
-		List<(string Id, bool On)> choices = new List<(string, bool)>();
+		// The kind travels with the id. Without it, Apply had to guess which of three namespaces a bare id
+		// belonged to, and a start-up entry's id is a Run value name any program can choose.
+		List<(string Kind, string Id, bool On)> choices = new List<(string, string, bool)>();
 		List<string> notSwitchable = new List<string>();
 		foreach (CheckList.Row r in ticked)
 		{
@@ -574,7 +579,7 @@ internal sealed class PerfPage
 				notSwitchable.Add(r.Title);
 				continue;
 			}
-			choices.Add((what, on));
+			choices.Add((kind, what, on));
 		}
 		if (choices.Count == 0)
 		{

@@ -36,6 +36,14 @@ internal static class Tweaks
 	// A command prefix: run it, but do not count a non-zero exit code as a failure (see Tweak.OnCommands).
 	internal const string Optional = "?";
 
+	// Which half of a selection a step belongs in. HKCU values have to be written by the signed-in user:
+	// on a standard-user account the UAC prompt collects an administrator's credentials, and an elevated
+	// PowerShell's HKCU: is then that administrator's profile, not the user's. So an entry owning both hives
+	// is split, and each half runs where it belongs.
+	internal const string UserScope = "user";
+
+	internal const string MachineScope = "machine";
+
 	// Risk, for the badge the window shows and the warning before it applies.
 	internal const string Safe = "safe";
 
@@ -69,7 +77,10 @@ internal static class Tweaks
 
 		public string Name;
 
-		public string Kind;        // dword | string | qword
+		// dword | string | qword | keylist. "keylist" is a single REG_SZ holding "key=value;key=value;" that
+		// Windows manages as well - DirectXUserGlobalSettings also carries the user's Auto HDR preference -
+		// so only our own keys inside it are written, and the rest of the list is left alone.
+		public string Kind;
 
 		public string On;
 
@@ -165,11 +176,15 @@ internal static class Tweaks
 		Ac("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5", "0"),
 		// Hard disk: never spin down.
 		Ac("0012ee47-9041-4b5d-9b77-535fba8b1442", "6738e2c4-e8a5-4a42-b16a-e040e769756e", "0"),
+		// /setactive comes BEFORE the /change calls, because powercfg /change edits whichever scheme is
+		// active. With it last, the three timeouts below landed on whatever plan was active instead - on a
+		// first run that is Balanced, so our plan never got them (the monitor still blanked mid-round) and
+		// the user's Balanced plan was left unable to sleep, with nothing to put it back.
+		"powercfg.exe /setactive " + PlanGuid,
 		// Display and sleep off, so nothing dims mid-round.
 		"powercfg.exe /change monitor-timeout-ac 0",
 		"powercfg.exe /change standby-timeout-ac 0",
-		"powercfg.exe /change disk-timeout-ac 0",
-		"powercfg.exe /setactive " + PlanGuid
+		"powercfg.exe /change disk-timeout-ac 0"
 	};
 
 	private static string Ac(string group, string setting, string value)
@@ -390,19 +405,25 @@ internal static class Tweaks
 			{
 				new Reg("HKLM", MemoryManagement + "\\PrefetchParameters", "EnablePrefetcher", "dword", "0", "3")
 			},
+			// -ErrorAction Stop on every one: without it a non-terminating error is folded into the success
+			// stream by 2>&1, thrown away by Out-Null, never reaches the catch, and leaves $LASTEXITCODE at
+			// the 0 the line before set - so a refused step was reported as applied.
+			//
+			// Pre-launch depends on launch prefetching, so the order is not symmetric: turning off, prelaunch
+			// goes first; turning back on, prefetching goes first.
 			OnCommands = new[]
 			{
-				"Disable-MMAgent -MemoryCompression",
-				"Disable-MMAgent -PageCombining",
-				"Disable-MMAgent -ApplicationPreLaunch",
-				"Disable-MMAgent -ApplicationLaunchPrefetching"
+				"Disable-MMAgent -MemoryCompression -ErrorAction Stop",
+				"Disable-MMAgent -PageCombining -ErrorAction Stop",
+				"Disable-MMAgent -ApplicationPreLaunch -ErrorAction Stop",
+				"Disable-MMAgent -ApplicationLaunchPrefetching -ErrorAction Stop"
 			},
 			OffCommands = new[]
 			{
-				"Enable-MMAgent -MemoryCompression",
-				"Enable-MMAgent -PageCombining",
-				"Enable-MMAgent -ApplicationPreLaunch",
-				"Enable-MMAgent -ApplicationLaunchPrefetching"
+				"Enable-MMAgent -MemoryCompression -ErrorAction Stop",
+				"Enable-MMAgent -PageCombining -ErrorAction Stop",
+				"Enable-MMAgent -ApplicationLaunchPrefetching -ErrorAction Stop",
+				"Enable-MMAgent -ApplicationPreLaunch -ErrorAction Stop"
 			}
 		},
 
@@ -489,7 +510,7 @@ internal static class Tweaks
 				// "VRROptimizeEnable=0;SwapEffectUpgradeEnable=1;" would have left the VRR optimization
 				// switched off in the off state, which is not the Windows default and not what was asked for.
 				new Reg("HKCU", "Software\\Microsoft\\DirectX\\UserGpuPreferences", "DirectXUserGlobalSettings",
-					"string", "VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;", Delete)
+					"keylist", "VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;", Delete)
 			}
 		},
 		new Tweak
@@ -813,7 +834,37 @@ internal static class Tweaks
 		{
 			return a == b;
 		}
+		// A "key=value;key=value;" list is a set, not a string: Windows writes its own order and puts its own
+		// keys in the same value. Every key we asked for has to be there with the value we asked for; what
+		// else the list holds is the user's business.
+		if (IsKeyList(want) && IsKeyList(got))
+		{
+			return Pairs(got) is Dictionary<string, string> theirs
+				&& Pairs(want).All((KeyValuePair<string, string> kv) =>
+					theirs.TryGetValue(kv.Key, out string v) && string.Equals(v, kv.Value, StringComparison.OrdinalIgnoreCase));
+		}
 		return string.Equals(want?.Trim(), got?.Trim(), StringComparison.OrdinalIgnoreCase);
+	}
+
+	// "VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;" and the like.
+	internal static bool IsKeyList(string s)
+	{
+		return s != null && s.IndexOf('=') > 0 && s.IndexOf(';') > 0;
+	}
+
+	internal static Dictionary<string, string> Pairs(string list)
+	{
+		Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		foreach (string part in (list ?? "").Split(';'))
+		{
+			int at = part.IndexOf('=');
+			if (at <= 0)
+			{
+				continue;
+			}
+			map[part.Substring(0, at).Trim()] = part.Substring(at + 1).Trim();
+		}
+		return map;
 	}
 
 	internal static bool TryNumber(string s, out long value)
@@ -828,7 +879,11 @@ internal static class Tweaks
 		{
 			if (ulong.TryParse(t.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong hex))
 			{
-				value = unchecked((long)hex);
+				// Narrowed to 32 bits, because that is what a DWORD is and what the registry hands back. The
+				// write side already truncated 0xFFFFFFFF to -1; the read side did not, so it compared -1
+				// against 4294967295 and "Network throttling off" read as half-applied forever, however many
+				// times it was applied.
+				value = (hex <= uint.MaxValue) ? unchecked((int)(uint)hex) : unchecked((long)hex);
 				return true;
 			}
 			return false;
@@ -887,13 +942,57 @@ internal static class Tweaks
 
 	// ---- The script ---------------------------------------------------------------------------------
 
+	// Is there anything for this scope to do? Lets the caller skip a consent prompt, or a PowerShell start,
+	// for a selection whose work all belongs in the other half.
+	internal static bool HasWork(IEnumerable<(string Id, bool On)> choices, string scope)
+	{
+		if (choices == null)
+		{
+			return false;
+		}
+		foreach ((string id, bool on) in choices)
+		{
+			Tweak t = Find(id);
+			if (t == null)
+			{
+				continue;
+			}
+			if (t.Values.Any((Reg r) => InScope(r, scope)) || CommandsInScope(t, scope))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// HKCU belongs to the signed-in user, HKLM to the machine.
+	private static bool InScope(Reg r, string scope)
+	{
+		return scope == UserScope ? (r.Hive == "HKCU") : (r.Hive == "HKLM");
+	}
+
+	// A command has no hive of its own. The ones that belong to the user are the pointer calls, which are
+	// exactly the commands of the entries that need no administrator rights; everything else (bcdedit,
+	// powercfg, netsh, the adapter walk) is machine-wide and must be elevated.
+	private static bool CommandsInScope(Tweak t, string scope)
+	{
+		bool user = !t.NeedsAdmin;
+		bool wantUser = scope == UserScope;
+		return user == wantUser && (t.OnCommands.Length > 0 || t.OffCommands.Length > 0);
+	}
+
 	// PowerShell for the chosen changes: (id, turn it on) pairs. Unknown ids are skipped. Each step counts its
 	// own failure into $failed, which the exit code carries back, so one refused value does not hide the rest.
+	//
+	// scope picks which half of the work to emit: UserScope for this account's own registry (run without
+	// elevation) or MachineScope for everything else. An entry owning values in both hives is split between
+	// the two, because an elevated PowerShell's HKCU: is the elevating administrator's profile, which on a
+	// standard-user account is somebody else's.
 	//
 	// Nothing in here is built from text the user typed or from anything read off the PC: every key, value and
 	// command comes from the catalog above, and strings are still quoted through Ps() so a stray apostrophe
 	// cannot end a literal.
-	internal static string Script(IEnumerable<(string Id, bool On)> choices)
+	internal static string Script(IEnumerable<(string Id, bool On)> choices, string scope = MachineScope)
 	{
 		StringBuilder sb = new StringBuilder();
 		sb.Append("$failed = 0\n");
@@ -912,7 +1011,17 @@ internal static class Tweaks
 			{
 				continue;
 			}
+			bool values = t.Values.Any((Reg r) => InScope(r, scope));
+			bool commands = CommandsInScope(t, scope);
+			if (!values && !commands)
+			{
+				continue;
+			}
 			list.Add((t, on));
+			if (!commands)
+			{
+				continue;
+			}
 			foreach (string cmd in on ? t.OnCommands : t.OffCommands)
 			{
 				if (cmd.Contains("[LiteSynapse.Pointer]"))
@@ -943,8 +1052,16 @@ internal static class Tweaks
 			sb.Append("# ").Append(t.Id).Append(on ? ": on\n" : ": off\n");
 			foreach (Reg r in t.Values)
 			{
+				if (!InScope(r, scope))
+				{
+					continue;
+				}
 				string want = on ? r.On : r.Off;
 				sb.Append(want == Delete ? RemoveValue(r) : SetValue(r, want));
+			}
+			if (!CommandsInScope(t, scope))
+			{
+				continue;
 			}
 			foreach (string cmd in on ? t.OnCommands : t.OffCommands)
 			{
@@ -962,6 +1079,10 @@ internal static class Tweaks
 
 	private static string SetValue(Reg r, string want)
 	{
+		if (r.Kind == "keylist")
+		{
+			return MergeKeyList(r, want);
+		}
 		string type = r.Kind switch
 		{
 			"string" => "String",
@@ -969,22 +1090,50 @@ internal static class Tweaks
 			_ => "DWord"
 		};
 		// A DWord is written as a number so 0xFFFFFFFF arrives as the value Windows expects, not as text.
-		string value = r.Kind == "string" ? RazerLeftovers.Ps(want) : NumberLiteral(want);
+		string value = r.Kind == "string" ? RazerLeftovers.Ps(want) : NumberLiteral(want, r.Kind);
 		return "try {\n" +
 			$"  if (-not (Test-Path -LiteralPath {Path(r)})) {{ New-Item -Path {Path(r)} -Force -ErrorAction Stop | Out-Null }}\n" +
 			$"  New-ItemProperty -LiteralPath {Path(r)} -Name {RazerLeftovers.Ps(r.Name)} -PropertyType {type} -Value {value} -Force -ErrorAction Stop | Out-Null\n" +
 			"} catch { $failed++ }\n";
 	}
 
+	// Reads the list that is there, replaces only the keys we own, and writes it back - so turning this on
+	// does not throw away whatever else Windows put in the same value. Overwriting the whole string dropped
+	// the user's global Auto HDR preference, and nothing put it back.
+	private static string MergeKeyList(Reg r, string want)
+	{
+		string path = Path(r);
+		string name = RazerLeftovers.Ps(r.Name);
+		StringBuilder sb = new StringBuilder();
+		sb.Append("try {\n");
+		sb.Append($"  if (-not (Test-Path -LiteralPath {path})) {{ New-Item -Path {path} -Force -ErrorAction Stop | Out-Null }}\n");
+		sb.Append("  $map = [ordered]@{}\n");
+		sb.Append($"  $cur = (Get-ItemProperty -LiteralPath {path} -Name {name} -ErrorAction SilentlyContinue).{r.Name}\n");
+		sb.Append("  foreach ($part in ($cur -split ';')) {\n");
+		sb.Append("    $at = $part.IndexOf('=')\n");
+		sb.Append("    if ($at -gt 0) { $map[$part.Substring(0, $at)] = $part.Substring($at + 1) }\n");
+		sb.Append("  }\n");
+		foreach (KeyValuePair<string, string> kv in Pairs(want))
+		{
+			sb.Append($"  $map[{RazerLeftovers.Ps(kv.Key)}] = {RazerLeftovers.Ps(kv.Value)}\n");
+		}
+		sb.Append("  $out = ''\n");
+		sb.Append("  foreach ($k in $map.Keys) { $out += \"$k=$($map[$k]);\" }\n");
+		sb.Append($"  New-ItemProperty -LiteralPath {path} -Name {name} -PropertyType String -Value $out -Force -ErrorAction Stop | Out-Null\n");
+		sb.Append("} catch { $failed++ }\n");
+		return sb.ToString();
+	}
+
 	// DWord values are unsigned in the registry but New-ItemProperty takes a signed int, so 0xFFFFFFFF is
-	// written as -1. Anything that is not a number is quoted and let through as text.
-	private static string NumberLiteral(string want)
+	// written as -1 - which TryNumber now does for us, so both sides of the comparison narrow identically.
+	// A QWord is 64-bit and must not be narrowed. Anything that is not a number is quoted as text.
+	private static string NumberLiteral(string want, string kind)
 	{
 		if (!TryNumber(want, out long n))
 		{
 			return RazerLeftovers.Ps(want);
 		}
-		if (n > int.MaxValue)
+		if (kind != "qword" && n > int.MaxValue)
 		{
 			n = unchecked((int)n);
 		}
@@ -993,11 +1142,16 @@ internal static class Tweaks
 		return (n < 0) ? ("(" + text + ")") : text;
 	}
 
-	// Removing a value that is not there is not a failure: that is already the state we want.
+	// Removing a value that is not there is not a failure: that is already the state we want. A removal that
+	// was refused - a policy-locked key, no rights - is one, so the value is read back afterwards rather than
+	// trusting SilentlyContinue, which hid both cases equally.
 	private static string RemoveValue(Reg r)
 	{
-		return $"Remove-ItemProperty -LiteralPath {Path(r)} -Name {RazerLeftovers.Ps(r.Name)} " +
-			"-Force -ErrorAction SilentlyContinue\n";
+		string path = Path(r);
+		string name = RazerLeftovers.Ps(r.Name);
+		return $"Remove-ItemProperty -LiteralPath {path} -Name {name} -Force -ErrorAction SilentlyContinue\n" +
+			$"if ($null -ne (Get-ItemProperty -LiteralPath {path} -Name {name} -ErrorAction SilentlyContinue)) " +
+			"{ $failed++ }\n";
 	}
 
 	// $LASTEXITCODE is only set by an external program, and it keeps its old value otherwise. Several of these
@@ -1029,12 +1183,14 @@ namespace LiteSynapse {
     static extern bool SystemParametersInfo(uint a, uint b, IntPtr v, uint f);
     public static void Acceleration(bool on) {
       int[] v = on ? new int[] { 6, 10, 1 } : new int[] { 0, 0, 0 };
-      SystemParametersInfo(4, 0, v, 3);
+      if (!SystemParametersInfo(4, 0, v, 3)) throw new Exception(""SPI_SETMOUSE failed"");
     }
     public static void Speed(int notch) {
       if (notch < 1) notch = 1;
       if (notch > 20) notch = 20;
-      SystemParametersInfo(113, (uint)notch, IntPtr.Zero, 3);
+      // SPI_SETMOUSESPEED takes the new speed in pvParam and requires uiParam to be zero. Passing it the
+      // other way round asked for speed 0, which is outside the valid 1-20 range, so it did nothing at all.
+      if (!SystemParametersInfo(113, 0, (IntPtr)notch, 3)) throw new Exception(""SPI_SETMOUSESPEED failed"");
     }
   }
 }

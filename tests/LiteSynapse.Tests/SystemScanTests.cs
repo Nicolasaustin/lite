@@ -200,6 +200,37 @@ public class ServiceCatalogTests
 	}
 
 	[Fact]
+	public void APerUserTemplateIsNotStoppedByName()
+	{
+		// What runs is an instance with a logon-id suffix (OneSyncSvc_49cd3), so "sc stop OneSyncSvc" cannot
+		// reach it. The start-type change is what takes effect, at the next sign-in, and the row says so.
+		foreach (string name in new[] { "OneSyncSvc", "CDPUserSvc", "PimIndexMaintenanceSvc", "MessagingService", "BcastDVRUserService" })
+		{
+			ServiceCatalog.Row row = ServiceCatalog.Find(name);
+			Assert.True(row.PerUser, name + " is a per-user template");
+			Assert.Contains("next sign-in", row.Lose);
+			string off = ServiceCatalog.Script(new[] { (name, false) });
+			Assert.Contains("start= disabled", off);
+			Assert.DoesNotContain("sc.exe stop", off);
+			// And turning it back on does not try to start a template either.
+			Assert.DoesNotContain("sc.exe start", ServiceCatalog.Script(new[] { (name, true) }));
+		}
+		// An ordinary service still gets both.
+		string normal = ServiceCatalog.Script(new[] { ("DiagTrack", false) });
+		Assert.Contains("sc.exe stop", normal);
+	}
+
+	[Fact]
+	public void ARowWindowsShipsDisabledIsNotOfferedAsSomethingToTurnBackOn()
+	{
+		// Writing "disabled" over "disabled" and then reporting a change is worse than not offering it.
+		foreach (string name in new[] { "tzautoupdate", "RemoteRegistry", "RemoteAccess" })
+		{
+			Assert.Equal(ServiceCatalog.Disabled, ServiceCatalog.Find(name).Default);
+		}
+	}
+
+	[Fact]
 	public void NothingSelectedChangesNothing()
 	{
 		Assert.Equal("$failed = 0\nexit $failed\n", ServiceCatalog.Script(null));
@@ -212,6 +243,19 @@ public class ServiceCatalogTests
 // script generator cannot be talked into touching something that is not in the catalog.
 public class TweaksTests
 {
+	// The work is emitted in two halves - this account's registry, run without elevation, and everything
+	// else, run with it - so a test that wants the whole picture asks for both.
+	private static string Both(params (string Id, bool On)[] choices)
+	{
+		return Tweaks.Script(choices, Tweaks.UserScope) + Tweaks.Script(choices, Tweaks.MachineScope);
+	}
+
+	private static string Both(List<(string Id, bool On)> choices)
+	{
+		return Tweaks.Script(choices, Tweaks.UserScope) + Tweaks.Script(choices, Tweaks.MachineScope);
+	}
+
+
 	[Fact]
 	public void EveryEntryIsCompleteAndReversible()
 	{
@@ -230,7 +274,7 @@ public class TweaksTests
 				Assert.Contains(r.Hive, new[] { "HKLM", "HKCU" });
 				Assert.False(string.IsNullOrWhiteSpace(r.Key));
 				Assert.False(string.IsNullOrWhiteSpace(r.Name));
-				Assert.Contains(r.Kind, new[] { "dword", "string", "qword" });
+				Assert.Contains(r.Kind, new[] { "dword", "string", "qword", "keylist" });
 				// Both states must be written out, or the entry is one-directional.
 				Assert.NotNull(r.On);
 				Assert.NotNull(r.Off);
@@ -238,6 +282,84 @@ public class TweaksTests
 		});
 		Assert.Equal(Tweaks.Catalog.Length,
 			Tweaks.Catalog.Select((Tweaks.Tweak t) => t.Id.ToLowerInvariant()).Distinct().Count());
+	}
+
+	[Fact]
+	public void AMultiKeyValueIsMergedIntoRatherThanOverwritten()
+	{
+		// DirectXUserGlobalSettings is one REG_SZ holding a key=value list that Windows manages too - it also
+		// carries the user's global Auto HDR preference. Writing the whole string threw that away, and
+		// nothing put it back.
+		string on = Both(("flip", true));
+		Assert.Contains("Get-ItemProperty", on);
+		Assert.Contains("$map[", on);
+		Assert.Contains("'SwapEffectUpgradeEnable'", on);
+		Assert.Contains("'VRROptimizeEnable'", on);
+		// The old whole-value write must be gone.
+		Assert.DoesNotContain("-Value 'VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;'", on);
+	}
+
+	[Fact]
+	public void AKeyListReadsBackWhateverOrderWindowsWroteIt()
+	{
+		// Order is Windows' choice, and other keys in the same value are the user's business: every key we
+		// asked for has to be present with the value we asked for, and nothing more is required.
+		Assert.True(Tweaks.Matches("A=0;B=0;", "B=0;A=0;"));
+		Assert.True(Tweaks.Matches("A=0;B=0;", "A=0;B=0;AutoHDREnable=1;"));
+		Assert.False(Tweaks.Matches("A=0;B=0;", "A=0;B=1;"));
+		Assert.False(Tweaks.Matches("A=0;B=0;", "A=0;"));
+		Assert.Equal(2, Tweaks.Pairs("A=0;B=1;").Count);
+		Assert.Equal("1", Tweaks.Pairs("A=0;B=1;")["b"]);
+		Assert.True(Tweaks.IsKeyList("A=0;B=1;"));
+		Assert.False(Tweaks.IsKeyList("38"));
+		Assert.False(Tweaks.IsKeyList(null));
+	}
+
+	[Fact]
+	public void TheHiveSplitPutsEachHalfWhereItBelongs()
+	{
+		// An entry owning both hives has to be split: an elevated PowerShell's HKCU: is the elevating
+		// administrator's profile, which on a standard-user account is somebody else's.
+		string user = Tweaks.Script(new[] { ("gamedvr", true) }, Tweaks.UserScope);
+		string machine = Tweaks.Script(new[] { ("gamedvr", true) }, Tweaks.MachineScope);
+		Assert.Contains("HKCU:", user);
+		Assert.DoesNotContain("HKLM:", user);
+		Assert.Contains("HKLM:", machine);
+		Assert.DoesNotContain("HKCU:", machine);
+		// And HasWork agrees with what each half actually emits.
+		Assert.True(Tweaks.HasWork(new[] { ("gamedvr", true) }, Tweaks.UserScope));
+		Assert.True(Tweaks.HasWork(new[] { ("gamedvr", true) }, Tweaks.MachineScope));
+		// A machine-only entry has nothing for the unelevated half, so no PowerShell is started for it.
+		Assert.False(Tweaks.HasWork(new[] { ("priority", true) }, Tweaks.UserScope));
+		Assert.True(Tweaks.HasWork(new[] { ("priority", true) }, Tweaks.MachineScope));
+		// The pointer calls belong to the user, and must not be sent to the elevated half.
+		Assert.Contains("LiteSynapse.Pointer", Tweaks.Script(new[] { ("accel", true) }, Tweaks.UserScope));
+		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new[] { ("accel", true) }, Tweaks.MachineScope));
+		Assert.False(Tweaks.HasWork(null, Tweaks.UserScope));
+	}
+
+	[Fact]
+	public void TheLowLatencyPlanIsMadeActiveBeforeItsTimeoutsAreSet()
+	{
+		// powercfg /change edits whichever scheme is ACTIVE. With /setactive last, the three timeouts landed
+		// on the plan that happened to be active - Balanced, on a first run - so our plan never got them and
+		// the user's Balanced plan was left unable to sleep, with nothing to put it back.
+		string on = Both(("powerplan", true));
+		int active = on.IndexOf("/setactive " + Tweaks.PlanGuid, StringComparison.Ordinal);
+		int change = on.IndexOf("/change monitor-timeout-ac", StringComparison.Ordinal);
+		Assert.True(active >= 0 && change >= 0);
+		Assert.True(active < change, "the plan has to be active before /change can edit it");
+	}
+
+	[Fact]
+	public void ADeleteThatWasRefusedIsCountedAsAFailure()
+	{
+		// SilentlyContinue hid "the value was not there" and "Windows would not let me" equally, so a
+		// policy-locked key reported complete success. The value is read back instead.
+		string off = Both(("mitigations", false));
+		Assert.Contains("Remove-ItemProperty", off);
+		Assert.Contains("Get-ItemProperty", off);
+		Assert.Contains("{ $failed++ }", off);
 	}
 
 	[Fact]
@@ -285,8 +407,8 @@ public class TweaksTests
 	[Fact]
 	public void NothingInTheCatalogTouchesTheInputStackOrDeletesAnything()
 	{
-		string all = Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
-			+ Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
+		string all = Both(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
+			+ Both(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
 		foreach (string never in new[]
 		{
 			"mshidkmdf", "mouhid", "kbdhid", "HidUsb", "mouclass\\\\", "sc.exe delete",
@@ -303,16 +425,19 @@ public class TweaksTests
 	[Fact]
 	public void OnlyWhatWasAskedForEndsUpInTheScript()
 	{
-		string one = Tweaks.Script(new[] { ("accel", true) });
+		string one = Both(("accel", true));
 		Assert.Contains("MouseThreshold1", one);
 		Assert.DoesNotContain("EnableLUA", one);
 		Assert.DoesNotContain("bcdedit", one);
 		Assert.StartsWith("$failed = 0\n", one);
 		Assert.EndsWith("exit $failed\n", one);
 		// An id that is not in the catalog is skipped, not guessed at.
-		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new[] { ("rm -rf /", true) }));
-		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new (string, bool)[0]));
-		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(null));
+		foreach (string scope in new[] { Tweaks.UserScope, Tweaks.MachineScope })
+		{
+			Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new[] { ("rm -rf /", true) }, scope));
+			Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new (string, bool)[0], scope));
+			Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(null, scope));
+		}
 	}
 
 	[Fact]
@@ -320,8 +445,8 @@ public class TweaksTests
 	{
 		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{
-			string on = Tweaks.Script(new[] { (t.Id, true) });
-			string off = Tweaks.Script(new[] { (t.Id, false) });
+			string on = Both((t.Id, true));
+			string off = Both((t.Id, false));
 			// Pointer speed is the one entry whose two states ask for the same value (the middle notch), so it
 			// is the only one allowed to produce the same script both ways.
 			if (t.Id == "pointerspeed")
@@ -337,14 +462,14 @@ public class TweaksTests
 	{
 		// The pointer helper is a block of C# compiled at run time: it must not be emitted for a selection
 		// that never calls it.
-		string plain = Tweaks.Script(new[] { ("gamemode", true) });
+		string plain = Both(("gamemode", true));
 		Assert.DoesNotContain("LiteSynapse.Pointer", plain);
 		Assert.DoesNotContain("LiteSynapse.Net", plain);
-		Assert.Contains("LiteSynapse.Pointer", Tweaks.Script(new[] { ("accel", true) }));
-		Assert.Contains("LiteSynapse.Net", Tweaks.Script(new[] { ("nagle", true) }));
-		// And only once, however many entries want it.
-		string both = Tweaks.Script(new[] { ("accel", true), ("pointerspeed", true) });
-		Assert.Equal(1, both.Split("Add-Type").Length - 1);
+		Assert.Contains("LiteSynapse.Pointer", Both(("accel", true)));
+		Assert.Contains("LiteSynapse.Net", Both(("nagle", true)));
+		// And only once per half, however many entries want it.
+		string one = Tweaks.Script(new[] { ("accel", true), ("pointerspeed", true) }, Tweaks.UserScope);
+		Assert.Equal(1, one.Split("Add-Type").Length - 1);
 	}
 
 	[Theory]
@@ -355,7 +480,7 @@ public class TweaksTests
 	[InlineData("priority", "38")]
 	public void NumbersAreWrittenAsWindowsWantsThem(string id, string expected)
 	{
-		Assert.Contains("-Value " + expected + " ", Tweaks.Script(new[] { (id, true) }));
+		Assert.Contains("-Value " + expected + " ", Both((id, true)));
 	}
 
 	[Fact]
@@ -371,7 +496,7 @@ public class TweaksTests
 			("powerplan", false, "powercfg.exe /delete " + Tweaks.PlanGuid)
 		})
 		{
-			string script = Tweaks.Script(new[] { (step.Id, step.On) });
+			string script = Both((step.Id, step.On));
 			int at = script.IndexOf(step.Expect, StringComparison.Ordinal);
 			Assert.True(at >= 0, step.Id + " does not run " + step.Expect);
 			// The lines straight after the removal are its own try/catch, and must not check the exit code.
@@ -381,14 +506,14 @@ public class TweaksTests
 			Assert.DoesNotContain("$failed++", after);
 		}
 		// The marker is never left in the script itself.
-		string all = Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
-			+ Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
+		string all = Both(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
+			+ Both(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
 		Assert.DoesNotContain("  ?", all);
 		Assert.DoesNotContain("?bcdedit", all);
 		Assert.DoesNotContain("?powercfg", all);
 		// A step that really can fail is still checked: setting a boot value, and the power plan's own writes.
-		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Tweaks.Script(new[] { ("dynamictick", true) }));
-		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Tweaks.Script(new[] { ("powerplan", true) }));
+		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Both(("dynamictick", true)));
+		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Both(("powerplan", true)));
 	}
 
 	[Fact]
@@ -396,7 +521,7 @@ public class TweaksTests
 	{
 		// Run() clears $LASTEXITCODE first, because a .NET call or a cmdlet does not set it and the check
 		// would otherwise read whatever external command ran before it in the script.
-		string script = Tweaks.Script(new[] { ("accel", true) });
+		string script = Both(("accel", true));
 		int clear = script.IndexOf("$global:LASTEXITCODE = 0", StringComparison.Ordinal);
 		int check = script.IndexOf("if ($LASTEXITCODE -ne 0)", StringComparison.Ordinal);
 		Assert.True(clear >= 0, "the exit code is never cleared");
@@ -406,7 +531,9 @@ public class TweaksTests
 	[Theory]
 	[InlineData("0x26", 38)]
 	[InlineData("38", 38)]
-	[InlineData("0xFFFFFFFF", 4294967295L)]
+	// Narrowed to 32 bits on purpose: a DWORD read back out of the registry is a signed int, so 0xFFFFFFFF
+	// has to compare equal to the -1 that Windows hands us or the setting reads as never applied.
+	[InlineData("0xFFFFFFFF", -1L)]
 	[InlineData("10", 10)]
 	public void HexAndDecimalReadTheSame(string text, long expected)
 	{
@@ -461,7 +588,7 @@ public class TweaksTests
 	[Fact]
 	public void TheLowLatencyPowerPlanIsBuiltAndCanBeRemovedAgain()
 	{
-		string on = Tweaks.Script(new[] { ("powerplan", true) });
+		string on = Both(("powerplan", true));
 		Assert.Contains("powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61", on);
 		Assert.Contains(Tweaks.PlanGuid, on);
 		// Processor minimum state and core parking at 100.
@@ -469,7 +596,7 @@ public class TweaksTests
 		Assert.Contains("0cc5b647-c1df-4637-891a-dec35c318583 100", on);
 		// USB selective suspend off.
 		Assert.Contains("48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0", on);
-		string off = Tweaks.Script(new[] { ("powerplan", false) });
+		string off = Both(("powerplan", false));
 		// Turning it off puts Balanced back and removes the plan we made, not one of the user's own.
 		Assert.Contains("powercfg.exe /setactive scheme_balanced", off);
 		Assert.Contains("powercfg.exe /delete " + Tweaks.PlanGuid, off);
@@ -488,7 +615,7 @@ public class TweaksTests
 			Assert.True(t.NeedsAdmin);
 		}
 		// Leaving the timer alone is done by deleting the overrides, never by setting one.
-		string on = Tweaks.Script(new[] { ("platformclock", true) });
+		string on = Both(("platformclock", true));
 		Assert.Contains("bcdedit.exe /deletevalue useplatformclock", on);
 		Assert.Contains("bcdedit.exe /deletevalue tscsyncpolicy", on);
 		Assert.DoesNotContain("/set useplatformclock", on);

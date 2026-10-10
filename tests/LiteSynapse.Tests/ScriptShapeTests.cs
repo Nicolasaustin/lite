@@ -17,10 +17,14 @@ public class ScriptShapeTests
 	// Every script the three generators can produce, at their largest.
 	private static IEnumerable<(string Name, string Script)> AllScripts()
 	{
-		yield return ("every setting on",
-			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList()));
-		yield return ("every setting off",
-			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList()));
+		// Both halves of the split, since each is a script in its own right that gets run on its own.
+		foreach (string scope in new[] { Tweaks.UserScope, Tweaks.MachineScope })
+		{
+			yield return ($"every setting on ({scope})",
+				Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList(), scope));
+			yield return ($"every setting off ({scope})",
+				Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList(), scope));
+		}
 		yield return ("every service off",
 			ServiceCatalog.Script(ServiceCatalog.All.Select((ServiceCatalog.Row r) => (r.Service, false)).ToList()));
 		yield return ("every service on",
@@ -36,24 +40,27 @@ public class ScriptShapeTests
 		// a structural mistake would land, so it is checked at its largest and at its smallest.
 		yield return ("services and every setting merged", SystemScanner.Combine(
 			ServiceCatalog.Script(ServiceCatalog.All.Select((ServiceCatalog.Row r) => (r.Service, false)).ToList()),
-			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())));
+			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList(), Tweaks.MachineScope)));
 		yield return ("one service and one setting merged", SystemScanner.Combine(
 			ServiceCatalog.Script(new[] { ("DiagTrack", false) }),
-			Tweaks.Script(new[] { ("accel", true) })));
+			Tweaks.Script(new[] { ("priority", true) }, Tweaks.MachineScope)));
 		// The halves can also be empty, which is what an all-start-up selection looks like by the time it
 		// reaches here.
 		yield return ("nothing on either side merged", SystemScanner.Combine(
-			ServiceCatalog.Script(null), Tweaks.Script(null)));
+			ServiceCatalog.Script(null), Tweaks.Script(null, Tweaks.MachineScope)));
 		yield return ("only settings merged", SystemScanner.Combine(
-			ServiceCatalog.Script(null), Tweaks.Script(new[] { ("nagle", true) })));
+			ServiceCatalog.Script(null), Tweaks.Script(new[] { ("nagle", true) }, Tweaks.MachineScope)));
 		yield return ("only services merged", SystemScanner.Combine(
-			ServiceCatalog.Script(new[] { ("Spooler", false) }), Tweaks.Script(null)));
+			ServiceCatalog.Script(new[] { ("Spooler", false) }), Tweaks.Script(null, Tweaks.MachineScope)));
 
 		// One of each kind together, which is what a real selection looks like.
 		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{
-			yield return ("just " + t.Id + " on", Tweaks.Script(new[] { (t.Id, true) }));
-			yield return ("just " + t.Id + " off", Tweaks.Script(new[] { (t.Id, false) }));
+			foreach (string scope in new[] { Tweaks.UserScope, Tweaks.MachineScope })
+			{
+				yield return ($"just {t.Id} on ({scope})", Tweaks.Script(new[] { (t.Id, true) }, scope));
+				yield return ($"just {t.Id} off ({scope})", Tweaks.Script(new[] { (t.Id, false) }, scope));
+			}
 		}
 	}
 

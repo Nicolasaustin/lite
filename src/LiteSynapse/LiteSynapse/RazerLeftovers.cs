@@ -432,7 +432,9 @@ public class RazerLeftovers
 		}
 		p.DisableTask = r.UpgradeTask == "ready";
 		p.Tasks.AddRange((r.Tasks ?? new List<RazerTask>())
-			.Where((RazerTask t) => t != null && !string.IsNullOrWhiteSpace(t.Path) && t.State == "ready")
+			// Anything not known to be off: a walked task's state is "unknown" because the task cache cannot
+			// tell us, and dropping those was how they came to be missed.
+			.Where((RazerTask t) => t != null && !string.IsNullOrWhiteSpace(t.Path) && t.State != "disabled")
 			.Select((RazerTask t) => t.Path));
 		p.Firewall = r.FirewallRules > 0;
 		p.RunOnce.AddRange((r.RunOnce ?? new List<string>()).Where((string v) => CpuzRunOnce.Contains(v, StringComparer.OrdinalIgnoreCase)));
@@ -535,7 +537,7 @@ public class RazerLeftovers
 			}
 			foreach (string t in p.Tasks)
 			{
-				bool still = (after?.Tasks ?? new List<RazerTask>()).Any((RazerTask x) => x != null && x.State == "ready" && string.Equals(x.Path, t, StringComparison.OrdinalIgnoreCase));
+				bool still = (after?.Tasks ?? new List<RazerTask>()).Any((RazerTask x) => x != null && x.State != "disabled" && string.Equals(x.Path, t, StringComparison.OrdinalIgnoreCase));
 				(still ? on : off).Add("task " + t.TrimStart('\\'));
 			}
 			if (p.Firewall)
@@ -1142,7 +1144,13 @@ public class RazerLeftovers
 						found.Add(new RazerTask
 						{
 							Path = full,
-							State = ((sub.GetValue("Index") is int idx) && idx == 0) ? "disabled" : "ready"
+							// The task cache does not carry an enabled flag - which is exactly why the
+							// upgrade task's state is read by shelling out to schtasks /XML instead. This used
+							// to guess from the "Index" value, which is not that flag, so every task whose
+							// Index happened to be 0 was reported disabled and then silently dropped from the
+							// clean-up plan. Unknown is the truth, and the plan includes anything not known to
+							// be off; schtasks /Change /DISABLE on an already-disabled task does no harm.
+							State = "unknown"
 						});
 					}
 				}

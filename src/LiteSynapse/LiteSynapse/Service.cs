@@ -774,9 +774,9 @@ internal sealed class Service
 		});
 	}
 
-	// Turns the chosen start-up entries, services and Windows settings on or off, then scans again. Each pair
-	// is (what, turn it on); nothing the user did not tick is touched.
-	public Task<string> ScanApplyAsync(IReadOnlyList<(string Id, bool On)> choices)
+	// Turns the chosen start-up entries, services and Windows settings on or off, then scans again. Each
+	// choice is (what kind of thing, which one, turn it on); nothing the user did not tick is touched.
+	public Task<string> ScanApplyAsync(IReadOnlyList<(string Kind, string Id, bool On)> choices)
 	{
 		return Task.Run(() =>
 		{

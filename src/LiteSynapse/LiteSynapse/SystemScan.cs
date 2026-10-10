@@ -404,12 +404,21 @@ internal static class SystemScanner
 					{
 						continue;
 					}
-					string command = run.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-					ScanItem item = Describe(name, command, scope);
-					// LiteSynapse does not put itself on the list.
-					if (!string.Equals(name, "LiteSynapse", StringComparison.OrdinalIgnoreCase))
+					// Per item: an unreadable value or a Task Manager switch that will not open loses that one
+					// row, not the whole list.
+					try
 					{
-						list.Add(item);
+						string command = run.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+						ScanItem item = Describe(name, command, scope);
+						// LiteSynapse does not put itself on the list.
+						if (!string.Equals(name, "LiteSynapse", StringComparison.OrdinalIgnoreCase))
+						{
+							list.Add(item);
+						}
+					}
+					catch (Exception ex)
+					{
+						Cfg.Log($"scan (startup {scope}\\{name}): " + ex.Message);
 					}
 				}
 			}
@@ -421,7 +430,18 @@ internal static class SystemScanner
 			{
 				continue;
 			}
-			foreach (string file in Directory.GetFiles(dir))
+			// One unreadable Startup folder must not take the Run entries with it.
+			string[] files;
+			try
+			{
+				files = Directory.GetFiles(dir);
+			}
+			catch (Exception ex)
+			{
+				Cfg.Log("scan (startup folder " + dir + "): " + ex.Message);
+				continue;
+			}
+			foreach (string file in files)
 			{
 				string name = System.IO.Path.GetFileNameWithoutExtension(file);
 				if (string.Equals(name, "LiteSynapse", StringComparison.OrdinalIgnoreCase))
@@ -543,7 +563,9 @@ internal static class SystemScanner
 					Risk = row?.Risk ?? Tweaks.Caution,
 					State = state,
 					CanDisable = row != null && start != 4,
-					CanEnable = row != null && start == 4,
+					// Nothing to put back when the start type Windows ships is "disabled" too: offering it
+					// would write the value it already has and then report a change that did not happen.
+					CanEnable = row != null && start == 4 && row.Default != ServiceCatalog.Disabled,
 					Network = hog.HasValue || online.Contains(name)
 				});
 			}
@@ -599,9 +621,18 @@ internal static class SystemScanner
 	// One call for everything the Performance page can change: start-up entries, services and Windows
 	// settings, each with its own on/off. Only what the user ticked is touched - there is no "apply all".
 	//
+	// Every choice carries the KIND of thing it is ("start", "svc" or "tweak") as well as its id, and is
+	// dispatched on that kind alone. Matching a bare id against all three in turn was a real hole: a start-up
+	// entry's id is a Run value name read straight out of the registry, and any program can create
+	// HKCU\...\Run\accel or \Run\Spooler without administrator rights. Ticking "Pointer acceleration off"
+	// then found the start-up entry first and reported "already like that" without applying the tweak, and
+	// ticking a service could disable a start-up program the user never ticked while leaving the service
+	// running.
+	//
 	// Start-up entries are this account's own (Task Manager's switch, no elevation). Services and settings go
-	// into one elevated script, so the whole selection costs at most one consent prompt.
-	public static string Apply(IReadOnlyList<(string Id, bool On)> choices)
+	// into one elevated script, so the whole selection costs at most one consent prompt - except the settings
+	// that live in this account's registry, which need none.
+	public static string Apply(IReadOnlyList<(string Kind, string Id, bool On)> choices)
 	{
 		if (choices == null || choices.Count == 0)
 		{
@@ -611,63 +642,57 @@ internal static class SystemScanner
 		List<string> done = new List<string>();
 		List<string> refused = new List<string>();
 		List<string> already = new List<string>();
-		// An id is acted on once. A start-up entry whose Run value happens to be named like a catalog id
-		// would otherwise be handled by the start-up loop and again by the loop below it.
-		HashSet<string> handled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		bool reboot = false;
-
-		// Start-up entries: this account only, no administrator rights needed.
-		foreach ((string id, bool on) in choices)
-		{
-			ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
-				i.Kind == "startup" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
-			if (item == null || string.IsNullOrWhiteSpace(item.Id))
-			{
-				continue;
-			}
-			if (on ? !item.CanEnable : !item.CanDisable)
-			{
-				// Already in the state that was asked for, or not ours to switch. Saying so beats reporting
-				// "nothing was changed", which reads like a failure.
-				handled.Add(item.Id);
-				already.Add(item.Name);
-				continue;
-			}
-			handled.Add(item.Id);
-			try
-			{
-				if (on)
-				{
-					StartupApproved.Enable(item.Id);
-				}
-				else
-				{
-					StartupApproved.Disable(item.Id);
-				}
-				done.Add(item.Name + (on ? " (on)" : " (off)"));
-				Cfg.Log($"system scan: start-up \"{item.Id}\" turned {(on ? "on" : "off")}");
-			}
-			catch (Exception ex)
-			{
-				Cfg.Log("system scan (startup " + item.Id + "): " + ex.Message);
-				refused.Add(item.Name);
-			}
-		}
-
-		// Services and Windows settings: one elevated script for the lot.
 		List<(string Service, bool On)> svc = new List<(string, bool)>();
 		List<(string Id, bool On)> tweaks = new List<(string, bool)>();
-		foreach ((string id, bool on) in choices)
+
+		foreach ((string kind, string id, bool on) in choices)
 		{
-			if (handled.Contains(id))
+			switch (kind)
 			{
+			case "start":
+			{
+				ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
+					i.Kind == "startup" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+				if (item == null || string.IsNullOrWhiteSpace(item.Id))
+				{
+					continue;
+				}
+				if (on ? !item.CanEnable : !item.CanDisable)
+				{
+					// Already in the state that was asked for. Saying so beats "nothing was changed",
+					// which reads like a failure.
+					already.Add(item.Name);
+					continue;
+				}
+				try
+				{
+					if (on)
+					{
+						StartupApproved.Enable(item.Id);
+					}
+					else
+					{
+						StartupApproved.Disable(item.Id);
+					}
+					done.Add(item.Name + (on ? " (on)" : " (off)"));
+					Cfg.Log($"system scan: start-up \"{item.Id}\" turned {(on ? "on" : "off")}");
+				}
+				catch (Exception ex)
+				{
+					Cfg.Log("system scan (startup " + item.Id + "): " + ex.Message);
+					refused.Add(item.Name);
+				}
 				continue;
 			}
-			ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
-				i.Kind == "service" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
-			if (item != null)
+			case "svc":
 			{
-				handled.Add(id);
+				ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
+					i.Kind == "service" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+				if (item == null)
+				{
+					continue;
+				}
 				if (on ? item.CanEnable : item.CanDisable)
 				{
 					svc.Add((item.Id, on));
@@ -679,33 +704,32 @@ internal static class SystemScanner
 				}
 				continue;
 			}
-			Tweaks.Tweak t = Tweaks.Find(id);
-			if (t != null)
+			case "tweak":
 			{
-				handled.Add(id);
+				Tweaks.Tweak t = Tweaks.Find(id);
+				if (t == null)
+				{
+					continue;
+				}
 				tweaks.Add((t.Id, on));
 				done.Add(t.Title + (on ? " (on)" : " (off)"));
 				reboot |= t.NeedsReboot;
+				continue;
+			}
 			}
 		}
-		// Settings that live in this account's own registry need no administrator rights, and the mouse ones
-		// are the ones the user will flip most often: those run without a consent prompt.
-		List<(string Id, bool On)> local = tweaks
-			.Where(((string Id, bool On) c) => Tweaks.Find(c.Id)?.NeedsAdmin == false)
-			.ToList();
-		List<(string Id, bool On)> elevated = tweaks
-			.Where(((string Id, bool On) c) => Tweaks.Find(c.Id)?.NeedsAdmin != false)
-			.ToList();
-		if (local.Count > 0)
+
+		// Values in this account's own registry need no administrator rights - and must not be written by an
+		// elevated process either, because on a standard-user account the UAC prompt collects a different
+		// account's credentials and HKCU: would then resolve to that administrator's profile. So the split is
+		// by hive, not by entry: an entry owning both hives has each half run in the right place.
+		if (Tweaks.HasWork(tweaks, Tweaks.UserScope))
 		{
 			try
 			{
-				RazerLeftovers.RunPowerShell(Tweaks.Script(local), 60000, out int lcode);
-				Cfg.Log($"system scan: {local.Count} setting(s) for this account -> exit code {lcode}");
-				if (lcode > 0)
-				{
-					refused.Add($"{lcode} step(s) Windows would not apply");
-				}
+				RazerLeftovers.RunPowerShell(Tweaks.Script(tweaks, Tweaks.UserScope), 60000, out int lcode);
+				Cfg.Log($"system scan: settings for this account -> exit code {lcode}");
+				Problem(lcode, refused, "the settings for this account");
 			}
 			catch (Exception ex0)
 			{
@@ -713,17 +737,14 @@ internal static class SystemScanner
 				refused.Add("the settings for this account");
 			}
 		}
-		if (svc.Count > 0 || elevated.Count > 0)
+		if (svc.Count > 0 || Tweaks.HasWork(tweaks, Tweaks.MachineScope))
 		{
-			string script = Combine(ServiceCatalog.Script(svc), Tweaks.Script(elevated));
+			string script = Combine(ServiceCatalog.Script(svc), Tweaks.Script(tweaks, Tweaks.MachineScope));
 			try
 			{
 				int code = RazerLeftovers.RunElevated(script, 180000);
-				Cfg.Log($"system scan: {svc.Count} service(s), {elevated.Count} windows setting(s) -> exit code {code}");
-				if (code > 0)
-				{
-					refused.Add($"{code} step(s) Windows would not apply");
-				}
+				Cfg.Log($"system scan: {svc.Count} service(s), {tweaks.Count} windows setting(s) -> exit code {code}");
+				Problem(code, refused, "the settings that need administrator rights");
 			}
 			catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
 			{
@@ -737,6 +758,28 @@ internal static class SystemScanner
 			}
 		}
 		return Report(done, refused, already, reboot);
+	}
+
+	// What a script's exit code means. It is the number of steps that failed, but the runner also uses -2 for
+	// "it did not finish in time" and -1 for "it never started" - and those used to pass the `code > 0` test
+	// and be reported as complete success, with the "Changed:" list having been built before the script ran.
+	private static void Problem(int code, List<string> refused, string what)
+	{
+		if (code == 0)
+		{
+			return;
+		}
+		if (code == -2)
+		{
+			refused.Add(what + " (it did not finish in time and may still be running - check again in a moment)");
+			return;
+		}
+		if (code < 0)
+		{
+			refused.Add(what + " (it could not be started)");
+			return;
+		}
+		refused.Add($"{code} step(s) Windows would not apply");
 	}
 
 	// Two scripts into one, so the whole selection costs a single consent prompt. Each half counts its own

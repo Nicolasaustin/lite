@@ -45,7 +45,12 @@ internal static class ServiceCatalog
 		// The start type Windows ships, restored when the row is turned back on.
 		public int Default;
 
-		public Row(string service, string title, string costs, string lose, string risk, int def)
+		// A per-user service template. What actually runs is an instance with a logon-id suffix
+		// (OneSyncSvc_49cd3), so "sc stop <template>" cannot reach it: the change is a start-type change that
+		// takes effect at the next sign-in. The script skips the pointless stop, and the row says so.
+		public bool PerUser;
+
+		public Row(string service, string title, string costs, string lose, string risk, int def, bool perUser = false)
 		{
 			Service = service;
 			Title = title;
@@ -53,6 +58,7 @@ internal static class ServiceCatalog
 			Lose = lose;
 			Risk = risk;
 			Default = def;
+			PerUser = perUser;
 		}
 	}
 
@@ -140,19 +146,19 @@ internal static class ServiceCatalog
 			"Phone Link, shared clipboard and Nearby Sharing stop working.", Tweaks.Safe, Auto),
 		new Row("CDPUserSvc", "Connected Devices Platform (user)",
 			"The per-account half of the same thing.",
-			"Phone Link, shared clipboard and Nearby Sharing stop working.", Tweaks.Safe, Auto),
+			"Phone Link, shared clipboard and Nearby Sharing stop working. Takes effect at the next sign-in: this one runs per account, so there is no instance to stop now.", Tweaks.Safe, Auto, perUser: true),
 		new Row("DusmSvc", "Data Usage",
 			"Measures how much data each app uses.",
 			"The data-usage page in Settings stops filling in.", Tweaks.Safe, Auto),
 		new Row("OneSyncSvc", "Sync Host",
 			"Syncs mail, contacts and calendar for the built-in apps.",
-			"The built-in Mail, Calendar and People apps stop syncing.", Tweaks.Safe, Auto),
+			"The built-in Mail, Calendar and People apps stop syncing. Takes effect at the next sign-in: this one runs per account, so there is no instance to stop now.", Tweaks.Safe, Auto, perUser: true),
 		new Row("PimIndexMaintenanceSvc", "Contact Data",
 			"Indexes contacts for the same apps.",
-			"Contact search in the built-in apps.", Tweaks.Safe, Auto),
+			"Contact search in the built-in apps. Takes effect at the next sign-in: this one runs per account, so there is no instance to stop now.", Tweaks.Safe, Auto, perUser: true),
 		new Row("MessagingService", "Messaging Service",
 			"Text-messaging support for the built-in apps.",
-			"Nothing unless you use Phone Link messaging.", Tweaks.Safe, Manual),
+			"Nothing unless you use Phone Link messaging. Takes effect at the next sign-in: this one runs per account, so there is no instance to stop now.", Tweaks.Safe, Manual, perUser: true),
 		new Row("PhoneSvc", "Phone Service",
 			"Phone-call support for the built-in apps.",
 			"Nothing unless you use Phone Link calling.", Tweaks.Safe, Manual),
@@ -274,7 +280,7 @@ internal static class ServiceCatalog
 			"Controller input in games that use GameInput. Mouse and keyboard are unaffected.", Tweaks.Caution, Manual),
 		new Row("BcastDVRUserService", "GameDVR and Broadcast",
 			"The Game Bar's recording and streaming.",
-			"Game Bar recording and broadcasting. Game Mode is separate and stays on.", Tweaks.Caution, Manual),
+			"Game Bar recording and broadcasting. Game Mode is separate and stays on. Takes effect at the next sign-in: this one runs per account, so there is no instance to stop now.", Tweaks.Caution, Manual, perUser: true),
 		new Row("bthserv", "Bluetooth Support",
 			"Manages Bluetooth devices.",
 			"Every Bluetooth device stops working. Only turn it off if nothing you use is Bluetooth.", Tweaks.Caution, Manual),
@@ -466,7 +472,7 @@ internal static class ServiceCatalog
 				string start = row.Default == Auto ? "auto" : (row.Default == Manual ? "demand" : "disabled");
 				sb.Append($"sc.exe config {n} start= {start} | Out-Null\n");
 				sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
-				if (row.Default == Auto)
+				if (row.Default == Auto && !row.PerUser)
 				{
 					// A service that will not start is not counted as a failure: several of these start on
 					// demand even when they are set to automatic.
@@ -477,7 +483,12 @@ internal static class ServiceCatalog
 			{
 				sb.Append($"sc.exe config {n} start= disabled | Out-Null\n");
 				sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
-				sb.Append($"sc.exe stop {n} | Out-Null\n");
+				// A per-user template has no running instance under its own name, so stopping it by name
+				// fails and tells the user nothing useful. The start-type change is what takes effect.
+				if (!row.PerUser)
+				{
+					sb.Append($"sc.exe stop {n} | Out-Null\n");
+				}
 			}
 		}
 		sb.Append("exit $failed\n");
