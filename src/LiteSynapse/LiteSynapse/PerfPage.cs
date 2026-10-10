@@ -35,6 +35,11 @@ internal sealed class PerfPage
 
 	private readonly List<PillButton> buttons = new List<PillButton>();
 
+	// Per page: the buttons that act on ticked rows, with the caption they were given. A destructive button
+	// that says how many rows it will change is the difference between "I meant that" and "I did not".
+	private readonly List<(int Page, PillButton Button, string Caption)> counted =
+		new List<(int, PillButton, string)>();
+
 	// Which pages have been filled since the window opened, so switching back does not re-read the PC.
 	private readonly bool[] loaded = new bool[5];
 
@@ -56,8 +61,12 @@ internal sealed class PerfPage
 		return pages[Math.Max(0, Math.Min(pages.Length - 1, pill))];
 	}
 
-	// Called when the page becomes visible. Reading the PC costs a moment (services, signatures, a WMI query),
-	// so it happens once per window rather than on every tab click; "Check again" re-reads on demand.
+	// Called when the page becomes visible. Reading the PC costs a moment (every service, a signature per
+	// start-up program, a WMI query), so it happens once per window rather than on every tab click, and
+	// "Check again" re-reads on demand.
+	//
+	// The first time a page is shown, whatever it needs is fetched in the background rather than leaving the
+	// user looking at "not read yet" above a button they would press anyway. Opening the tab is the ask.
 	public void Show(int pill)
 	{
 		int i = Math.Max(0, Math.Min(pages.Length - 1, pill));
@@ -67,6 +76,61 @@ internal sealed class PerfPage
 		}
 		loaded[i] = true;
 		Refresh(i);
+		// The tray's "Performance" opens the window straight onto this tab, which means Goto runs before the
+		// form is shown and its handle does not exist yet. Work() needs the handle to post its result back, so
+		// in that case the fetch waits for the window to appear - otherwise it would be dropped and the page
+		// would sit there with its buttons disabled.
+		if (!owner.IsHandleCreated)
+		{
+			int page = i;
+			void WhenShown(object sender, EventArgs e)
+			{
+				owner.Shown -= WhenShown;
+				Fetch(page);
+			}
+			owner.Shown += WhenShown;
+			return;
+		}
+		Fetch(i);
+	}
+
+	// Reads whatever the page needs, the first time it is opened.
+	private void Fetch(int i)
+	{
+		switch (i)
+		{
+		case 0:
+			// A shallow check ran at start-up; the services, tasks and firewall rules need the full one.
+			if (!app.Razer.Deep)
+			{
+				Work(0, "Checking what Razer left behind...", () =>
+				{
+					app.RefreshRazer(deep: true);
+					return "Checked.";
+				});
+			}
+			break;
+		case 1:
+			if (!app.Tuning.Checked)
+			{
+				Work(1, "Asking Windows about the devices...", () =>
+				{
+					app.RefreshTuning();
+					return "Checked.";
+				});
+			}
+			break;
+		default:
+			if (!app.Scan.Checked)
+			{
+				Work(i, "Reading the settings...", () =>
+				{
+					app.RunScanAsync().GetAwaiter().GetResult();
+					return "Checked.";
+				});
+			}
+			break;
+		}
 	}
 
 	// ---- Layout helpers -------------------------------------------------------------------------------
@@ -124,6 +188,10 @@ internal sealed class PerfPage
 			b.Click += (object _1, EventArgs _2) => Guarded(onPage, handler);
 			head.Controls.Add(b);
 			buttons.Add(b);
+			if (text.IndexOf("TICKED", StringComparison.Ordinal) >= 0)
+			{
+				counted.Add((index, b, text));
+			}
 			x += b.Width + 10;
 		}
 		Label note = new Label
@@ -144,6 +212,8 @@ internal sealed class PerfPage
 			Dock = DockStyle.Fill,
 			BackColor = Theme.Bg
 		};
+		int listPage = index;
+		list.Changed += () => ShowCounts(listPage);
 		lists[index] = list;
 		page.Controls.Add(list);
 		page.Controls.Add(head);
@@ -178,6 +248,21 @@ internal sealed class PerfPage
 		}
 		note.ForeColor = problem ? Color.FromArgb(235, 120, 120) : Theme.Green;
 		note.Text = text ?? "";
+	}
+
+	// Puts the number of ticked rows on this page's apply buttons, so a destructive press is never a guess.
+	private void ShowCounts(int index)
+	{
+		int n = lists[index]?.TickedCount ?? 0;
+		foreach ((int page, PillButton button, string caption) in counted)
+		{
+			if (page != index || button.IsDisposed)
+			{
+				continue;
+			}
+			button.Text = (n > 0) ? caption.Replace("TICKED", n.ToString() + " TICKED") : caption;
+			button.Invalidate();
+		}
 	}
 
 	// Runs the slow part off the UI thread, with the buttons disabled while it does.
@@ -450,13 +535,20 @@ internal sealed class PerfPage
 			return;
 		}
 		// A risky row has to be ticked and then confirmed by name: these are the ones that give up security.
-		List<CheckList.Row> risky = ticked.Where((CheckList.Row r) => on && r.Risk == Tweaks.Risky).ToList();
+		//
+		// Which direction is the dangerous one depends on what the row is. Turning a tweak ON is what applies
+		// it, so that is the direction to ask about. For a service it is the other way round: turning
+		// Defender, the firewall or Windows Update OFF is the change that costs something, and turning it back
+		// on is the safe direction. Asking about "on" for everything meant the Services page's green
+		// "TURN TICKED OFF" button disabled Defender with no confirmation at all, while "TURN TICKED BACK ON"
+		// put up a warning about giving up security for restoring it.
+		List<CheckList.Row> risky = ticked.Where((CheckList.Row r) => r.Risk == Tweaks.Risky && Destructive(r, on)).ToList();
 		if (risky.Count > 0)
 		{
 			string list = string.Join("\n  ", risky.Select((CheckList.Row r) => "- " + r.Title));
 			DialogResult answer = MessageBox.Show(owner,
 				"These give up security or a part of Windows you may need:\n\n  " + list +
-				"\n\nEach one's cost is written on its row. Turn them on?",
+				"\n\nEach one's cost is written on its row. " + (on ? "Turn them on?" : "Turn them off?"),
 				"LiteSynapse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
 			if (answer != DialogResult.Yes)
 			{
@@ -489,6 +581,21 @@ internal sealed class PerfPage
 		string trailer = (notSwitchable.Count > 0) ? " " + Cannot(notSwitchable) : "";
 		Work(index, on ? "Turning them on..." : "Turning them off...",
 			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult() + trailer);
+	}
+
+	// Is this the direction that takes something away? Applying a tweak is "on"; disabling a service is "off".
+	// A start-up entry is neither: turning one off costs nothing that cannot be undone from the same list.
+	private static bool Destructive(CheckList.Row row, bool on)
+	{
+		switch (Split(row.Id).Kind)
+		{
+		case "svc":
+			return !on;
+		case "tweak":
+			return on;
+		default:
+			return false;
+		}
 	}
 
 	// "tweak:accel" -> ("tweak", "accel"); "file:C:\\x.exe" -> ("file", "C:\\x.exe"). Only the first colon
@@ -795,6 +902,7 @@ internal sealed class PerfPage
 			FillStartup();
 			break;
 		}
+		ShowCounts(index);
 	}
 
 	// The service told us something changed: re-read whichever page is showing next time it is opened.

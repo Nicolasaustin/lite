@@ -311,6 +311,12 @@ internal class MainForm : Form
 
 	private readonly Toggle tgLive;
 
+	// Close the window when a linked game comes to the front, and the anti-cheat guard. Both were settable
+	// from the old HTML window and had no home in this one.
+	private readonly Toggle tgCloseOnGame;
+
+	private readonly Toggle tgSafe;
+
 	private readonly Label lblHome1;
 
 	private readonly Label lblHome2;
@@ -358,6 +364,24 @@ internal class MainForm : Form
 
 	// The Performance tab's index in the top bar (the tray's "Performance" opens it).
 	public const int PagePerf = 6;
+
+	// Size, maximized state and "close when a game starts" (data/ui.json).
+	private readonly UiPrefs prefs = UiPrefs.Load();
+
+	private readonly float dpiScale;
+
+	// EVENT_SYSTEM_FOREGROUND, so the window can get out of the way when a game comes to the front.
+	private const uint EventSystemForeground = 3u;
+
+	private const uint WinEventSkipOwnProcess = 2u;
+
+	private Native.WinEventProc foregroundProc;
+
+	private nint foregroundHook;
+
+	private FormWindowState shownState = FormWindowState.Normal;
+
+	private bool closing;
 
 	// Built on demand: its five pages read the PC, so nothing happens until the tab is opened.
 	private PerfPage perf;
@@ -749,6 +773,12 @@ internal class MainForm : Form
 		Toggle toggle6 = new Toggle();
 		((Control)toggle6).BackColor = Theme.Card;
 		tgLive = toggle6;
+		Toggle toggle7 = new Toggle();
+		((Control)toggle7).BackColor = Theme.Card;
+		tgCloseOnGame = toggle7;
+		Toggle toggle8 = new Toggle();
+		((Control)toggle8).BackColor = Theme.Card;
+		tgSafe = toggle8;
 		lblHome1 = new Label
 		{
 			AutoSize = true,
@@ -767,10 +797,16 @@ internal class MainForm : Form
 		this.app = app;
 		base.Text = "LiteSynapse";
 		base.Icon = AppIcon.Icon();
-		base.Width = 1180;
-		base.Height = 780;
-		base.MinimumSize = new Size(1000, 700);
+		// Remembered size, scaled for this display's DPI and clamped to the work area: at 125% on a 1366x768
+		// laptop the old fixed 1180x780 opened taller than the screen every time.
+		dpiScale = Math.Max(1f, (float)base.DeviceDpi / 96f);
+		base.MinimumSize = FitToScreen(Scaled(UiPrefs.MinWidth, UiPrefs.MinHeight));
+		base.Size = FitToScreen(Scaled(prefs.Width, prefs.Height));
 		base.StartPosition = (FormStartPosition)1;
+		if (prefs.Maximized)
+		{
+			base.WindowState = FormWindowState.Maximized;
+		}
 		base.BackColor = Theme.Bg;
 		base.ForeColor = Theme.Text;
 		base.Font = Theme.F(10f, (FontStyle)0);
@@ -891,6 +927,104 @@ internal class MainForm : Form
 	{
 		base.OnHandleCreated(e);
 		Ui.DarkTitleBar((Form)(object)this);
+	}
+
+	protected override void OnShown(EventArgs e)
+	{
+		base.OnShown(e);
+		shownState = base.WindowState;
+		HookForeground();
+	}
+
+	protected override void OnFormClosing(FormClosingEventArgs e)
+	{
+		base.OnFormClosing(e);
+		if (e.Cancel)
+		{
+			return;
+		}
+		closing = true;
+		UnhookForeground();
+		// The size as the user left it, back in unscaled units so it means the same on another display.
+		Rectangle bounds = (base.WindowState == FormWindowState.Normal) ? base.Bounds : base.RestoreBounds;
+		if (bounds.Width > 0 && bounds.Height > 0)
+		{
+			prefs.Width = (int)Math.Round(bounds.Width / dpiScale);
+			prefs.Height = (int)Math.Round(bounds.Height / dpiScale);
+		}
+		prefs.Maximized = base.WindowState == FormWindowState.Maximized
+			|| (base.WindowState == FormWindowState.Minimized && shownState == FormWindowState.Maximized);
+		prefs.Normalize();
+		prefs.Save();
+	}
+
+	private Size Scaled(int width, int height)
+	{
+		return new Size((int)Math.Round(width * dpiScale), (int)Math.Round(height * dpiScale));
+	}
+
+	private Size FitToScreen(Size size)
+	{
+		Rectangle area = Screen.FromPoint(Cursor.Position).WorkingArea;
+		return new Size(Math.Min(size.Width, area.Width), Math.Min(size.Height, area.Height));
+	}
+
+	// ---- Close when a game comes to the front ----------------------------------------------------------
+
+	// The whole point of this app is that nothing of it costs anything while you play, and a window sitting
+	// on top of a game costs something. When a linked game comes to the front, the window closes.
+	private void HookForeground()
+	{
+		if (foregroundHook != IntPtr.Zero)
+		{
+			return;
+		}
+		foregroundProc = OnForegroundChanged;
+		foregroundHook = Native.SetWinEventHook(EventSystemForeground, EventSystemForeground, IntPtr.Zero,
+			foregroundProc, 0u, 0u, WinEventSkipOwnProcess);
+	}
+
+	private void UnhookForeground()
+	{
+		if (foregroundHook != IntPtr.Zero)
+		{
+			Native.UnhookWinEvent(foregroundHook);
+			foregroundHook = IntPtr.Zero;
+		}
+		foregroundProc = null;
+	}
+
+	// Another program came to the front; this process's own windows are skipped by the hook.
+	private void OnForegroundChanged(nint hook, uint evt, nint hwnd, int idObject, int idChild, uint thread, uint time)
+	{
+		try
+		{
+			if (closing || !prefs.CloseOnGame || base.IsDisposed)
+			{
+				return;
+			}
+			string path = Native.ForegroundExePath(out uint pid);
+			if (path == null || pid == (uint)Environment.ProcessId)
+			{
+				return;
+			}
+			string exe = Path.GetFileName(path);
+			GameRule rule = GameRule.Find(app.Games, exe, path);
+			if (rule == null)
+			{
+				return;
+			}
+			Cfg.Log($"window closed: {exe} (\"{rule.Profile}\") came to the front");
+			// The hook runs on this thread's message loop, so closing is posted rather than done inline.
+			if (((Control)this).IsHandleCreated)
+			{
+				((Control)this).BeginInvoke((Action)Close);
+			}
+		}
+		catch (Exception ex)
+		{
+			Cfg.Log("window: foreground check: " + ex.Message);
+		}
 	}
 
 	public void OpenMemory()
@@ -1478,6 +1612,23 @@ internal class MainForm : Form
 		Row("Switch profiles automatically when a game starts", (Control)(object)tgAuto);
 		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup);
 		Row("Run selected profiles on the mouse itself", (Control)(object)tgLive, "Writes the profile into the mouse's memory (slots 1-2) and switches to it, so it keeps working if LiteSynapse is closed.");
+		Row("Close this window when a game starts", (Control)(object)tgCloseOnGame, "A window on top of a game costs frames. With this on, the window gets out of the way by itself when a linked game comes to the front.");
+		Row("Competitive safe", (Control)(object)tgSafe, "Keeps macros and Snap Tap switched off while a game is in front. Valve kicks for them on official servers and FACEIT bans for them, so leave this on unless you are in an offline practice session.");
+		tgCloseOnGame.CheckedChanged += () =>
+		{
+			if (!loading)
+			{
+				prefs.CloseOnGame = tgCloseOnGame.Checked;
+				prefs.Save();
+			}
+		};
+		tgSafe.CheckedChanged += () =>
+		{
+			if (!loading)
+			{
+				app.SetCompetitiveSafe(tgSafe.Checked);
+			}
+		};
 		tgAuto.CheckedChanged += () =>
 		{
 			if (!loading)
@@ -2903,6 +3054,8 @@ internal class MainForm : Form
 				tgAuto.Checked = app.Auto;
 				tgStartup.Checked = Service.IsStartup();
 				tgLive.Checked = app.LiveWrite;
+				tgCloseOnGame.Checked = prefs.CloseOnGame;
+				tgSafe.Checked = app.CompetitiveSafe;
 				LoadLog();
 			}
 			if (top.Selected == 2)

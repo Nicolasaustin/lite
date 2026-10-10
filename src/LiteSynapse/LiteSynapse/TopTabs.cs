@@ -47,12 +47,31 @@ internal class TopTabs : Control
 		Order = o;
 	}
 
+	// Each tab is its glyph, its caption and some padding. With seven tabs that can be wider than the window
+	// at the minimum size, or at a display scale above 100% where the text grows and the window does not -
+	// and this row has no wrap and no scroll, so an overflowing tab was simply clipped off the right edge.
+	// When the total does not fit, the padding is squeezed down to a floor before anything is cut.
 	private float[] Widths()
 	{
 		Font f = Theme.F(9.5f, (FontStyle)0);
 		try
 		{
-			return Items.Select(((string text, string glyph) i) => 46f + Tx.Measure(i.text.ToUpperInvariant(), f).Width + 18f).ToArray();
+			float[] text = Items.Select(((string text, string glyph) i) =>
+				Tx.Measure(i.text.ToUpperInvariant(), f).Width).ToArray();
+			const float glyph = 46f;
+			const float padding = 18f;
+			const float minPadding = 4f;
+			float[] w = text.Select((float t) => glyph + t + padding).ToArray();
+			float available = base.Width - 8f - 4f * Math.Max(0, Items.Length - 1);
+			float total = w.Sum();
+			if (available <= 0f || total <= available)
+			{
+				return w;
+			}
+			// Take the overflow out of the padding, evenly, no further than the floor.
+			float over = total - available;
+			float give = Math.Min(over / Math.Max(1, Items.Length), padding - minPadding);
+			return text.Select((float t) => glyph + t + padding - give).ToArray();
 		}
 		finally
 		{

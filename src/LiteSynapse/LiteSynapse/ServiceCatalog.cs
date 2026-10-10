@@ -65,6 +65,10 @@ internal static class ServiceCatalog
 		// Input. Without these the PC has no pointer and no typing.
 		"mouclass", "mouhid", "kbdclass", "kbdhid", "mshidkmdf", "HidUsb", "hidi2c", "HidBth", "hidinterrupt",
 		"USBHUB3", "usbhub", "USBXHCI", "usbccgp", "usbehci", "usbohci", "usbuhci",
+		// Elevation. With Appinfo off nothing on the PC can ask for administrator rights - including
+		// LiteSynapse, so the change could not be undone from the page that made it. FR33THY's list leaves
+		// it alone too.
+		"Appinfo",
 		// Boot and sign-in.
 		"DcomLaunch", "RpcSs", "RpcEptMapper", "PlugPlay", "Power", "LSM", "UserManager", "ProfSvc",
 		"BrokerInfrastructure", "CoreMessagingRegistrar", "SystemEventsBroker", "DeviceInstall", "Winmgmt",
@@ -334,9 +338,6 @@ internal static class ServiceCatalog
 		new Row("Schedule", "Task Scheduler",
 			"Runs scheduled tasks, including Windows' own maintenance.",
 			"A great deal of Windows stops working, including parts of servicing and many apps' updaters. Keep it on.", Tweaks.Risky, Auto),
-		new Row("Appinfo", "Application Information",
-			"Runs programs with administrator rights.",
-			"Nothing can elevate, so LiteSynapse cannot apply anything on this page. Keep it on.", Tweaks.Risky, Manual),
 
 		// ---- Risky: updates, security, networking ---------------------------------------------------
 		new Row("DoSvc", "Delivery Optimization",

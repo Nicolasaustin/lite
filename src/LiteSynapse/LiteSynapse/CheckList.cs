@@ -80,6 +80,9 @@ internal sealed class CheckList : Control
 	{
 		DoubleBuffered = true;
 		BackColor = Theme.Bg;
+		// Focusable so the mouse wheel reaches it, but out of the tab order: it is a list, not a field.
+		SetStyle(ControlStyles.Selectable, value: true);
+		TabStop = false;
 		bar.Dock = DockStyle.Right;
 		bar.Width = 14;
 		bar.SmallChange = 24;
@@ -169,9 +172,17 @@ internal sealed class CheckList : Control
 		int view = Math.Max(1, Height);
 		int maxScroll = Math.Max(0, total - view);
 		bar.Visible = total > view;
-		// A VScrollBar's highest reachable Value is Maximum - LargeChange + 1, so Maximum has to be set past
-		// the end by LargeChange - 1 for the last row to be scrollable into view.
-		bar.Maximum = maxScroll + bar.LargeChange - 1;
+		// A VScrollBar's highest reachable Value is Maximum - LargeChange + 1. Setting Maximum from the
+		// LargeChange *getter* does not work: the getter returns Math.Min(whatLWeSet, Maximum - Minimum + 1),
+		// so it is clamped by the Maximum we are about to replace. Right after construction, or after a layout
+		// pass with an empty list, it reads 1 instead of 120 - and the list then stopped about two rows short
+		// of the bottom until the window was resized.
+		//
+		// Setting both from the content instead has no such dependency: Maximum = total - 1 with
+		// LargeChange = view gives a highest Value of exactly total - view, which is the last row.
+		bar.Maximum = Math.Max(0, total - 1);
+		bar.LargeChange = Math.Max(1, view);
+		bar.SmallChange = 24;
 		if (bar.Value > maxScroll)
 		{
 			bar.Value = maxScroll;
@@ -393,6 +404,19 @@ internal sealed class CheckList : Control
 		}
 	}
 
+	protected override void OnMouseEnter(EventArgs e)
+	{
+		base.OnMouseEnter(e);
+		// Windows delivers WM_MOUSEWHEEL to the focused window, and WinForms bubbles an unhandled wheel
+		// message up the parent chain rather than down to the control under the pointer. Without this the
+		// wheel scrolls nothing after the first tab switch, because ShowPage clears the host's controls and
+		// takes the focused one with them.
+		if (!Focused && CanFocus)
+		{
+			Focus();
+		}
+	}
+
 	protected override void OnMouseLeave(EventArgs e)
 	{
 		base.OnMouseLeave(e);
@@ -406,6 +430,15 @@ internal sealed class CheckList : Control
 	protected override void OnMouseDown(MouseEventArgs e)
 	{
 		base.OnMouseDown(e);
+		// The wheel only reaches the control that has focus, and nothing else on these pages wants it.
+		if (!Focused && CanFocus)
+		{
+			Focus();
+		}
+		if (e.Button != MouseButtons.Left)
+		{
+			return;
+		}
 		int at = RowAt(e.Y);
 		if (at < 0 || items[at].Header || !items[at].Can)
 		{
@@ -431,7 +464,9 @@ internal sealed class CheckList : Control
 			return;
 		}
 		int step = -(e.Delta / 120) * 60;
-		int maxScroll = Math.Max(0, bar.Maximum - bar.LargeChange + 1);
+		// The same reachable maximum the scrollbar itself enforces, worked out from the content rather than
+		// from the clamped LargeChange getter.
+		int maxScroll = Math.Max(0, total - Math.Max(1, Height));
 		bar.Value = Math.Max(bar.Minimum, Math.Min(maxScroll, bar.Value + step));
 	}
 }

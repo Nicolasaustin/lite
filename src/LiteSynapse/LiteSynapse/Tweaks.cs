@@ -472,15 +472,21 @@ internal static class Tweaks
 			Title = "Optimizations for windowed games off",
 			What = "Windows 11 upgrades a windowed game's swap chain to the flip model and adds its own frame " +
 				"pacing. For a game that already uses exclusive fullscreen it is one more thing between the frame " +
-				"and the panel.",
+				"and the panel. This turns off that upgrade and the variable-refresh-rate optimization with it, " +
+				"which is how the guide sets it.",
 			Cost = "If you play borderless-windowed, this is the setting that gives borderless its low latency - " +
-				"leave it off in that case.",
+				"leave it off in that case. It also turns off the VRR optimization for windowed games, so on a " +
+				"G-Sync or FreeSync monitor judder in windowed games is worth watching for.",
 			Risk = Caution,
 			Source = "fr33thy",
 			Values = new[]
 			{
+				// Off removes the value rather than writing the other half of it: with no value Windows uses
+				// its own defaults for both settings, which is what "off" has to mean. Writing
+				// "VRROptimizeEnable=0;SwapEffectUpgradeEnable=1;" would have left the VRR optimization
+				// switched off in the off state, which is not the Windows default and not what was asked for.
 				new Reg("HKCU", "Software\\Microsoft\\DirectX\\UserGpuPreferences", "DirectXUserGlobalSettings",
-					"string", "VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;", "VRROptimizeEnable=0;SwapEffectUpgradeEnable=1;")
+					"string", "VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;", Delete)
 			}
 		},
 		new Tweak

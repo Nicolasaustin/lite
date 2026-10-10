@@ -93,7 +93,10 @@ public class ServiceCatalogTests
 			"usbhub", "USBXHCI", "usbccgp",
 			"DcomLaunch", "RpcSs", "RpcEptMapper", "PlugPlay", "Power", "LSM", "UserManager", "ProfSvc",
 			"CryptSvc", "Winmgmt", "gpsvc", "StorSvc", "Audiosrv", "AudioEndpointBuilder",
-			"nsi", "Dhcp", "Dnscache", "Themes", "TrustedInstaller"
+			"nsi", "Dhcp", "Dnscache", "Themes", "TrustedInstaller",
+			// With this off nothing can ask for administrator rights, so the change could not be undone from
+			// the page that made it.
+			"Appinfo"
 		})
 		{
 			Assert.True(ServiceCatalog.IsProtected(critical), critical + " must never be offered");
