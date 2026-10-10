@@ -172,9 +172,19 @@ internal static class Program
 		// elevated process can register or remove it - this one is (app.manifest), and it does nothing else.
 		if (args.Length >= 1 && (args[0] == "--register-startup" || args[0] == "--unregister-startup"))
 		{
-			string error = Service.SetStartup(args[0] == "--register-startup");
-			Cfg.FlushLog();
-			return (error == null) ? 0 : 1;
+			try
+			{
+				string error = Service.SetStartup(args[0] == "--register-startup");
+				Cfg.FlushLog();
+				return (error == null) ? 0 : 1;
+			}
+			catch (Exception ex)
+			{
+				// Setup falls back on its own (StartupRequest, or schtasks /Delete): never a crash dialog here.
+				Cfg.Log("start with Windows (" + args[0] + "): " + ex.Message);
+				Cfg.FlushLog();
+				return 1;
+			}
 		}
 		bool first;
 		Mutex single;
@@ -220,7 +230,10 @@ internal static class Program
 					if (!File.Exists(path) || DateTime.Now - File.GetLastWriteTime(path) > TimeSpan.FromMinutes(1L))
 					{
 						File.WriteAllText(path, DateTime.Now.ToString("o"));
-						Process.Start(new ProcessStartInfo("cmd.exe", "/c ping -n 4 127.0.0.1 >nul & \"" + Environment.ProcessPath + "\" --tray")
+						// Full paths, and /d so this account's cmd AutoRun does not run with administrator rights.
+						string sys = Environment.SystemDirectory;
+						Process.Start(new ProcessStartInfo(Path.Combine(sys, "cmd.exe"), "/d /s /c \"\"" + Path.Combine(sys, "ping.exe") +
+							"\" -n 4 127.0.0.1 >nul & \"" + Environment.ProcessPath + "\" --tray\"")
 						{
 							CreateNoWindow = true,
 							UseShellExecute = false

@@ -13,6 +13,11 @@
 ; Relative paths are relative to this folder (makensis changes into it).
 
 Unicode true
+; The installer and uninstaller run as administrator: NSIS before 3.09 had an elevated-uninstaller flaw
+; (CVE-2023-37378).
+!if ${NSIS_PACKEDVERSION} < 0x03009000
+  !error "NSIS 3.09 or newer is required (the installer and uninstaller run as administrator)."
+!endif
 ManifestDPIAware true
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
@@ -116,7 +121,7 @@ Var FinishText
 !define MUI_ABORTWARNING
 
 !define MUI_WELCOMEPAGE_TITLE "Install ${APP_NAME} ${VERSION}"
-!define MUI_WELCOMEPAGE_TEXT "Setup installs ${APP_NAME} ${VERSION} for your Windows account. It does not need administrator rights.$\r$\n$\r$\nIf ${APP_NAME} is running, Setup closes it first. Your profiles and settings are kept or copied over; existing ones are never overwritten.$\r$\n$\r$\nSetup does not install or remove any drivers or services.$\r$\n$\r$\n$_CLICK"
+!define MUI_WELCOMEPAGE_TEXT "Setup installs ${APP_NAME} ${VERSION} for your Windows account. It asks for administrator rights because ${APP_NAME} runs as administrator: that is what lets its macros and Snap Tap reach games that run as administrator.$\r$\n$\r$\nIf ${APP_NAME} is running, Setup closes it first. Your profiles and settings are kept or copied over; existing ones are never overwritten.$\r$\n$\r$\nSetup does not install or remove any drivers or services.$\r$\n$\r$\n$_CLICK"
 !insertmacro MUI_PAGE_WELCOME
 
 !define MUI_DIRECTORYPAGE_TEXT_TOP "Setup will install ${APP_NAME} in the folder below. Your profiles and settings are stored in its $\"data$\" subfolder."
@@ -263,7 +268,7 @@ Function ${un}CloseApp
       StrCpy $2 "closed (forced)"
     ${EndIf}
     ${If} $0 = 1
-      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${APP_NAME} is still running and Setup could not close it (it may have been started as administrator).$\r$\n$\r$\nRight-click the ${APP_NAME} tray icon and choose Exit, then click Retry." /SD IDCANCEL IDRETRY retry
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "${APP_NAME} is still running and Setup could not close it.$\r$\n$\r$\nRight-click the ${APP_NAME} tray icon and choose Exit, then click Retry." /SD IDCANCEL IDRETRY retry
       DetailPrint "${APP_NAME} is still running: cancelled."
       Abort
     ${EndIf}
@@ -479,6 +484,10 @@ Function .onInit
   ; "Start with Windows" starts as the sign-in task is now (mirrored by the app), or, coming from a version that
   ; used the Run key, checked when that value exists and Task Manager's Startup apps has not turned it off.
   ReadRegStr $0 HKCU "${APP_REG_KEY}" "StartWithWindows"
+  ${If} $0 == ""
+    ; A choice an earlier Setup left for LiteSynapse to carry out, not done yet.
+    ReadRegStr $0 HKCU "${APP_REG_KEY}" "StartupRequest"
+  ${EndIf}
   ReadRegStr $1 HKCU "${RUN_KEY}" "${RUN_VALUE}"
   ${If} $0 == "1"
     StrCpy $StartupState ${BST_CHECKED}
@@ -539,7 +548,7 @@ Function DirectoryLeave
     RMDir "$INSTDIR"
   ${EndIf}
   ${If} $2 = 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "Setup cannot write to $INSTDIR without administrator rights.$\r$\n$\r$\nChoose a folder in your user profile, for example the default one." /SD IDOK
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Setup cannot write to $INSTDIR.$\r$\n$\r$\nChoose another folder, for example the default one." /SD IDOK
     Abort
   ${EndIf}
 FunctionEnd
@@ -593,7 +602,8 @@ Function OptionsLeave
   StrCpy $PrereqsShown 1
   ${If} $DotNetVersion == ""
     MessageBox MB_YESNO|MB_ICONEXCLAMATION "${APP_NAME} needs the .NET 10 Desktop Runtime (x64), which is not installed.$\r$\n$\r$\nYes: open the official download page (pick $\".NET Desktop Runtime$\" for Windows x64). Setup continues; install the runtime before you start ${APP_NAME}.$\r$\n$\r$\nNo: continue without opening the page." /SD IDNO IDNO skipDotNet
-    ExecShell "open" "${DOTNET_URL}"
+    ; Through Explorer, which is not elevated, so the browser does not start with Setup's administrator rights.
+    Exec '"$WINDIR\explorer.exe" "${DOTNET_URL}"'
   skipDotNet:
   ${EndIf}
 FunctionEnd
@@ -666,6 +676,9 @@ Section "${APP_NAME}" SecMain
   ${EndIf}
 
   SetOverwrite on
+  ; LiteSynapse.exe is a single file. A DLL left in its folder by an older version (the WebView2 ones) would make
+  ; the sign-in task refuse to start it (StartupTask.cs), and nothing current needs one.
+  Delete "$INSTDIR\*.dll"
   !insertmacro LS_INSTALL_FILES
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\${UNINST_EXE}"
@@ -721,15 +734,26 @@ Section "${APP_NAME}" SecMain
     StrCpy $2 "--unregister-startup"
     StrCpy $3 "0"
   ${EndIf}
-  ClearErrors
-  ExecWait '"$INSTDIR\${APP_EXE}" $2' $0
-  ${If} ${Errors}
-  ${OrIf} $0 != 0
+  ${If} $DotNetVersion == ""
+    ; LiteSynapse cannot run yet: it does it on its first start, once the runtime is installed.
     WriteRegStr HKCU "${APP_REG_KEY}" "StartupRequest" "$3"
-    !insertmacro LOG "Start with Windows: left for LiteSynapse's next start ($2 returned $0)"
+    !insertmacro LOG "Start with Windows: left for LiteSynapse's first start (no .NET runtime yet)"
   ${Else}
-    DeleteRegValue HKCU "${APP_REG_KEY}" "StartupRequest"
-    !insertmacro LOG "Start with Windows: $2"
+    ; No ".NET is required" dialog from the app host if something is still missing: it would block Setup.
+    System::Call 'kernel32::SetEnvironmentVariable(t "DOTNET_DISABLE_GUI_ERRORS", t "1")'
+    ClearErrors
+    ExecWait '"$INSTDIR\${APP_EXE}" $2' $0
+    ${If} ${Errors}
+      WriteRegStr HKCU "${APP_REG_KEY}" "StartupRequest" "$3"
+      !insertmacro LOG "Start with Windows: left for LiteSynapse's next start ($2 could not be run)"
+    ${ElseIf} $0 != 0
+      WriteRegStr HKCU "${APP_REG_KEY}" "StartupRequest" "$3"
+      !insertmacro LOG "Start with Windows: left for LiteSynapse's next start ($2 returned $0)"
+    ${Else}
+      DeleteRegValue HKCU "${APP_REG_KEY}" "StartupRequest"
+      !insertmacro LOG "Start with Windows: $2"
+    ${EndIf}
+    System::Call 'kernel32::SetEnvironmentVariable(t "DOTNET_DISABLE_GUI_ERRORS", p 0)'
   ${EndIf}
 
   ; Apps & features entry.
@@ -782,9 +806,32 @@ Section "Uninstall"
   Call un.CloseApp
   Pop $9
 
-  ; The sign-in task runs as administrator: LiteSynapse removes it (before its files go).
-  ExecWait '"$INSTDIR\${APP_EXE}" --unregister-startup'
+  ; The sign-in task runs as administrator: LiteSynapse removes it (before its files go). When it cannot run
+  ; (no runtime, file missing), the task is deleted by the name LiteSynapse recorded. Running it may create
+  ; data\log.txt, so whether data existed before is noted for the clean-up below.
+  StrCpy $7 0
+  ${IfNot} ${FileExists} "$INSTDIR\data\*.*"
+    StrCpy $7 1
+  ${EndIf}
+  System::Call 'kernel32::SetEnvironmentVariable(t "DOTNET_DISABLE_GUI_ERRORS", t "1")'
+  ClearErrors
+  StrCpy $0 1
+  ${If} ${FileExists} "$INSTDIR\${APP_EXE}"
+    ExecWait '"$INSTDIR\${APP_EXE}" --unregister-startup' $0
+  ${EndIf}
+  ${If} ${Errors}
+  ${OrIf} $0 != 0
+    ReadRegStr $1 HKCU "${APP_REG_KEY}" "TaskName"
+    ${If} $1 != ""
+      nsExec::Exec '"$SYSDIR\schtasks.exe" /Delete /TN "$1" /F'
+      Pop $0
+    ${EndIf}
+  ${EndIf}
   DeleteRegKey HKCU "${APP_REG_KEY}"
+  ${If} $7 = 1
+    ; There was no data before: anything there now is the log LiteSynapse just wrote.
+    RMDir /r "$INSTDIR\data"
+  ${EndIf}
 
   !insertmacro LS_UNINSTALL_FILES
   Delete "$INSTDIR\${UNINST_EXE}"

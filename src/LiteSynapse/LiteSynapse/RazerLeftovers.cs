@@ -846,6 +846,13 @@ public class RazerLeftovers
 		{
 			return DriverScript + " was not found next to LiteSynapse.exe. Reinstall LiteSynapse to get it back.";
 		}
+		// It runs with administrator rights, now without a UAC prompt (LiteSynapse is elevated), from a folder this
+		// account can write to: only the copy built into LiteSynapse.exe is trusted.
+		if (!MatchesBuiltIn(path))
+		{
+			Cfg.Log("razer cleanup: " + path + " differs from the copy built into LiteSynapse.exe; not run");
+			return DriverScript + " has been changed since LiteSynapse was installed, so it was not run. Reinstall LiteSynapse to get the original back.";
+		}
 		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath, "-NoProfile -ExecutionPolicy Bypass -NoExit -File \"" + path + "\"")
 		{
 			UseShellExecute = true,
@@ -862,6 +869,26 @@ public class RazerLeftovers
 			msg += " Uninstall Razer Synapse first: while it is installed it puts the drivers back, and the script refuses to remove them.";
 		}
 		return msg;
+	}
+
+	private static bool MatchesBuiltIn(string path)
+	{
+		try
+		{
+			using Stream built = typeof(RazerLeftovers).Assembly.GetManifestResourceStream(DriverScript);
+			if (built == null)
+			{
+				return false;
+			}
+			using System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create();
+			byte[] want = sha.ComputeHash(built);
+			using FileStream f = File.OpenRead(path);
+			return want.AsSpan().SequenceEqual(sha.ComputeHash(f));
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			return false;
+		}
 	}
 
 	// Windows PowerShell by its full path: a bare name would also find a powershell.exe in the working directory

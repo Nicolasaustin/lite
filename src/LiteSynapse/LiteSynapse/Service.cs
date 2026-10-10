@@ -586,6 +586,28 @@ internal sealed class Service
 		worker.Post("devices", () => SyncDevices(reset: true));
 	}
 
+	// Settings' RESYNC MOUSE, and what LiteSynapse does itself when it sees Razer Synapse running: Synapse writes its
+	// own profiles into the mouse's memory and can leave it in driver mode, so a slot LiteSynapse recorded as
+	// holding "CS2" may hold something else (tilt left and right swapped, other buttons). Every slot record is
+	// dropped, the mouse goes back to normal mode, and the active profile, lighting and DPI are written again.
+	public Task<string> ResyncMouseAsync()
+	{
+		return RunOnDevices("resync", () =>
+		{
+			liveProfile.ForgetAll();
+			RazerDevice m = mouse;
+			bool mode = m != null && m.SetDeviceMode(0);
+			RazerDevice k = keyboard;
+			k?.SetDeviceMode(0);
+			Cfg.Log("resync: slot records dropped" + ((m != null) ? ", mouse in normal mode: " + mode : ", no mouse found") +
+				"; writing \"" + ActiveMouse + "\" again");
+			SyncDevices(reset: true);
+			return (m == null)
+				? "The Naga was not found. Plug it in and press RESYNC MOUSE again."
+				: "Writing \"" + ActiveMouse + "\" into the mouse again. Check the buttons in a few seconds; the log below says when it is done.";
+		});
+	}
+
 	// Runs work on the device worker (e.g. reads for the UI). Only the latest pending request of a kind runs;
 	// a replaced one completes with default.
 	public Task<T> RunOnDevices<T>(string kind, Func<T> work)
@@ -760,6 +782,13 @@ internal sealed class Service
 			if (r.SynapseRunning)
 			{
 				Cfg.Log("Razer Synapse is running: it can change the lighting and switch the mouse's slots behind LiteSynapse");
+				// It writes its own profiles into the slots: none of LiteSynapse's records can be trusted now, so
+				// the next profile switch writes the slot again instead of switching to what Synapse left there.
+				worker.Post("forget-slots", () =>
+				{
+					liveProfile.ForgetAll();
+					Cfg.Log("Razer Synapse was seen: the mouse's slots will be written again on the next switch (or press RESYNC MOUSE)");
+				});
 			}
 		}
 		Notify();
@@ -1612,53 +1641,91 @@ internal sealed class Service
 	// (SyncStartup), so the Settings page and the tray menu never wait on Task Scheduler.
 	private static int startupState = -1;
 
+	// One Task Scheduler conversation at a time: SyncStartup runs on the thread pool while the Settings switch or
+	// the tray menu may be setting the task.
+	private static readonly object startupLock = new object();
+
 	// Brings "Start with Windows" over to the sign-in task (StartupTask): the installer's choice when it left one,
 	// an older LiteSynapse's Run value (which cannot start a program that asks for administrator rights), and a
-	// task left pointing at a copy of LiteSynapse that has since moved.
+	// task registered for an older file or another path. What it carries over is only cleared once the task is set.
 	private static void SyncStartup()
 	{
 		try
 		{
-			string me = Environment.ProcessPath;
-			bool? want = null;
-			using (RegistryKey req = Registry.CurrentUser.OpenSubKey(StartupTask.RequestKey, writable: true))
+			lock (startupLock)
 			{
-				if (req?.GetValue(StartupTask.RequestValue) is string r)
+				string me = Environment.ProcessPath;
+				bool? want = null;
+				bool fromRequest = false;
+				bool fromRun = false;
+				using (RegistryKey req = Registry.CurrentUser.OpenSubKey(StartupTask.RequestKey))
 				{
-					want = r == "1";
-					req.DeleteValue(StartupTask.RequestValue, throwOnMissingValue: false);
-					Cfg.Log("start with Windows: the installer asked for " + (want.Value ? "on" : "off"));
+					if (req?.GetValue(StartupTask.RequestValue) is string r)
+					{
+						want = r == "1";
+						fromRequest = true;
+						Cfg.Log("start with Windows: the installer asked for " + (want.Value ? "on" : "off"));
+					}
 				}
-			}
-			using (RegistryKey run = Registry.CurrentUser.OpenSubKey(RunKey, writable: true))
-			{
-				if (run?.GetValue("LiteSynapse") is string old && old.IndexOf("LiteSynapse", StringComparison.OrdinalIgnoreCase) >= 0)
+				using (RegistryKey run = Registry.CurrentUser.OpenSubKey(RunKey))
 				{
-					// On unless Task Manager had turned it off.
-					want ??= StartupApproved.State("LiteSynapse") == "enabled";
-					run.DeleteValue("LiteSynapse", throwOnMissingValue: false);
-					// Task Manager's entry for a Run value that is gone: removed with it.
-					StartupApproved.Enable("LiteSynapse");
-					Cfg.Log("start with Windows: moved from the Run key to the sign-in task (" + (want.Value ? "on" : "off") + ")");
+					if (run?.GetValue("LiteSynapse") is string old && old.IndexOf("LiteSynapse", StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						// On unless Task Manager had turned it off.
+						want ??= StartupApproved.State("LiteSynapse") == "enabled";
+						fromRun = true;
+					}
 				}
-			}
-			if (want.HasValue)
-			{
-				SetStartup(want.Value);
-				return;
-			}
-			bool? state = StartupTask.State(me, out bool stale);
-			if (stale)
-			{
-				// Moved or updated since the task was registered: it follows this copy, with this file's hash.
-				SetStartup(true);
-				Cfg.Log("start with Windows: sign-in task registered again for " + me);
-				return;
-			}
-			if (state.HasValue)
-			{
-				Volatile.Write(ref startupState, state.Value ? 1 : 0);
-				Mirror(state.Value);
+				if (want.HasValue)
+				{
+					if (SetStartupLocked(want.Value) != null)
+					{
+						// Kept, to be tried again next start.
+						return;
+					}
+					if (fromRequest)
+					{
+						using RegistryKey req = Registry.CurrentUser.OpenSubKey(StartupTask.RequestKey, writable: true);
+						req?.DeleteValue(StartupTask.RequestValue, throwOnMissingValue: false);
+					}
+					if (fromRun)
+					{
+						using RegistryKey run = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+						run?.DeleteValue("LiteSynapse", throwOnMissingValue: false);
+						// Task Manager's entry for a Run value that is gone: removed with it.
+						StartupApproved.Enable("LiteSynapse");
+						Cfg.Log("start with Windows: moved from the Run key to the sign-in task");
+					}
+					return;
+				}
+				// The sign-in task refuses to start LiteSynapse while a DLL sits next to it (it could only be planted).
+				try
+				{
+					string[] dlls = Directory.GetFiles(Path.GetDirectoryName(me) ?? ".", "*.dll");
+					if (dlls.Length > 0)
+					{
+						Cfg.Log("start with Windows: the sign-in task will not start LiteSynapse while these files sit next to it: " +
+							string.Join(", ", dlls.Select(Path.GetFileName)) + ". Reinstall LiteSynapse, or delete them.");
+					}
+				}
+				catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+				{
+				}
+				bool? state = StartupTask.State(me, out bool stale);
+				if (stale)
+				{
+					// Moved or updated since the task was registered: it follows this copy, with this file's hash.
+					if (SetStartupLocked(true) == null)
+					{
+						Cfg.Log("start with Windows: sign-in task registered again for " + me);
+					}
+					return;
+				}
+				if (state.HasValue)
+				{
+					Volatile.Write(ref startupState, state.Value ? 1 : 0);
+					Mirror(state.Value);
+				}
 			}
 		}
 		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
@@ -1670,13 +1737,21 @@ internal sealed class Service
 	public static bool IsStartup()
 	{
 		int s = Volatile.Read(ref startupState);
-		if (s < 0)
+		if (s >= 0)
 		{
-			bool? state = StartupTask.State(Environment.ProcessPath, out _);
-			s = (state == true) ? 1 : 0;
-			if (state.HasValue)
+			return s == 1;
+		}
+		lock (startupLock)
+		{
+			s = Volatile.Read(ref startupState);
+			if (s < 0)
 			{
-				Volatile.Write(ref startupState, s);
+				bool? state = StartupTask.State(Environment.ProcessPath, out _);
+				s = (state == true) ? 1 : 0;
+				if (state.HasValue)
+				{
+					Volatile.Write(ref startupState, s);
+				}
 			}
 		}
 		return s == 1;
@@ -1684,6 +1759,14 @@ internal sealed class Service
 
 	// Registers or removes the sign-in task. Returns null when it worked, else why not (also logged).
 	public static string SetStartup(bool on)
+	{
+		lock (startupLock)
+		{
+			return SetStartupLocked(on);
+		}
+	}
+
+	private static string SetStartupLocked(bool on)
 	{
 		string error = StartupTask.Set(on, Environment.ProcessPath);
 		if (error == null)
@@ -1702,6 +1785,8 @@ internal sealed class Service
 		{
 			using RegistryKey k = Registry.CurrentUser.CreateSubKey(StartupTask.RequestKey);
 			k.SetValue(StartupTask.MirrorValue, on ? "1" : "0");
+			// And the task's name, for the uninstaller's fallback when LiteSynapse itself cannot run.
+			k.SetValue(StartupTask.TaskNameValue, StartupTask.Name);
 		}
 		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
 		{

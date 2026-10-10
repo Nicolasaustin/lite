@@ -293,6 +293,21 @@ internal class LiveProfile
 		liveSlot = -1;
 	}
 
+	// Forgets what every slot holds: something other than LiteSynapse (Razer Synapse) may have written them, so
+	// no recorded profile can be trusted to be on the mouse. The next Apply writes the profile again.
+	public void ForgetAll()
+	{
+		lock (tableLock)
+		{
+			for (int slot = 1; slot <= OnboardSlots.SlotCount; slot++)
+			{
+				Table().Forget(slot);
+			}
+			SaveTable();
+		}
+		liveSlot = -1;
+	}
+
 	// Puts the mouse back on the user's own slot (the last slot 3..5 it was on).
 	public string Restore(RazerDevice dev)
 	{

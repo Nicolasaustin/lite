@@ -10,6 +10,8 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- requireAdministrator: see the comment in the manifest. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Running as administrator: DOTNET_STARTUP_HOOKS from this account's environment must not load code into it. -->
+    <StartupHookSupport>false</StartupHookSupport>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
@@ -51,5 +53,7 @@
     <EmbeddedResource Include="icon\icon-*.png" LogicalName="LiteSynapse.%(Filename).png" />
     <!-- Run elevated by the Razer clean-up (RazerLeftovers.FindDriverScript looks in tools\ next to the exe). -->
     <None Update="tools\remove-razer-filter-drivers.ps1" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- And inside the exe, so the copy in tools\ is checked before it runs with administrator rights. -->
+    <EmbeddedResource Include="tools\remove-razer-filter-drivers.ps1" LogicalName="remove-razer-filter-drivers.ps1" />
   </ItemGroup>
 </Project>

@@ -42,14 +42,21 @@ public class StartupTaskTests
 		// The path is a quoted literal, apostrophe doubled.
 		Assert.Contains("$p = 'C:\\Users\\o''brien\\AppData\\Local\\Programs\\LiteSynapse\\LiteSynapse.exe'", script);
 		Assert.Contains("'" + Hash + "'", script);
-		Assert.Contains("^(DOTNET_|COMPlus_|CORECLR_)", script);
-		// Variables cleared, then the hash checked, then the start - in that order; nothing starts on a mismatch.
-		int clear = script.IndexOf("Remove-Item", StringComparison.Ordinal);
-		int check = script.IndexOf("Get-FileHash", StringComparison.Ordinal);
-		int start = script.IndexOf("Start-Process", StringComparison.Ordinal);
-		Assert.True(clear >= 0 && clear < check && check < start);
-		Assert.Contains("-ArgumentList '--tray'", script);
-		Assert.Contains("else { exit 3 }", script);
+		Assert.Contains("^(DOTNET_|COMPlus_|CORECLR_|COREHOST_|COR_)", script);
+		// Variables cleared, planted DLLs refused, the hash checked, then the start - in that order.
+		int clear = script.IndexOf("SetEnvironmentVariable", StringComparison.Ordinal);
+		int dlls = script.IndexOf("'*.dll'", StringComparison.Ordinal);
+		int check = script.IndexOf("ComputeHash", StringComparison.Ordinal);
+		int start = script.IndexOf("Process]::Start", StringComparison.Ordinal);
+		Assert.True(clear >= 0 && clear < dlls && dlls < check && check < start);
+		Assert.Contains("'--tray'", script);
+		Assert.Contains("{ exit 3 }", script);
+		Assert.Contains("{ exit 4 }", script);
+		// No cmdlet PowerShell would load from a module (the module path is the user's to change).
+		foreach (string cmdlet in new[] { "Get-FileHash", "Start-Process", "Get-ChildItem", "Remove-Item", "New-Object", "Where-Object", "ForEach-Object" })
+		{
+			Assert.DoesNotContain(cmdlet, script);
+		}
 	}
 
 	[Fact]
@@ -62,7 +69,8 @@ public class StartupTaskTests
 		Assert.Equal("InteractiveToken", principal.Element(Ns + "LogonType").Value);
 		Assert.Equal("HighestAvailable", principal.Element(Ns + "RunLevel").Value);
 		XElement settings = x.Descendants(Ns + "Settings").Single();
-		Assert.Equal("5", settings.Element(Ns + "Priority").Value);
+		Assert.Equal("4", settings.Element(Ns + "Priority").Value);
+		Assert.Equal("false", settings.Element(Ns + "AllowStartOnDemand").Value);
 		Assert.Equal("PT0S", settings.Element(Ns + "ExecutionTimeLimit").Value);
 		Assert.Equal("false", settings.Element(Ns + "DisallowStartIfOnBatteries").Value);
 		Assert.Equal("IgnoreNew", settings.Element(Ns + "MultipleInstancesPolicy").Value);

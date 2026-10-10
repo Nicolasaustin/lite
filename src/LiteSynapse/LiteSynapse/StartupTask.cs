@@ -25,7 +25,12 @@ namespace LiteSynapse;
 // changes (an update), so the hash is always its own.
 internal static class StartupTask
 {
-	public const string Name = "LiteSynapse";
+	// One task per Windows account ("LiteSynapse-<SID>"): two accounts on the same PC each keep their own, and one
+	// account's LiteSynapse never re-points or deletes the other's.
+	public static string Name => "LiteSynapse-" + CurrentSid();
+
+	// The task's name, mirrored for the uninstaller's fallback (it removes the task itself if LiteSynapse cannot).
+	public const string TaskNameValue = "TaskName";
 
 	// The installer's "Start with Windows" choice, for the app to carry out on its next start (the installer runs
 	// without administrator rights, so it cannot register the task itself). "1" or "0"; removed once done.
@@ -133,6 +138,12 @@ internal static class StartupTask
 		return me.Name;
 	}
 
+	private static string CurrentSid()
+	{
+		using WindowsIdentity me = WindowsIdentity.GetCurrent();
+		return me.User?.Value ?? "user";
+	}
+
 	// Windows PowerShell by its full path, never a powershell.exe found some other way.
 	internal static string LauncherPath => System.IO.Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
 
@@ -144,15 +155,27 @@ internal static class StartupTask
 		return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(f));
 	}
 
-	// What the task asks PowerShell to do (see the top of this file). The path is quoted through Ps(), and the hash
-	// is hex, so nothing in here can end a literal.
+	// What the task asks PowerShell to do (see the top of this file). Only the language and .NET calls - no
+	// cmdlet that PowerShell would load from a module, since the module path comes from this account's environment.
+	// The path is quoted through Ps(), and the hash is hex, so nothing in here can end a literal.
 	internal static string LauncherScript(string exePath, string sha256)
 	{
 		return "$p = " + RazerLeftovers.Ps(exePath) + "\n" +
-			"Get-ChildItem Env: | Where-Object { $_.Name -match '^(DOTNET_|COMPlus_|CORECLR_)' } | " +
-			"ForEach-Object { Remove-Item -LiteralPath ('Env:' + $_.Name) }\n" +
-			"if ((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash -eq '" + sha256 + "') " +
-			"{ Start-Process -FilePath $p -ArgumentList '--tray' } else { exit 3 }\n";
+			// Variables that could load other code into a .NET program (runtime location, startup hooks, profilers,
+			// host tracing to a chosen file).
+			"foreach ($k in @([Environment]::GetEnvironmentVariables().Keys)) { " +
+			"if ($k -match '^(DOTNET_|COMPlus_|CORECLR_|COREHOST_|COR_)') { [Environment]::SetEnvironmentVariable($k, $null) } }\n" +
+			"$d = [IO.Path]::GetDirectoryName($p)\n" +
+			// LiteSynapse.exe is one file: a DLL beside it can only be something planted to load into it.
+			"if ([IO.Directory]::GetFiles($d, '*.dll').Length -gt 0) { exit 4 }\n" +
+			"$f = [IO.File]::OpenRead($p)\n" +
+			"try { $h = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($f)).Replace('-', '') } " +
+			"finally { $f.Dispose() }\n" +
+			"if ($h -ne '" + sha256 + "') { exit 3 }\n" +
+			"$i = [Diagnostics.ProcessStartInfo]::new($p, '--tray')\n" +
+			"$i.UseShellExecute = $false\n" +
+			"$i.WorkingDirectory = $d\n" +
+			"[void][Diagnostics.Process]::Start($i)\n";
 	}
 
 	internal static string Arguments(string exePath, string sha256)
@@ -162,8 +185,9 @@ internal static class StartupTask
 		return "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encoded;
 	}
 
-	// The task definition. Normal priority (Task Scheduler's default of 7 would start LiteSynapse below normal),
-	// no time limit, not stopped on battery, one copy at a time.
+	// The task definition. Priority 4: normal CPU, I/O and memory priority (Task Scheduler's default of 7 would start
+	// LiteSynapse below normal, and 5 lowers its memory priority). No time limit, not stopped on battery, one copy
+	// at a time, and only at sign-in - not on demand.
 	internal static string Xml(string exePath, string sha256, string user)
 	{
 		return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n" +
@@ -196,13 +220,13 @@ internal static class StartupTask
 			"      <StopOnIdleEnd>false</StopOnIdleEnd>\n" +
 			"      <RestartOnIdle>false</RestartOnIdle>\n" +
 			"    </IdleSettings>\n" +
-			"    <AllowStartOnDemand>true</AllowStartOnDemand>\n" +
+			"    <AllowStartOnDemand>false</AllowStartOnDemand>\n" +
 			"    <Enabled>true</Enabled>\n" +
 			"    <Hidden>false</Hidden>\n" +
 			"    <RunOnlyIfIdle>false</RunOnlyIfIdle>\n" +
 			"    <WakeToRun>false</WakeToRun>\n" +
 			"    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>\n" +
-			"    <Priority>5</Priority>\n" +
+			"    <Priority>4</Priority>\n" +
 			"  </Settings>\n" +
 			"  <Actions Context=\"Author\">\n" +
 			"    <Exec>\n" +

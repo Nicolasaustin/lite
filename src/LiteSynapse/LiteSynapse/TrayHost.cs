@@ -549,7 +549,11 @@ internal sealed class TrayHost
 		case MenuStartup:
 			try
 			{
-				Service.SetStartup(!Service.IsStartup());
+				string error = Service.SetStartup(!Service.IsStartup());
+				if (error != null)
+				{
+					System.Windows.Forms.MessageBox.Show("Windows would not change the sign-in task: " + error, "LiteSynapse");
+				}
 				break;
 			}
 			catch (Exception ex)

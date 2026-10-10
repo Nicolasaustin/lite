@@ -628,6 +628,16 @@ internal sealed class RazerDevice : IDisposable
 		}
 	}
 
+	// Device mode: 0x00 normal (the device runs its own buttons and slots), 0x03 driver mode (Razer Synapse handles
+	// the buttons itself). Synapse puts the mouse in driver mode while it runs and does not always put it back.
+	public bool SetDeviceMode(byte mode)
+	{
+		lock (gate)
+		{
+			return TransactAuto(0, 4, 2, stackalloc byte[2] { mode, 0 }, null) == StatusOk;
+		}
+	}
+
 	public bool SetPolling(int hz)
 	{
 		byte v = hz switch

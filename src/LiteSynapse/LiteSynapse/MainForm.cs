@@ -93,7 +93,7 @@ internal class MainForm : Form
 
 		internal void _003CBuildSettings_003Eb__78_4(object? _1, EventArgs _2)
 		{
-			Process.Start("explorer.exe", Cfg.Dir)?.Dispose();
+			Process.Start(ExplorerPath, Cfg.Dir)?.Dispose();
 		}
 
 		internal void _003CBuildNaga_003Eb__79_5(object? _, PaintEventArgs pe)
@@ -136,7 +136,7 @@ internal class MainForm : Form
 		{
 			try
 			{
-				Process.Start(new ProcessStartInfo("control.exe", "main.cpl")
+				Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "control.exe"), "main.cpl")
 				{
 					UseShellExecute = true
 				})?.Dispose();
@@ -1188,6 +1188,10 @@ internal class MainForm : Form
 		}
 	}
 
+	// Windows tools by full path: LiteSynapse runs as administrator, and a bare name is looked up in its own
+	// (user-writable) folder first.
+	private static string ExplorerPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+
 	private static Label Lbl(string t, Color? c = null, float size = 10f, bool bold = false)
 	{
 		//IL_0000: Unknown result type (might be due to invalid IL or missing references)
@@ -1772,7 +1776,7 @@ internal class MainForm : Form
 		PillButton rel = pillButton2;
 		((Control)cfg).Click += (object? _, EventArgs _) =>
 		{
-			Process.Start("explorer.exe", Cfg.Dir)?.Dispose();
+			Process.Start(ExplorerPath, Cfg.Dir)?.Dispose();
 		};
 		((Control)rel).Click += (object? _, EventArgs _) =>
 		{
@@ -1780,7 +1784,34 @@ internal class MainForm : Form
 			app.ForceRecheck();
 			LoadAll();
 		};
-		((Control)btns).Controls.AddRange(new Control[2] { cfg, rel });
+		PillButton resync = new PillButton();
+		((Control)resync).Text = "RESYNC MOUSE";
+		((Control)resync).Width = 170;
+		((Control)resync).Location = new Point(384, 8);
+		// After Razer Synapse ran (it writes its own profiles into the mouse - tilt left and right swapped, other
+		// buttons): writes LiteSynapse's profile into the mouse again.
+		((Control)resync).Click += async (object? _, EventArgs _) =>
+		{
+			((Control)resync).Enabled = false;
+			((Control)resync).Text = "RESYNCING...";
+			string msg;
+			try
+			{
+				msg = await app.ResyncMouseAsync();
+			}
+			catch (Exception ex)
+			{
+				msg = "Could not resync: " + ex.Message;
+			}
+			if (!((Control)this).IsDisposed)
+			{
+				((Control)resync).Text = "RESYNC MOUSE";
+				((Control)resync).Enabled = true;
+				LoadLog();
+				MessageBox.Show((IWin32Window)(object)this, msg ?? "Resync is already running.", "LiteSynapse");
+			}
+		};
+		((Control)btns).Controls.AddRange(new Control[3] { cfg, rel, resync });
 		Card card3 = new Card
 		{
 			Title = "Log"
@@ -2054,7 +2085,7 @@ internal class MainForm : Form
 			{
 				try
 				{
-					Process.Start(new ProcessStartInfo("control.exe", "main.cpl")
+					Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "control.exe"), "main.cpl")
 					{
 						UseShellExecute = true
 					})?.Dispose();

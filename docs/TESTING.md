@@ -1,6 +1,30 @@
 # Testing LiteSynapse
 
-## Build 17 (1.2.6): LiteSynapse runs as administrator, so macros reach CS2
+## Build 17 (1.2.6): LiteSynapse runs as administrator, so macros reach CS2; RESYNC MOUSE
+
+**Tilt left / right swapped after opening Razer Synapse:** Synapse writes its own profiles into the Naga's memory
+and can leave it in driver mode. LiteSynapse still had slot 1 recorded as "CS2", so it switched to it without
+writing ("switched, no write") and the mouse ran Synapse's version. Fixes:
+
+- **Settings > RESYNC MOUSE** drops every slot record, puts the mouse back in normal mode and writes the active
+  profile, lighting and DPI again. Press it whenever Synapse has been opened.
+- When LiteSynapse sees Synapse running, it drops the slot records by itself, so the next profile switch writes the
+  slot again instead of trusting what Synapse left.
+
+**Security, since it now runs as administrator:**
+
+- The sign-in task does not start LiteSynapse.exe directly. It starts Windows PowerShell from System32 with a short
+  command (only .NET calls, no modules) that clears DOTNET_/COMPlus_/CORECLR_/COREHOST_/COR_ variables, refuses
+  to start if any DLL sits next to LiteSynapse.exe, checks the exe's SHA-256 against the one registered, and only
+  then starts it. A console window may flash for a moment at sign-in.
+- One task per Windows account (`LiteSynapse-<SID>`), normal priority (4), not startable on demand.
+- Windows tools are started by full path (explorer, control, cmd, ping), cmd without AutoRun, DllImports only from
+  System32, .NET startup hooks off, and the Razer driver guide script is checked against the copy built into the
+  exe before it runs.
+- The installer opens the .NET download page through Explorer (not as administrator), does not hang when .NET is
+  missing, and the uninstaller removes the sign-in task even if LiteSynapse itself cannot run.
+- Still to do (build 18): install into Program Files, so the program folder is not writable without administrator
+  rights at all. Until then the hash check above is what protects the sign-in task.
 
 **Why:** build 16's log showed every macro firing and Windows refusing every key it sent
 (`macro "W Jumpthrow": Windows took 0 of 8 key events (error 0)`). Windows only lets a program send keys into a
