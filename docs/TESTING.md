@@ -1,3 +1,69 @@
+# LiteSynapse 1.1.9 test build 10: the network limit, and undoing other tools' damage
+
+Two additions, both from looking at what TinyBoost touches.
+
+## Windows limits your network while a game runs
+
+This is the big one and it is on by default on every Windows PC.
+
+While any multimedia app is running (a game counts), Windows' multimedia scheduler **limits all other network
+traffic to about 10 packets per millisecond**, and **keeps 20% of the CPU back** for background work. Two
+registry values under `Multimedia\SystemProfile` control it: `NetworkThrottlingIndex` and
+`SystemResponsiveness`. Both are documented by Microsoft, and both are in **Settings → Performance → Device
+latency** now:
+
+| Row | Default | What LiteSynapse sets |
+|---|---|---|
+| Network limit while gaming | ~10 packets/ms | Off |
+| CPU kept for background work | 20% | 10% |
+
+"Set up for lowest latency" now does these two as well as the mouse ones. This is the setting most likely to
+explain a game feeling laggy while something else is using the connection.
+
+## Harmful settings from other tools
+
+New card in **Settings → System scan**. Optimizer guides and YouTube scripts leave settings behind that make a
+PC *worse*. LiteSynapse finds them and puts the Windows default back. It never sets any of them.
+
+| Found | Why it is bad |
+|---|---|
+| CPU security fixes turned off | Spectre/Meltdown protection off for a few frames. Any program can read memory it should not, passwords included. |
+| User Account Control turned off | Nothing asks permission before changing the PC. Gains no performance at all. |
+| Thread priority changed | `Win32PrioritySeparation` set to 26, 38 and the like. Usually makes frame pacing worse. |
+| Mouse or keyboard queue size changed | Smaller buffers do not lower latency, and they drop input when the PC is busy. |
+| Global timer resolution forced | Gives every program the 1 ms timer, raising interrupts and power use system-wide. |
+| Desktop compositor test mode | An internal debug switch left on in the window compositor. |
+| csrss.exe priority changed | Raising a core Windows process' priority starves the rest of Windows. Known cause of stutter. |
+
+The repair also clears the boot-time overrides these guides love — `useplatformclock`, `useplatformtick`,
+`disabledynamictick`, `tscsyncpolicy`. Modern CPUs keep better time on their own; forcing these makes timing
+worse. They need administrator rights even to read, so they are not listed, but the repair clears them
+whenever you tick anything.
+
+Every entry says what it does to your PC now and exactly what it will be set back to. Nothing is deleted and
+no new tweak is applied; each step restores a Windows default.
+
+## Install
+
+1. Run `LiteSynapse-Setup-1.1.9.exe`. It keeps your profiles, games and macros.
+2. Quit Razer Synapse fully.
+
+## Checklist
+
+| # | Try this | Expected |
+|---|---|---|
+| 1 | **Settings → Performance → Check now** | Two new rows: network limit and CPU kept for background work |
+| 2 | **Set up for lowest latency** | The dialog now lists those two as well |
+| 3 | Afterwards, re-check | Both read Off / 10% |
+| 4 | **Settings → System scan → Scan now** | The "Harmful settings from other tools" card appears |
+| 5 | If it finds nothing | Good — nothing has messed with your PC. The card says so. |
+| 6 | If it finds something | Read the reason, tick it, **Repair selected**, restart |
+| 7 | Everything from build 9 | Unchanged |
+
+**Don't test Snap Tap or macros in Valve matchmaking or FACEIT.**
+
+---
+
 # LiteSynapse 1.1.8 test build 9: System scan
 
 New tab: **Settings → System scan**. It looks at everything that starts with Windows, the background services

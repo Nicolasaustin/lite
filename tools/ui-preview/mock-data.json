@@ -4767,6 +4767,22 @@
           "network": false
         }
       ],
+      "bad": [
+        {
+          "id": "mitigations",
+          "kind": "security",
+          "name": "CPU security fixes turned off",
+          "harm": "Windows' protection against Spectre and Meltdown has been switched off to gain a few frames. Any program on the PC can read memory it should not, including passwords.",
+          "fix": "Turn the protection back on (the Windows default)."
+        },
+        {
+          "id": "priority",
+          "kind": "performance",
+          "name": "Thread priority changed (Win32PrioritySeparation = 38)",
+          "harm": "A guide changed how Windows shares the CPU between the window in front and everything else. The values these guides use often make frame pacing worse, not better.",
+          "fix": "Put it back to 2, the Windows desktop default."
+        }
+      ],
       "deliveryMode": 3,
       "uploadsUpdates": true,
       "deliveryText": "Shares updates with PCs on the internet: it uploads to strangers, which eats your upload."
@@ -4784,6 +4800,8 @@
         }
       ],
       "usbSuspend": "on",
+      "networkThrottling": true,
+      "responsiveness": 20,
       "backgroundCap": true,
       "acceleration": true,
       "pointerSpeed": 12

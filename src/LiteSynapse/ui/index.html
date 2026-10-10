@@ -1193,10 +1193,11 @@ function normalize(s) {
   d.razer.runOnce = d.razer.runOnce || [];
   d.razer.tasks = (d.razer.tasks || []).filter(Boolean);
   d.razer.firewallRules = d.razer.firewallRules || 0;
-  d.tuning = Object.assign({ checked: false, devices: [], usbSuspend: 'unknown', backgroundCap: false, acceleration: false, pointerSpeed: 10 }, s.tuning || {});
+  d.tuning = Object.assign({ checked: false, devices: [], usbSuspend: 'unknown', networkThrottling: false, responsiveness: 20, backgroundCap: false, acceleration: false, pointerSpeed: 10 }, s.tuning || {});
   d.tuning.devices = (d.tuning.devices || []).filter(Boolean);
   d.scan = Object.assign({ checked: false, defender: 'unknown', items: [], deliveryMode: 1, uploadsUpdates: false, deliveryText: '' }, s.scan || {});
   d.scan.items = (d.scan.items || []).filter(Boolean);
+  d.scan.bad = (d.scan.bad || []).filter(Boolean);
   return d;
 }
 
@@ -1231,7 +1232,7 @@ const razerServicesToTurnOff = () => {
 // Windows settings that delay the mouse's reports.
 const tuningToFix = () => {
   const t = S.tuning;
-  return t.checked && (t.backgroundCap || t.acceleration || t.pointerSpeed !== 10 || t.usbSuspend === 'on' || t.devices.some(d => d.powerSaving));
+  return t.checked && (t.backgroundCap || t.acceleration || t.pointerSpeed !== 10 || t.usbSuspend === 'on' || t.devices.some(d => d.powerSaving) || t.networkThrottling || t.responsiveness > 10);
 };
 const isLeftovers = () => {
   const r = S.razer;
@@ -3548,6 +3549,12 @@ function setPerformance() {
         ? `Windows may put ${sleepy.map(d => d.name).join(', ')} to sleep to save power. The first movement after a quiet moment then waits for the device to wake up.`
         : t.devices.length ? 'Your Razer devices are never put to sleep.' : 'No Razer device found in Windows’ device list.',
         state(!sleepy.length, 'Off', plural(sleepy.length, 'device'))),
+      leftRow('link', 'Network limit while gaming', t.networkThrottling
+        ? 'On. While a game runs, Windows limits everything else on the network to about 10 packets per millisecond. Voice chat, downloads and the game\u2019s own traffic all share that limit.'
+        : 'Off. Windows does not limit network traffic while a game runs.', state(!t.networkThrottling, 'Off', 'On')),
+      leftRow('gauge', 'CPU kept for background work', t.responsiveness > 10
+        ? `Windows keeps ${t.responsiveness}% of the CPU for background tasks while a game runs. ${t.responsiveness === 20 ? 'That is the Windows default' : 'That is more than the default'}; 10% is the usual setting for gaming.`
+        : `${t.responsiveness}% — set for gaming.`, state(t.responsiveness <= 10, t.responsiveness + '%', t.responsiveness + '%')),
       leftRow('power', 'USB selective suspend', t.usbSuspend === 'on'
         ? 'On in the current power plan: Windows suspends idle USB devices, your mouse included.'
         : t.usbSuspend === 'off' ? 'Off in the current power plan.' : 'Could not be read.',
@@ -3559,7 +3566,9 @@ function setPerformance() {
     if (t.pointerSpeed !== 10) items.push(`Put the pointer speed back to the middle notch (now ${t.pointerSpeed} of 20)`);
     if (sleepy.length) items.push(`Stop Windows putting ${plural(sleepy.length, 'Razer device')} to sleep`);
     if (t.usbSuspend === 'on') items.push('Turn USB selective suspend off in the current power plan');
-    const needsAdmin = sleepy.length > 0 || t.usbSuspend === 'on';
+    if (t.networkThrottling) items.push('Stop Windows limiting other network traffic while a game runs');
+    if (t.responsiveness > 10) items.push(`Lower the CPU Windows keeps for background work from ${t.responsiveness}% to 10%`);
+    const needsAdmin = sleepy.length > 0 || t.usbSuspend === 'on' || t.networkThrottling || t.responsiveness > 10;
     const ok = await confirmModal({
       title: 'Set up the mouse for lowest latency?', icon: 'zap', ok: 'Set it up',
       body: h('div', { class: 'stack tight' },
@@ -3687,6 +3696,35 @@ function setScan() {
       ? h('button', { class: cx('btn sm', busy === 'def:' + i.id && 'busy'), disabled: !!busy, 'data-fk': 'scan:def:' + i.id, onclick: () => defender(i) },
           busy === 'def:' + i.id ? h('span', { class: 'spin' }) : icon('shield', 14), 'Check')
       : null);
+  // ---- Harmful settings another optimizer left behind ----
+  const bad = sc.bad || [];
+  const badPick = ui.badPick || (ui.badPick = {});
+  const badChosen = () => bad.filter(b => badPick[b.id]);
+  const repair = async () => {
+    const items = badChosen();
+    if (!items.length) return;
+    const ok = await confirmModal({
+      title: 'Put these back to the Windows default?', icon: 'reset', ok: 'Repair',
+      body: h('div', { class: 'stack tight' },
+        h('ul', { class: 'plain-list' }, items.map(b => h('li', null, h('b', null, b.name), ' — ', b.fix))),
+        h('div', { class: 'muted small' }, 'Every one of these sets a Windows default back. Nothing new is switched on. Windows asks for administrator permission once, and a restart finishes the job.'))
+    });
+    if (!ok) return;
+    ui.scanBusy = 'repair';
+    requestRender();
+    const res = await act('repairTweaks', { ids: items.map(b => b.id) }, { timeout: 180000 });
+    ui.scanBusy = '';
+    ui.badPick = {};
+    requestRender();
+    if (res !== FAILED && res && res.message) infoModal('Repair', res.message, 'reset');
+  };
+  const badRow = (b) => h('div', { class: 'leftover' },
+    h('input', { type: 'checkbox', class: 'ck', checked: !!badPick[b.id], 'data-fk': 'bad:' + b.id, 'aria-label': 'Repair ' + b.name,
+      onchange: e => { badPick[b.id] = e.target.checked; requestRender(); } }),
+    h('div', { style: 'min-width:0' },
+      h('div', { class: 't' }, b.name, h('span', { class: cx('badge', b.kind === 'security' ? 'danger' : 'warn'), style: 'margin-left:8px' }, b.kind === 'security' ? 'Security' : 'Performance')),
+      h('div', { class: 'd' }, b.harm),
+      h('div', { class: 'd faint' }, 'Fix: ', b.fix)));
   const count = chosen().length + (picked['__delivery'] ? 1 : 0);
   return h('div', { class: 'stack' },
     h('div', { class: 'card' },
@@ -3715,6 +3753,16 @@ function setScan() {
         h('button', { class: cx('btn primary', busy === 'off' && 'busy'), disabled: !!busy || !count, 'data-fk': 'scan:off', onclick: turnOff },
           busy === 'off' ? h('span', { class: 'spin' }) : icon('power', 16), count ? `Turn off ${count} selected` : 'Turn off selected'),
         h('span', { class: 'small faint' }, 'Tick what you want off. Nothing is removed and everything can be set back in Windows.')) : null),
+    sc.checked ? h('div', { class: 'card' },
+      cardHead(['Harmful settings from other tools', bad.length ? h('span', { class: 'badge warn' }, bad.length) : h('span', { class: 'badge ok' }, icon('check', 12), 'None')],
+        'Settings that popular “optimizer” guides apply and that make a PC slower, less stable or less safe. LiteSynapse never sets any of these; it only finds them and puts them back.', null, 'reset'),
+      bad.length
+        ? h('div', null, bad.map(badRow),
+          h('div', { class: 'row wrap', style: 'margin-top:16px;padding-top:16px;border-top:1px solid var(--line)' },
+            h('button', { class: cx('btn primary', busy === 'repair' && 'busy'), disabled: !!busy || !badChosen().length, 'data-fk': 'bad:fix', onclick: repair },
+              busy === 'repair' ? h('span', { class: 'spin' }) : icon('reset', 16), badChosen().length ? `Repair ${badChosen().length} selected` : 'Repair selected'),
+            h('span', { class: 'small faint' }, 'Each one sets a Windows default back. Administrator permission once, then restart.')))
+        : h('div', { class: 'small muted' }, 'Nothing harmful found in the settings LiteSynapse checks. Boot-time overrides (useplatformclock and the like) need administrator rights even to read, so they are not listed; the repair clears them anyway when you tick anything here.')) : null,
     sc.checked && startup.length ? h('div', { class: 'card' },
       cardHead(['Starts with Windows', h('span', { class: 'badge' }, startup.length)],
         'Every one of these runs at sign-in, before and while you play.', null, 'play'),

@@ -113,6 +113,95 @@ public class SystemScanTests
 		Assert.False(string.IsNullOrWhiteSpace(ScanRules.DeliveryText(mode)));
 	}
 
+	// ---- Harmful settings other optimizers leave behind ----
+
+	[Theory]
+	[InlineData(null, false)]
+	[InlineData(2, false)]
+	[InlineData(38, true)]
+	[InlineData(26, true)]
+	public void PrioritySeparationAwayFromTheDefault(int? value, bool expected)
+	{
+		Assert.Equal(expected, BadTweaks.PrioritySeparationOdd(value));
+	}
+
+	[Theory]
+	[InlineData(null, false)]
+	[InlineData(100, false)]
+	[InlineData(20, true)]
+	[InlineData(500, true)]
+	public void InputQueueSizeAwayFromTheDefault(int? value, bool expected)
+	{
+		Assert.Equal(expected, BadTweaks.QueueSizeOdd(value));
+	}
+
+	[Theory]
+	[InlineData(null, null, false)]
+	[InlineData(3, 3, true)]
+	[InlineData(3, null, true)]
+	[InlineData(0, null, true)]
+	public void CpuMitigationsTurnedOff(int? over, int? mask, bool expected)
+	{
+		Assert.Equal(expected, BadTweaks.MitigationsOff(over, mask));
+	}
+
+	[Theory]
+	[InlineData(null, false)]
+	[InlineData(1, false)]
+	[InlineData(0, true)]
+	public void UacTurnedOff(int? enableLua, bool expected)
+	{
+		Assert.Equal(expected, BadTweaks.UacOff(enableLua));
+	}
+
+	[Theory]
+	[InlineData("Receive Window Auto-Tuning Level : normal", false)]
+	[InlineData("Receive Window Auto-Tuning Level : disabled", true)]
+	[InlineData("Receive Window Auto-Tuning Level : restricted", true)]
+	[InlineData("something else entirely", false)]
+	[InlineData("", false)]
+	[InlineData(null, false)]
+	public void TcpAutoTuningAwayFromNormal(string output, bool expected)
+	{
+		Assert.Equal(expected, BadTweaks.AutoTuningBroken(output));
+	}
+
+	[Fact]
+	public void TheRepairOnlyPutsWindowsDefaultsBack()
+	{
+		string all = BadTweaks.Script(new List<string> { "boot", "mitigations", "uac", "priority", "queues", "timer", "dwm", "csrss", "autotuning" });
+		// The boot overrides are deleted, never set.
+		Assert.All(BadTweaks.BootOverrides, (string v) => Assert.Contains("bcdedit.exe /deletevalue " + v, all));
+		Assert.DoesNotContain("bcdedit.exe /set", all);
+		// Windows defaults, by value.
+		Assert.Contains("'EnableLUA' -PropertyType DWord -Value 1", all);
+		Assert.Contains("'Win32PrioritySeparation' -PropertyType DWord -Value 2", all);
+		Assert.Contains("'MouseDataQueueSize' -PropertyType DWord -Value 100", all);
+		Assert.Contains("'KeyboardDataQueueSize' -PropertyType DWord -Value 100", all);
+		Assert.Contains("autotuninglevel=normal", all);
+		// Overrides are removed so Windows goes back to deciding for itself.
+		Assert.Contains("'FeatureSettingsOverride'", all);
+		Assert.Contains("'GlobalTimerResolutionRequests'", all);
+		Assert.Contains("'OverlayTestMode'", all);
+		// Only what was asked for.
+		string one = BadTweaks.Script(new List<string> { "uac" });
+		Assert.Contains("EnableLUA", one);
+		Assert.DoesNotContain("bcdedit", one);
+		Assert.DoesNotContain("Win32PrioritySeparation", one);
+		Assert.Equal("$failed = 0\nexit $failed\n", BadTweaks.Script(new List<string>()));
+		Assert.Equal("$failed = 0\nexit $failed\n", BadTweaks.Script(null));
+	}
+
+	[Fact]
+	public void TheRepairNeverTouchesTheHidStackOrSecurityServices()
+	{
+		string all = BadTweaks.Script(new List<string> { "boot", "mitigations", "uac", "priority", "queues", "timer", "dwm", "csrss", "autotuning" });
+		foreach (string never in new[] { "WinDefend", "mpssvc", "wscsvc", "mouhid", "kbdhid", "mshidkmdf", "HidUsb", "sc.exe delete", "Remove-Item -Path 'HKLM:\\SYSTEM" })
+		{
+			Assert.DoesNotContain(never, all);
+		}
+	}
+
 	[Fact]
 	public void TheTurnOffScriptDisablesBeforeItStopsAndOnlyTouchesWhatWasAsked()
 	{
@@ -133,5 +222,37 @@ public class SystemScanTests
 		string empty = SystemScanner.Script(new List<string>(), delivery: false);
 		Assert.Equal("$failed = 0\nexit $failed\n", empty);
 		Assert.Equal(empty, SystemScanner.Script(null, delivery: false));
+	}
+
+	[Theory]
+	[InlineData(null, true)]
+	[InlineData(10, true)]
+	[InlineData(70, true)]
+	[InlineData(unchecked((int)0xFFFFFFFF), false)]
+	public void WindowsLimitsOtherNetworkTrafficWhileAGameRuns(int? index, bool expected)
+	{
+		Assert.Equal(expected, DeviceTuning.NetworkThrottled(index));
+	}
+
+	[Theory]
+	[InlineData(null, true)]
+	[InlineData(20, true)]
+	[InlineData(14, true)]
+	[InlineData(10, false)]
+	[InlineData(0, false)]
+	public void CpuKeptForBackgroundWork(int? value, bool expected)
+	{
+		Assert.Equal(expected, DeviceTuning.ResponsivenessHigh(value));
+	}
+
+	[Fact]
+	public void TheLatencyScriptSetsTheMultimediaValuesOnlyWhenAsked()
+	{
+		string with = DeviceTuning.Script(new string[0], powerPlan: false, multimedia: true);
+		Assert.Contains("'NetworkThrottlingIndex' -PropertyType DWord -Value 0xFFFFFFFF", with);
+		Assert.Contains("'SystemResponsiveness' -PropertyType DWord -Value 10", with);
+		string without = DeviceTuning.Script(new string[0], powerPlan: false, multimedia: false);
+		Assert.DoesNotContain("NetworkThrottlingIndex", without);
+		Assert.DoesNotContain("SystemResponsiveness", without);
 	}
 }

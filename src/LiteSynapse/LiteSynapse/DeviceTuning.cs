@@ -44,6 +44,17 @@ internal static class DeviceTuning
 
 	private const string MouseKey = "Control Panel\\Mouse";
 
+	// MMCSS, the scheduler Windows uses while a multimedia app runs. Both values are documented by Microsoft.
+	//  SystemResponsiveness: the share of CPU kept for background work, 20 by default on a desktop. 10 is the
+	//  usual gaming value; 0 is not used here because it can starve audio.
+	//  NetworkThrottlingIndex: while a multimedia app runs, Windows limits other network traffic to this many
+	//  packets per millisecond (10 by default). 0xFFFFFFFF turns the limit off, which is what a game wants.
+	private const string SystemProfile = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile";
+
+	public const int ThrottlingOff = unchecked((int)0xFFFFFFFFu);
+
+	public const int ResponsivenessGaming = 10;
+
 	public const string ThrottleValue = "RawMouseThrottleEnabled";
 
 	// SPI_GETMOUSE / SPI_SETMOUSE take int[3] { threshold1, threshold2, acceleration }; all zero = no
@@ -108,6 +119,19 @@ internal static class DeviceTuning
 		return mouse != null && mouse.Length >= 3 && (mouse[0] != 0 || mouse[1] != 0 || mouse[2] != 0);
 	}
 
+	// Windows limits other network traffic while a game runs unless this is turned off. Not set means the
+	// Windows default, 10 packets per millisecond.
+	internal static bool NetworkThrottled(int? index)
+	{
+		return (index ?? 10) != ThrottlingOff;
+	}
+
+	// 20 by default: a fifth of the CPU kept for background work while a game runs.
+	internal static bool ResponsivenessHigh(int? value)
+	{
+		return (value ?? 20) > ResponsivenessGaming;
+	}
+
 	// What the window shows for the power plan's USB selective suspend: on | off | unknown.
 	internal static string SuspendState(int? acSetting)
 	{
@@ -120,10 +144,18 @@ internal static class DeviceTuning
 
 	// The elevated script: zero the three values on each device key, then turn USB selective suspend off in the
 	// power plan. Exit code = the number of steps that failed.
-	internal static string Script(IEnumerable<string> deviceKeys, bool powerPlan)
+	internal static string Script(IEnumerable<string> deviceKeys, bool powerPlan, bool multimedia = false)
 	{
 		StringBuilder sb = new StringBuilder();
 		sb.Append("$failed = 0\n");
+		if (multimedia)
+		{
+			string path = "HKLM:\\" + SystemProfile;
+			sb.Append("try {\n");
+			sb.Append("  New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name 'NetworkThrottlingIndex' -PropertyType DWord -Value 0xFFFFFFFF -Force -ErrorAction Stop | Out-Null\n");
+			sb.Append("  New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name 'SystemResponsiveness' -PropertyType DWord -Value " + ResponsivenessGaming + " -Force -ErrorAction Stop | Out-Null\n");
+			sb.Append("} catch { $failed++ }\n");
+		}
 		foreach (string key in deviceKeys ?? Enumerable.Empty<string>())
 		{
 			string path = "HKLM:\\" + key + "\\Device Parameters";
@@ -188,6 +220,14 @@ internal static class DeviceTuning
 		{
 			((after?.UsbSuspend == "on") ? left : done).Add("USB selective suspend in the power plan");
 		}
+		if (before.NetworkThrottling && adminRan)
+		{
+			((after?.NetworkThrottling ?? true) ? left : done).Add("the limit Windows puts on network traffic while a game runs");
+		}
+		if (before.ResponsivenessHigh && adminRan)
+		{
+			((after?.ResponsivenessHigh ?? true) ? left : done).Add("the CPU Windows keeps back for background work");
+		}
 		List<string> parts = new List<string>();
 		if (done.Count > 0)
 		{
@@ -226,6 +266,16 @@ internal static class DeviceTuning
 		catch (Exception ex2)
 		{
 			Cfg.Log("device tuning (power plan): " + ex2.Message);
+		}
+		try
+		{
+			using RegistryKey mm = Registry.LocalMachine.OpenSubKey(SystemProfile);
+			s.NetworkThrottling = NetworkThrottled((mm?.GetValue("NetworkThrottlingIndex") is int ni) ? ni : null);
+			s.Responsiveness = (mm?.GetValue("SystemResponsiveness") is int sr) ? sr : 20;
+		}
+		catch (Exception exMm)
+		{
+			Cfg.Log("device tuning (multimedia): " + exMm.Message);
 		}
 		try
 		{
@@ -371,9 +421,10 @@ internal static class DeviceTuning
 		if (before.NeedsAdminFix)
 		{
 			List<string> keys = before.Devices.Where((TunedDevice d) => d.PowerSaving).Select((TunedDevice d) => d.Key).ToList();
+			bool mm = before.NetworkThrottling || before.ResponsivenessHigh;
 			try
 			{
-				int code = RazerLeftovers.RunElevated(Script(keys, before.UsbSuspend == "on"), 60000);
+				int code = RazerLeftovers.RunElevated(Script(keys, before.UsbSuspend == "on", mm), 60000);
 				adminRan = true;
 				Cfg.Log($"device tuning: {keys.Count} device key(s), power plan {before.UsbSuspend} -> exit code {code}");
 			}
@@ -410,6 +461,14 @@ public sealed class DeviceTuningState
 	// on | off | unknown
 	public string UsbSuspend { get; set; } = "unknown";
 
+	// Windows limits other network traffic while a game runs (NetworkThrottlingIndex).
+	public bool NetworkThrottling { get; set; }
+
+	// How much CPU Windows keeps for background work while a game runs (SystemResponsiveness, 20 by default).
+	public int Responsiveness { get; set; } = 20;
+
+	public bool ResponsivenessHigh => DeviceTuning.ResponsivenessHigh(Responsiveness);
+
 	// Windows caps raw mouse input at 125 Hz while the window is not in front.
 	public bool BackgroundCap { get; set; }
 
@@ -424,7 +483,7 @@ public sealed class DeviceTuningState
 	// The settings that need no administrator rights.
 	public bool NeedsUserFix => BackgroundCap || Acceleration || PointerSpeedOff;
 
-	public bool NeedsAdminFix => Devices.Any((TunedDevice d) => d.PowerSaving) || UsbSuspend == "on";
+	public bool NeedsAdminFix => Devices.Any((TunedDevice d) => d.PowerSaving) || UsbSuspend == "on" || NetworkThrottling || ResponsivenessHigh;
 
 	public bool NeedsWork => NeedsUserFix || NeedsAdminFix;
 }

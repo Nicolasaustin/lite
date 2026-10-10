@@ -210,6 +210,24 @@ internal static class ScanRules
 	}
 }
 
+// One harmful setting found on the PC, and what putting it back costs.
+public sealed class BadTweak
+{
+	// boot | mitigations | uac | priority | queues | timer | dwm | csrss | autotuning
+	public string Id { get; set; } = "";
+
+	public string Name { get; set; } = "";
+
+	// What it does to the PC now.
+	public string Harm { get; set; } = "";
+
+	// What LiteSynapse would set it back to.
+	public string Fix { get; set; } = "";
+
+	// security | performance
+	public string Kind { get; set; } = "performance";
+}
+
 // One thing the scan found.
 public sealed class ScanItem
 {
@@ -265,6 +283,9 @@ public sealed class ScanResult
 	public bool UploadsUpdates { get; set; }
 
 	public string DeliveryText { get; set; } = "";
+
+	// Harmful settings another optimizer left behind.
+	public List<BadTweak> Bad { get; set; } = new List<BadTweak>();
 
 	public int Flagged => Items.Count(i => i.Flag.Length > 0);
 }
@@ -341,8 +362,16 @@ internal static class SystemScanner
 			int byFlag = ScanRules.Rank(a.Flag).CompareTo(ScanRules.Rank(b.Flag));
 			return (byFlag != 0) ? byFlag : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
 		});
+		try
+		{
+			r.Bad = FindBadTweaks();
+		}
+		catch (Exception ex6)
+		{
+			Cfg.Log("scan (bad tweaks): " + ex6.Message);
+		}
 		r.Checked = true;
-		Cfg.Log($"system scan: {r.Items.Count} item(s), {r.Flagged} worth a look, Defender {r.Defender}");
+		Cfg.Log($"system scan: {r.Items.Count} item(s), {r.Flagged} worth a look, {r.Bad.Count} harmful tweak(s), Defender {r.Defender}");
 		return r;
 	}
 
@@ -542,6 +571,101 @@ internal static class SystemScanner
 		return list;
 	}
 
+	// Settings another optimizer left behind that are worth undoing. Registry only: the boot ones need
+	// administrator rights to read, so they are cleared by the repair step whether or not they are there.
+	private static List<BadTweak> FindBadTweaks()
+	{
+		List<BadTweak> bad = new List<BadTweak>();
+		int? Value(string key, string name)
+		{
+			using RegistryKey k = Registry.LocalMachine.OpenSubKey(key);
+			return (k?.GetValue(name) is int v) ? v : null;
+		}
+		if (BadTweaks.MitigationsOff(Value(BadTweaks.MemoryManagement, "FeatureSettingsOverride"), Value(BadTweaks.MemoryManagement, "FeatureSettingsOverrideMask")))
+		{
+			bad.Add(new BadTweak
+			{
+				Id = "mitigations",
+				Kind = "security",
+				Name = "CPU security fixes turned off",
+				Harm = "Windows' protection against Spectre and Meltdown has been switched off to gain a few frames. Any program on the PC can read memory it should not, including passwords.",
+				Fix = "Turn the protection back on (the Windows default)."
+			});
+		}
+		if (BadTweaks.UacOff(Value(BadTweaks.PoliciesSystem, "EnableLUA")))
+		{
+			bad.Add(new BadTweak
+			{
+				Id = "uac",
+				Kind = "security",
+				Name = "User Account Control turned off",
+				Harm = "Nothing asks permission before changing the PC any more, and every program you run has full rights. It does not gain performance.",
+				Fix = "Turn User Account Control back on (needs a restart)."
+			});
+		}
+		int? sep = Value(BadTweaks.PriorityControl, "Win32PrioritySeparation");
+		if (BadTweaks.PrioritySeparationOdd(sep))
+		{
+			bad.Add(new BadTweak
+			{
+				Id = "priority",
+				Name = $"Thread priority changed (Win32PrioritySeparation = {sep})",
+				Harm = "A guide changed how Windows shares the CPU between the window in front and everything else. The values these guides use often make frame pacing worse, not better.",
+				Fix = "Put it back to 2, the Windows desktop default."
+			});
+		}
+		if (BadTweaks.QueueSizeOdd(Value(BadTweaks.MouseClass, "MouseDataQueueSize")) || BadTweaks.QueueSizeOdd(Value(BadTweaks.KeyboardClass, "KeyboardDataQueueSize")))
+		{
+			bad.Add(new BadTweak
+			{
+				Id = "queues",
+				Name = "Mouse or keyboard queue size changed",
+				Harm = "A guide made the buffer Windows uses for mouse and keyboard reports smaller. It does not lower latency, and a buffer that is too small drops input when the PC is busy.",
+				Fix = "Put both back to 100, the Windows default."
+			});
+		}
+		using (RegistryKey k = Registry.LocalMachine.OpenSubKey(BadTweaks.KernelKey))
+		{
+			if (k?.GetValue("GlobalTimerResolutionRequests") != null)
+			{
+				bad.Add(new BadTweak
+				{
+					Id = "timer",
+					Name = "Global timer resolution forced",
+					Harm = "Every program on the PC is given the 1 ms timer, which raises the timer interrupt rate and power use for everything, not just your game.",
+					Fix = "Remove the override and let each program ask for what it needs."
+				});
+			}
+		}
+		using (RegistryKey k = Registry.LocalMachine.OpenSubKey(BadTweaks.Dwm))
+		{
+			if (k?.GetValue("OverlayTestMode") != null)
+			{
+				bad.Add(new BadTweak
+				{
+					Id = "dwm",
+					Name = "Desktop compositor test mode",
+					Harm = "A debugging switch inside Windows' window compositor was left on. It is not a supported setting and can break how frames are presented.",
+					Fix = "Remove it."
+				});
+			}
+		}
+		using (RegistryKey k = Registry.LocalMachine.OpenSubKey(BadTweaks.Csrss + "\\PerfOptions"))
+		{
+			if (k != null)
+			{
+				bad.Add(new BadTweak
+				{
+					Id = "csrss",
+					Name = "csrss.exe priority changed",
+					Harm = "A guide raised the priority of a core Windows process. Starving the rest of Windows of CPU is a known cause of stutter and hangs.",
+					Fix = "Remove the override."
+				});
+			}
+		}
+		return bad;
+	}
+
 	// ---- Turning things off ----------------------------------------------------------------------------
 
 	// ids: Run value names (this account) and service names from the allowlist. delivery: stop Windows
@@ -634,6 +758,36 @@ internal static class SystemScanner
 		}
 		sb.Append("exit $failed\n");
 		return sb.ToString();
+	}
+
+	// Puts the chosen harmful settings back to their Windows default (one UAC prompt). The boot overrides are
+	// always cleared when "boot" is asked for, because reading them needs administrator rights anyway.
+	public static string Repair(IReadOnlyList<string> ids)
+	{
+		if (ids == null || ids.Count == 0)
+		{
+			return "Nothing was selected.";
+		}
+		try
+		{
+			int code = RazerLeftovers.RunElevated(BadTweaks.Script(ids), 60000);
+			Cfg.Log($"bad tweaks repair: {string.Join(", ", ids)} -> exit code {code}");
+			ScanResult after = Check();
+			List<string> left = after.Bad.Where((BadTweak b) => ids.Contains(b.Id, StringComparer.OrdinalIgnoreCase)).Select((BadTweak b) => b.Name).ToList();
+			string msg = (left.Count == 0)
+				? "Put back to the Windows default. "
+				: "Still set: " + string.Join(", ", left) + ". ";
+			return msg + "Restart the PC so Windows picks all of it up.";
+		}
+		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+		{
+			return "Cancelled: Windows did not get administrator permission, so nothing was changed.";
+		}
+		catch (Exception ex2)
+		{
+			Cfg.Log("bad tweaks repair: " + ex2.Message);
+			return "Could not run the repair: " + ex2.Message;
+		}
 	}
 
 	// Asks Microsoft Defender to scan one file or folder. LiteSynapse never judges a file itself.
@@ -740,5 +894,147 @@ internal static class SystemScanner
 			}
 			return map;
 		}
+	}
+}
+
+// Settings that popular "optimizer" guides apply and that make a PC slower, less stable or less safe. Putting
+// them back to the Windows default is the fix; every one here is a documented Windows setting.
+//
+// LiteSynapse never sets any of these: it only finds them and offers to undo them.
+internal static class BadTweaks
+{
+	internal const string MemoryManagement = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
+
+	internal const string PriorityControl = "SYSTEM\\CurrentControlSet\\Control\\PriorityControl";
+
+	internal const string KernelKey = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel";
+
+	internal const string PoliciesSystem = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System";
+
+	internal const string MouseClass = "SYSTEM\\CurrentControlSet\\Services\\mouclass\\Parameters";
+
+	internal const string KeyboardClass = "SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters";
+
+	internal const string Dwm = "SOFTWARE\\Microsoft\\Windows\\Dwm";
+
+	internal const string Csrss = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\csrss.exe";
+
+	// The boot settings a guide may have forced. Modern CPUs keep better time on their own; forcing these makes
+	// timing worse and can cost frames.
+	internal static readonly string[] BootOverrides = new string[4]
+	{
+		"useplatformclock", "useplatformtick", "disabledynamictick", "tscsyncpolicy"
+	};
+
+	// ---- Pure helpers (tested) -------------------------------------------------------------------------
+
+	// Win32PrioritySeparation: 2 is the Windows desktop default ("Programs"). Guides set 26, 38 and the like.
+	internal static bool PrioritySeparationOdd(int? value)
+	{
+		return value.HasValue && value.Value != 2;
+	}
+
+	// mouclass / kbdclass queue size: 100 is the Windows default. Guides lower it claiming less latency, with
+	// no evidence, and a too-small queue drops input under load.
+	internal static bool QueueSizeOdd(int? value)
+	{
+		return value.HasValue && value.Value != 100;
+	}
+
+	// FeatureSettingsOverride turns the CPU vulnerability mitigations (Spectre, Meltdown) off.
+	internal static bool MitigationsOff(int? over, int? mask)
+	{
+		return over.HasValue || mask.HasValue;
+	}
+
+	// EnableLUA 0 turns User Account Control off: no more "do you want to allow" prompts, and every program
+	// the user runs gets full rights.
+	internal static bool UacOff(int? enableLua)
+	{
+		return enableLua.HasValue && enableLua.Value == 0;
+	}
+
+	// netsh output for "Receive Window Auto-Tuning Level". Anything but normal slows real downloads down.
+	internal static bool AutoTuningBroken(string netshOutput)
+	{
+		if (string.IsNullOrWhiteSpace(netshOutput))
+		{
+			return false;
+		}
+		foreach (string line in netshOutput.Split('\n'))
+		{
+			if (line.IndexOf("Auto-Tuning Level", StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				return line.IndexOf("normal", StringComparison.OrdinalIgnoreCase) < 0;
+			}
+		}
+		return false;
+	}
+
+	// The elevated repair. Every step puts a Windows default back; nothing new is turned on.
+	internal static string Script(IReadOnlyList<string> ids)
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.Append("$failed = 0\n");
+		bool Has(string id) => ids != null && ids.Contains(id, StringComparer.OrdinalIgnoreCase);
+		if (Has("boot"))
+		{
+			// A value that is not set makes bcdedit complain; that is fine and must not count as a failure.
+			foreach (string v in BootOverrides)
+			{
+				sb.Append("bcdedit.exe /deletevalue " + v + " 2>$null | Out-Null\n");
+			}
+		}
+		if (Has("mitigations"))
+		{
+			sb.Append(Remove(MemoryManagement, "FeatureSettingsOverride"));
+			sb.Append(Remove(MemoryManagement, "FeatureSettingsOverrideMask"));
+		}
+		if (Has("uac"))
+		{
+			sb.Append(Set(PoliciesSystem, "EnableLUA", 1));
+		}
+		if (Has("priority"))
+		{
+			sb.Append(Set(PriorityControl, "Win32PrioritySeparation", 2));
+		}
+		if (Has("queues"))
+		{
+			sb.Append(Set(MouseClass, "MouseDataQueueSize", 100));
+			sb.Append(Set(KeyboardClass, "KeyboardDataQueueSize", 100));
+		}
+		if (Has("timer"))
+		{
+			sb.Append(Remove(KernelKey, "GlobalTimerResolutionRequests"));
+		}
+		if (Has("dwm"))
+		{
+			sb.Append(Remove(Dwm, "OverlayTestMode"));
+		}
+		if (Has("csrss"))
+		{
+			sb.Append("Remove-Item -Path 'HKLM:\\" + Csrss + "\\PerfOptions' -Recurse -Force -ErrorAction SilentlyContinue | Out-Null\n");
+		}
+		if (Has("autotuning"))
+		{
+			sb.Append("netsh.exe interface tcp set global autotuninglevel=normal | Out-Null\n");
+			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
+		}
+		sb.Append("exit $failed\n");
+		return sb.ToString();
+	}
+
+	private static string Set(string key, string name, int value)
+	{
+		string path = "HKLM:\\" + key;
+		return "try { New-Item -Path " + RazerLeftovers.Ps(path) + " -Force -ErrorAction Stop | Out-Null; " +
+			"New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name " + RazerLeftovers.Ps(name) +
+			" -PropertyType DWord -Value " + value + " -Force -ErrorAction Stop | Out-Null } catch { $failed++ }\n";
+	}
+
+	private static string Remove(string key, string name)
+	{
+		return "Remove-ItemProperty -Path " + RazerLeftovers.Ps("HKLM:\\" + key) + " -Name " + RazerLeftovers.Ps(name) +
+			" -Force -ErrorAction SilentlyContinue | Out-Null\n";
 	}
 }

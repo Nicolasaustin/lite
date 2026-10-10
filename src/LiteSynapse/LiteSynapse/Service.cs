@@ -797,6 +797,18 @@ internal sealed class Service
 		});
 	}
 
+	// Puts the chosen harmful settings back to their Windows default, then scans again.
+	public Task<string> RepairAsync(IReadOnlyList<string> ids)
+	{
+		return Task.Run(() =>
+		{
+			string msg = SystemScanner.Repair(ids);
+			Scan = SystemScanner.Check();
+			Notify();
+			return msg;
+		});
+	}
+
 	// Asks Microsoft Defender to scan one program's file.
 	public Task<string> DefenderScanAsync(string path)
 	{

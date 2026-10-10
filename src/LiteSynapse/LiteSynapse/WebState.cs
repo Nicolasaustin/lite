@@ -194,11 +194,28 @@ internal sealed class ScanDto
 
 	public List<ScanItemDto> Items { get; set; } = new List<ScanItemDto>();
 
+	// Harmful settings another optimizer left behind.
+	public List<BadTweakDto> Bad { get; set; } = new List<BadTweakDto>();
+
 	public int DeliveryMode { get; set; } = 1;
 
 	public bool UploadsUpdates { get; set; }
 
 	public string DeliveryText { get; set; } = "";
+}
+
+internal sealed class BadTweakDto
+{
+	public string Id { get; set; } = "";
+
+	public string Name { get; set; } = "";
+
+	public string Harm { get; set; } = "";
+
+	public string Fix { get; set; } = "";
+
+	// security | performance
+	public string Kind { get; set; } = "performance";
 }
 
 internal sealed class ScanItemDto
@@ -245,6 +262,12 @@ internal sealed class TuningDto
 
 	// on | off | unknown
 	public string UsbSuspend { get; set; } = "unknown";
+
+	// Windows limits other network traffic while a game runs (NetworkThrottlingIndex).
+	public bool NetworkThrottling { get; set; }
+
+	// How much CPU Windows keeps for background work while a game runs (20 by default).
+	public int Responsiveness { get; set; } = 20;
 
 	// Windows caps raw mouse input at 125 Hz for windows that are not in front.
 	public bool BackgroundCap { get; set; }

@@ -370,10 +370,19 @@
         return { message: 'Turned off: ' + names.join(', ') + '. Sign out and back in for the start-up changes to take effect.' };
       });
     },
+    repairTweaks: a => {
+      const ids = a.ids || [];
+      if (!ids.length) fail('Nothing was selected.');
+      return delay(1100).then(() => {
+        st.scan = Object.assign({}, st.scan, { bad: (st.scan.bad || []).filter(b => !ids.includes(b.id)) });
+        pushState();
+        return { message: 'Put back to the Windows default. Restart the PC so Windows picks all of it up.' };
+      });
+    },
     defenderScan: a => delay(1500).then(() => ({ message: `Microsoft Defender scanned "${a.id}" and found nothing.` })),
     tuneDevices: () => delay(900).then(() => {
       const t = st.tuning || {};
-      st.tuning = Object.assign({}, t, { backgroundCap: false, acceleration: false, pointerSpeed: 10, usbSuspend: 'off', devices: (t.devices || []).map(d => Object.assign({}, d, { powerSaving: false })) });
+      st.tuning = Object.assign({}, t, { backgroundCap: false, acceleration: false, pointerSpeed: 10, usbSuspend: 'off', networkThrottling: false, responsiveness: 10, devices: (t.devices || []).map(d => Object.assign({}, d, { powerSaving: false })) });
       pushState();
       return { message: 'Turned off: the 125 Hz cap on background windows (after the next sign-in), mouse acceleration, pointer speed scaling, 1 device kept awake, USB selective suspend in the power plan. Sign out and back in (or restart) so every part of Windows picks this up.' };
     }),

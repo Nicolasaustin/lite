@@ -238,6 +238,10 @@ scenario('main', async browser => {
   await shot(p, '32d-settings-performance-after', 400);
   await tab(p, 'System scan');
   await shot(p, '32e-system-scan', 500);
+  await p.click('input[data-fk="bad:mitigations"]');
+  await p.click('button[data-fk="bad:fix"]');
+  await shot(p, '32g-bad-tweaks-confirm', 400);
+  await p.keyboard.press('Escape');
   await p.click('input[data-fk="scan:UpdaterSvcHost"]');
   await p.click('input[data-fk="scan:DiagTrack"]');
   await p.click('input[data-fk="scan:delivery"]');

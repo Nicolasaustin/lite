@@ -87,6 +87,10 @@ All JSON property names are camelCase.
       "costs": "Starts with Windows.", "lose": "It no longer starts by itself.",
       "state": "on", "canDisable": true, "network": true
     }],
+    "bad": [{                         // harmful settings another optimizer left behind
+      "id": "mitigations", "kind": "security", "name": "CPU security fixes turned off",
+      "harm": "...", "fix": "Turn the protection back on (the Windows default)."
+    }],
     "deliveryMode": 1,                // Windows Update Delivery Optimization download mode
     "uploadsUpdates": true,
     "deliveryText": "Also shares updates with PCs on your own network, uploading to them."
@@ -95,6 +99,8 @@ All JSON property names are camelCase.
     "checked": true,
     "devices": [{ "name": "Razer Naga Left-Handed Edition", "powerSaving": true }],
     "usbSuspend": "on",               // USB selective suspend in the current power plan: on | off | unknown
+    "networkThrottling": true,        // Windows limits other network traffic while a game runs
+    "responsiveness": 20,             // % of CPU kept for background work while a game runs (20 = default)
     "backgroundCap": true,            // Windows caps raw mouse input at 125 Hz for background windows
     "acceleration": false,            // "Enhance pointer precision"
     "pointerSpeed": 10                // 1..20; 10 is the middle notch (6 of 11)
@@ -149,7 +155,8 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `systemScan` | `{}` | State (fills `state.scan`; reads the registry and the running programs, changes nothing) |
 | `scanTurnOff` | `{ ids: string[], delivery: bool }` | `{ message }` — turns off the chosen start-up entries (this account, like Task Manager) and services (allowlist only, one UAC prompt), and sets Delivery Optimization to "from Microsoft only" |
 | `defenderScan` | `{ id }` | `{ message }` — asks Microsoft Defender to scan that item's file (`Start-MpScan`, one UAC prompt) |
-| `tuneDevices` | `{}` | `{ message }` — turns off the background polling cap, pointer acceleration and pointer-speed scaling for this Windows account (no UAC), then with one UAC prompt turns off USB power saving on the Razer devices and USB selective suspend in the power plan |
+| `repairTweaks` | `{ ids: string[] }` | `{ message }` — puts harmful settings from `state.scan.bad` back to their Windows default (one UAC prompt); also clears the boot overrides (`useplatformclock` and the like) |
+| `tuneDevices` | `{}` | `{ message }` — turns off the background polling cap, pointer acceleration and pointer-speed scaling for this Windows account (no UAC), then with one UAC prompt turns off USB power saving on the Razer devices, USB selective suspend in the power plan, the network limit Windows applies while a game runs (NetworkThrottlingIndex) and the CPU it keeps for background work (SystemResponsiveness) |
 | `razerCleanup` | `{ action: "disableServices"\|"disableGameManager"\|"driverGuide" }` | `{ message }` — `disableServices` turns off the sign-in autostart (no UAC), then with one UAC prompt sets Game Manager and the other Razer services to Disabled and stops them, deletes the CPUID driver service, disables the upgrade task and Razer's other scheduled tasks, removes the Windows Firewall rules for Razer programs and deletes the cpuz RunOnce values; never Audiosrv, VSSrv or XTU3SERVICE |
 | `runSelfTest` | `{}` | `null` — opens a console window running `LiteSynapse.exe testall` |
 | `openConfigFolder` | `{}` | `null` |

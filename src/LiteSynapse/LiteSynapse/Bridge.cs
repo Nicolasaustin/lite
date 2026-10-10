@@ -102,6 +102,7 @@ internal sealed class Bridge
 			["systemScan"] = SystemScanCmd,
 			["scanTurnOff"] = ScanTurnOff,
 			["defenderScan"] = DefenderScan,
+			["repairTweaks"] = RepairTweaks,
 			["runSelfTest"] = RunSelfTest,
 			["openConfigFolder"] = Now(_ =>
 			{
@@ -273,6 +274,14 @@ internal sealed class Bridge
 			DeliveryMode = r.DeliveryMode,
 			UploadsUpdates = r.UploadsUpdates,
 			DeliveryText = r.DeliveryText ?? "",
+			Bad = (r.Bad ?? new List<BadTweak>()).Where((BadTweak b) => b != null).Select((BadTweak b) => new BadTweakDto
+			{
+				Id = b.Id ?? "",
+				Name = b.Name ?? "",
+				Harm = b.Harm ?? "",
+				Fix = b.Fix ?? "",
+				Kind = b.Kind ?? "performance"
+			}).ToList(),
 			Items = (r.Items ?? new List<ScanItem>()).Where((ScanItem i) => i != null).Select((ScanItem i) => new ScanItemDto
 			{
 				Kind = i.Kind ?? "startup",
@@ -300,6 +309,8 @@ internal sealed class Bridge
 		{
 			Checked = t.Checked,
 			UsbSuspend = string.IsNullOrEmpty(t.UsbSuspend) ? "unknown" : t.UsbSuspend,
+			NetworkThrottling = t.NetworkThrottling,
+			Responsiveness = t.Responsiveness,
 			BackgroundCap = t.BackgroundCap,
 			Acceleration = t.Acceleration,
 			PointerSpeed = t.PointerSpeed,
@@ -1016,6 +1027,18 @@ internal sealed class Bridge
 			throw new BridgeException("Nothing was selected.");
 		}
 		string message = await svc.ScanApplyAsync(ids, delivery);
+		return new MessageResult(message ?? "");
+	}
+
+	// Puts the chosen harmful settings back to their Windows default. Result: { message }.
+	private async Task<object> RepairTweaks(WebArgs a)
+	{
+		List<string> ids = a.Has("ids") ? a.Strings("ids") : new List<string>();
+		if (ids.Count == 0)
+		{
+			throw new BridgeException("Nothing was selected.");
+		}
+		string message = await svc.RepairAsync(ids);
 		return new MessageResult(message ?? "");
 	}
 
