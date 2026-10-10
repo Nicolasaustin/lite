@@ -3136,6 +3136,12 @@ internal class MainForm : Form
 
 	private void LoadLog()
 	{
+		// Not while minimised, hidden or with a game in front: a game starting raises several changes at once,
+		// and each used to read the log on this thread.
+		if (!base.Visible || base.WindowState == FormWindowState.Minimized || app.InGame)
+		{
+			return;
+		}
 		try
 		{
 			if (!File.Exists(Cfg.LogFile))

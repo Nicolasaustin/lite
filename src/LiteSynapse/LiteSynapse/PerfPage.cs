@@ -395,7 +395,20 @@ internal sealed class PerfPage
 			b.Enabled = false;
 		}
 		Say(index, pending);
-		Task.Run(job).ContinueWith((Task<string> t) =>
+		// Below normal priority: these reads (every service, signatures, a WMI query) must not compete with a
+		// game that is starting while they finish.
+		Task.Run(() =>
+		{
+			System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.BelowNormal;
+			try
+			{
+				return job();
+			}
+			finally
+			{
+				System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.Normal;
+			}
+		}).ContinueWith((Task<string> t) =>
 		{
 			if (owner == null || owner.IsDisposed || !owner.IsHandleCreated)
 			{
@@ -832,7 +845,7 @@ internal sealed class PerfPage
 					Desc = t.What + " Source: " + Tweaks.SourceText(t.Source) + ".",
 					Cost = Costly(t),
 					Note = (t.OneWay && helping)
-						? "Set. LiteSynapse does not move it away again - use Windows' own mouse settings for that."
+						? "Already right, so there is no switch: this one has no other value worth setting from here."
 						: HowKnown(t),
 					State = thing,
 					HelpsWhenOn = t.PerfOn,

@@ -337,17 +337,19 @@ internal static class Tweaks
 			Title = "Foreground boost (Win32PrioritySeparation = 26 hex)",
 			Thing = "Foreground boost (Win32PrioritySeparation 26 hex)",
 			PerfOn = true,
-			What = "Short, variable time slices with a 3:1 boost for the window in front. Windows ships 2 " +
-				"(long, fixed slices, even sharing), which is tuned for a desktop rather than a game. 26 hex / 38 " +
-				"decimal is the value the guides use.",
-			Cost = "Effects are machine-dependent and it is argued over. It changes nothing you can break, so try " +
-				"it and judge by frame times.",
+			What = "Short time slices with a 3:1 boost for the window in front. On Windows 10 and 11 the default (2) " +
+				"already means exactly that, the same as the guides' 26 hex, so a stock PC reads ON. It reads OFF when " +
+				"something set long or unboosted slices (a server-style value), and switching it ON puts 26 hex back.",
+			Cost = "",
 			Source = "fr33thy",
 			NeedsAdmin = true,
-			// The other short-quantum, foreground-boosted values tweak guides use count as applied too.
-			Values = new[] { new Reg("HKLM", PriorityControl, "Win32PrioritySeparation", "dword", "0x26", "2")
+			// One-way: the Windows default already counts as on, so there is nothing to switch back to.
+			OneWay = true,
+			// Short quantum with the 3:1 boost, whichever spelling: 2 (client default), 22, 26 and 2A hex.
+			Values = new[] { new Reg("HKLM", PriorityControl, "Win32PrioritySeparation", "dword", "0x26", NotOn)
 			{
-				OnAny = new[] { "0x28", "0x2A", "0x16", "0x18" }
+				Absent = "2",
+				OnAny = new[] { "2", "0x22", "0x2A" }
 			} }
 		},
 		new Tweak
@@ -371,10 +373,13 @@ internal static class Tweaks
 			Thing = "System-wide 0.5 ms timer requests",
 			PerfOn = true,
 			What = "Windows 11 made timer-resolution requests per-process, so one program asking for a 0.5 ms timer " +
-				"no longer speeds up the clock for everything. This restores the old system-wide behaviour, which " +
-				"games and their anti-cheat both benefit from.",
-			Cost = "Takes effect after a restart. A faster system timer costs a little idle power.",
+				"no longer speeds up the clock for everything. This restores the old system-wide behaviour: any " +
+				"program's request - a browser playing video, Discord - speeds up the clock for the whole PC, also " +
+				"in the background. The game in front already gets the resolution it asks for either way.",
+			Cost = "Takes effect after a restart. More timer interrupts on every core all day: higher idle power and heat, " +
+				"and less boost headroom. Left out of FIX ALL - try it and judge by frame times.",
 			Source = "fr33thy",
+			Risk = Caution,
 			NeedsAdmin = true,
 			NeedsReboot = true,
 			Values = new[] { new Reg("HKLM", Kernel, "GlobalTimerResolutionRequests", "dword", "1", Delete) }
@@ -447,7 +452,8 @@ internal static class Tweaks
 			What = "Builds a power plan from Ultimate Performance and sets it active: processor never below 100%, " +
 				"core parking off, USB selective suspend off, PCIe link-state power management off, no disk or " +
 				"monitor sleep. Clocks that drop while you play are a common cause of stutter.",
-			Cost = "Higher idle power draw and a warmer PC. On a laptop, use it on mains only.",
+			Cost = "Higher idle power draw and a warmer PC, and the PC no longer goes to sleep by itself on mains power. " +
+				"On a laptop, use it on mains only. Switching it off puts Windows' Balanced plan back.",
 			Source = "fr33thy",
 			NeedsAdmin = true,
 			OnCommands = PowerPlanOn,
@@ -639,11 +645,13 @@ internal static class Tweaks
 			Title = "Nagle's algorithm off",
 			Thing = "Nagle's algorithm",
 			PerfOn = false,
-			What = "Stops Windows holding small packets back to bundle them with the next one. A shot in CS2 is a " +
-				"small packet, and waiting to batch it adds delay for no gain.",
-			Cost = "Slightly more overhead on connections that send many tiny packets. Applied to every network " +
-				"adapter on the PC.",
+			What = "Stops Windows holding small TCP packets back to bundle them with the next one, and acknowledges " +
+				"every segment at once. It only touches TCP: CS2's game traffic is UDP, which Nagle never delays, so the " +
+				"gain is for TCP games and voice tools, not CS2.",
+			Cost = "More upstream packets during downloads (Steam, browser). Applied to every network adapter on the " +
+				"PC. Left out of FIX ALL.",
 			Source = "fr33thy",
+			Risk = Caution,
 			NeedsAdmin = true,
 			OnCommands = new[] { "[LiteSynapse.Net]::Nagle($true)" },
 			OffCommands = new[] { "[LiteSynapse.Net]::Nagle($false)" }
@@ -671,7 +679,8 @@ internal static class Tweaks
 			PerfOn = false,
 			What = "Stops the network card from idling down, sleeping between packets or green-ethernet " +
 				"negotiating. Each of those shows up as an occasional ping spike.",
-			Cost = "A watt or two. Wake-on-LAN stops working.",
+			Cost = "A watt or two. Wake-on-LAN stops working. Switching it back removes these driver settings so the driver's " +
+				"own defaults apply - it does not restore values you had set by hand.",
 			Source = "fr33thy",
 			NeedsAdmin = true,
 			OnCommands = new[] { "[LiteSynapse.Net]::AdapterPower($false)" },

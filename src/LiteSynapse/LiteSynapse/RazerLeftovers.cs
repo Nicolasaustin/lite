@@ -870,6 +870,14 @@ public class RazerLeftovers
 		{
 			return "";
 		}
+		// The reads (a WMI query, a settings script) run below normal, out of a starting game's way.
+		try
+		{
+			p.PriorityClass = ProcessPriorityClass.BelowNormal;
+		}
+		catch (Exception ex) when (ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception)
+		{
+		}
 		// Read both pipes before waiting: a script that fills one would otherwise block on the write.
 		Task<string> stdout = p.StandardOutput.ReadToEndAsync();
 		Task<string> stderr = p.StandardError.ReadToEndAsync();

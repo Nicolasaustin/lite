@@ -13,7 +13,6 @@
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <!-- Workstation GC: one small heap, no per-core heaps or GC threads. Freed segments go back to Windows
          instead of being kept for later, so the tray app's memory stays small between uses. -->

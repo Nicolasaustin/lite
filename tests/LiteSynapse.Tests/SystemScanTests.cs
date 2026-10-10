@@ -607,9 +607,14 @@ public class TweaksTests
 	public void AnotherOptimizersEquallyGoodValueCountsAsApplied()
 	{
 		// Values tweak guides use besides ours: the PC is tuned, and the row says so.
+		// Short quanta with the 3:1 boost however it is spelled - Windows' own 2 included, which on a client
+		// edition means exactly what 26 hex spells out. Long or unboosted slices are the other side.
 		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 0x2A));
-		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 0x28));
-		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 2));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 2));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => null));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 0x18));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 0x28));
+		Assert.True(Tweaks.Find("priority").OneWay);
 		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("mousequeue"), (Tweaks.Reg r) => 20));
 		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("mousequeue"), (Tweaks.Reg r) => 100));
 		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 0));
