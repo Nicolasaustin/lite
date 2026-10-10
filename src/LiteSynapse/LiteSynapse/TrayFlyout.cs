@@ -255,16 +255,15 @@ internal sealed class TrayFlyout : Form
 		Theme.Quality(g);
 		g.Clear(Theme.Top);
 		g.DrawImage((Image)(object)logo, 20, 16, 40, 40);
-		Font f = Theme.F(14f, (FontStyle)1);
+		Font f = Theme.P(14f, (FontStyle)1);
 		try
 		{
 			Tx.Left(g, "LiteSynapse", f, Color.White, new RectangleF(72f, 16f, 220f, 24f));
 		}
 		finally
 		{
-			((IDisposable)f)?.Dispose();
 		}
-		Font f2 = Theme.F(8.5f, (FontStyle)0);
+		Font f2 = Theme.P(8.5f, (FontStyle)0);
 		try
 		{
 			Graphics g2 = g;
@@ -281,7 +280,6 @@ internal sealed class TrayFlyout : Form
 		}
 		finally
 		{
-			((IDisposable)f2)?.Dispose();
 		}
 		Pen p = new Pen(Color.FromArgb(40, 40, 40));
 		try
@@ -292,7 +290,7 @@ internal sealed class TrayFlyout : Form
 		{
 			((IDisposable)p)?.Dispose();
 		}
-		Font f3 = Theme.F(8f, (FontStyle)1);
+		Font f3 = Theme.P(8f, (FontStyle)1);
 		try
 		{
 			Tx.Center(g, "PROFILES", f3, Theme.Dim, new RectangleF(0f, 80f, 360f, 22f));
@@ -309,27 +307,24 @@ internal sealed class TrayFlyout : Form
 		}
 		finally
 		{
-			((IDisposable)f3)?.Dispose();
 		}
 		DrawMouseIcon(g, 26f, 112f);
-		Font f4 = Theme.F(7.5f, (FontStyle)0);
+		Font f4 = Theme.P(7.5f, (FontStyle)0);
 		try
 		{
 			Tx.Left(g, "RAZER NAGA LEFT-HANDED EDITION", f4, Theme.Dim, new RectangleF(78f, 150f, 260f, 16f));
 		}
 		finally
 		{
-			((IDisposable)f4)?.Dispose();
 		}
 		DrawKeyboardIcon(g, 24f, 194f);
-		Font f5 = Theme.F(7.5f, (FontStyle)0);
+		Font f5 = Theme.P(7.5f, (FontStyle)0);
 		try
 		{
 			Tx.Left(g, "RAZER BLACKWIDOW LITE", f5, Theme.Dim, new RectangleF(78f, 226f, 260f, 16f));
 		}
 		finally
 		{
-			((IDisposable)f5)?.Dispose();
 		}
 		Pen p3 = new Pen(Color.FromArgb(40, 40, 40));
 		try
@@ -366,32 +361,29 @@ internal sealed class TrayFlyout : Form
 		{
 			((IDisposable)b2)?.Dispose();
 		}
-		Font f6 = Theme.F(9.5f, (FontStyle)0);
+		Font f6 = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
 			Tx.Left(g, status, f6, Theme.Text, new RectangleF(50f, 281f, 280f, 26f));
 		}
 		finally
 		{
-			((IDisposable)f6)?.Dispose();
 		}
-		Font f7 = Theme.F(9.5f, (FontStyle)0);
+		Font f7 = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
 			Tx.Left(g, "Switch profiles by game automatically", f7, Theme.Text, new RectangleF(32f, 304f, 250f, 28f));
 		}
 		finally
 		{
-			((IDisposable)f7)?.Dispose();
 		}
-		Font f8 = Theme.F(8f, (FontStyle)0);
+		Font f8 = Theme.P(8f, (FontStyle)0);
 		try
 		{
 			Tx.Left(g, svc.Auto ? "Follows the program in front" : "Manual: the profile you picked stays", f8, Theme.Dim, new RectangleF(32f, 330f, 296f, 18f));
 		}
 		finally
 		{
-			((IDisposable)f8)?.Dispose();
 		}
 		SolidBrush b3 = new SolidBrush(Color.FromArgb(8, 8, 8));
 		try
@@ -412,23 +404,21 @@ internal sealed class TrayFlyout : Form
 			((IDisposable)p4)?.Dispose();
 		}
 		g.DrawImage((Image)(object)logo, 102, 382, 36, 36);
-		Font f9 = Theme.F(10.5f, (FontStyle)1);
+		Font f9 = Theme.P(10.5f, (FontStyle)1);
 		try
 		{
 			Tx.Left(g, "LITESYNAPSE", f9, Color.White, new RectangleF(146f, 382f, 140f, 36f));
 		}
 		finally
 		{
-			((IDisposable)f9)?.Dispose();
 		}
-		Font f10 = Theme.F(8f, (FontStyle)0);
+		Font f10 = Theme.P(8f, (FontStyle)0);
 		try
 		{
 			Tx.Right(g, "v1.0", f10, Color.FromArgb(110, 110, 110), new RectangleF(300f, 406f, 52f, 16f));
 		}
 		finally
 		{
-			((IDisposable)f10)?.Dispose();
 		}
 		Pen p5 = new Pen(Color.FromArgb(70, 70, 70));
 		try

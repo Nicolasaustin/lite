@@ -78,14 +78,13 @@ internal class KeyCapture : Control
 			{
 				t = (base.Focused ? "Press a key..." : "Click here, then press a key");
 			}
-			Font f = Theme.F(11f, (FontStyle)0);
+			Font f = Theme.P(11f, (FontStyle)0);
 			try
 			{
 				Tx.Center(g, t, f, (KeyName != null) ? Theme.Text : Theme.Dim, new RectangleF(0f, 0f, base.Width, base.Height));
 			}
 			finally
 			{
-				((IDisposable)f)?.Dispose();
 			}
 		}
 		finally

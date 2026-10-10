@@ -23,10 +23,10 @@ internal class Card : Panel
 		Graphics g = e.Graphics;
 		Theme.Quality(g);
 		g.Clear(base.BackColor);
-		Font f = Theme.F(11f, (FontStyle)0);
+		Font f = Theme.P(11f, (FontStyle)0);
 		try
 		{
-			Font q = Theme.F(8f, (FontStyle)1);
+			Font q = Theme.P(8f, (FontStyle)1);
 			try
 			{
 				Tx.Left(g, Title.ToUpperInvariant(), f, Muted ? Theme.GreenDim : Theme.Green, new RectangleF(40f, 34f, base.Width - 90, 24f));
@@ -43,12 +43,10 @@ internal class Card : Panel
 			}
 			finally
 			{
-				((IDisposable)q)?.Dispose();
 			}
 		}
 		finally
 		{
-			((IDisposable)f)?.Dispose();
 		}
 	}
 }

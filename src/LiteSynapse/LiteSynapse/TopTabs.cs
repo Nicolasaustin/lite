@@ -53,7 +53,7 @@ internal class TopTabs : Control
 	// When the total does not fit, the padding is squeezed down to a floor before anything is cut.
 	private float[] Widths()
 	{
-		Font f = Theme.F(9.5f, (FontStyle)0);
+		Font f = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
 			float[] text = Items.Select(((string text, string glyph) i) =>
@@ -77,7 +77,6 @@ internal class TopTabs : Control
 		{
 			if (f != null)
 			{
-				((IDisposable)f).Dispose();
 			}
 		}
 	}
@@ -108,10 +107,10 @@ internal class TopTabs : Control
 		Normalize();
 		float[] w = Widths();
 		float[] xs = Lefts(w);
-		Font f = Theme.F(9.5f, (FontStyle)0);
+		Font f = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
-			Font gf = Theme.F(8.5f, (FontStyle)1);
+			Font gf = Theme.P(8.5f, (FontStyle)1);
 			try
 			{
 				foreach (int i in Order)
@@ -165,12 +164,10 @@ internal class TopTabs : Control
 			}
 			finally
 			{
-				((IDisposable)gf)?.Dispose();
 			}
 		}
 		finally
 		{
-			((IDisposable)f)?.Dispose();
 		}
 	}
 

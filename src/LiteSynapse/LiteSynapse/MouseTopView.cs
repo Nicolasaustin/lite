@@ -280,7 +280,7 @@ internal class MouseTopView : Control
 				{
 					((IDisposable)lp)?.Dispose();
 				}
-				Font f = Theme.F(11f, (FontStyle)0);
+				Font f = Theme.P(11f, (FontStyle)0);
 				try
 				{
 					float gap = 190f * s;
@@ -368,7 +368,6 @@ internal class MouseTopView : Control
 				}
 				finally
 				{
-					((IDisposable)f)?.Dispose();
 				}
 			}
 			finally

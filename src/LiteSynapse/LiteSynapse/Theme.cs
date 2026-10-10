@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -33,12 +34,35 @@ internal static class Theme
 
 	private static TextureBrush dots;
 
+	// A new font the caller owns: for a control's Font property, set once when the control is built.
 	public static Font F(float size, FontStyle st = (FontStyle)0)
 	{
-		//IL_0006: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0008: Unknown result type (might be due to invalid IL or missing references)
-		//IL_000e: Expected Obj, but got Unknown
 		return new Font("Segoe UI", size, st, (GraphicsUnit)3);
+	}
+
+	// Fonts for Paint handlers. Every handler used to make its own Font each time it painted (per list row, per
+	// tab, per tray card) and one of them never gave it back, so every repaint was a GDI allocation and some were
+	// a GDI leak. These are made once per size and style and kept for the life of the process: never dispose one.
+	// Per thread, because the window and the tray paint on different threads and a GDI+ object is not meant to
+	// be used by two at once.
+	[ThreadStatic]
+	private static Dictionary<(string, float, FontStyle), Font> painted;
+
+	public static Font P(float size, FontStyle st = (FontStyle)0)
+	{
+		return P("Segoe UI", size, st);
+	}
+
+	// The same for a symbol or emoji face.
+	public static Font P(string face, float size, FontStyle st = (FontStyle)0)
+	{
+		Dictionary<(string, float, FontStyle), Font> cache = painted ??= new Dictionary<(string, float, FontStyle), Font>();
+		if (!cache.TryGetValue((face, size, st), out Font f))
+		{
+			f = new Font(face, size, st, (GraphicsUnit)3);
+			cache[(face, size, st)] = f;
+		}
+		return f;
 	}
 
 	public static void Quality(Graphics g)

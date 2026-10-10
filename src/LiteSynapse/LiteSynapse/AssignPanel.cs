@@ -181,14 +181,13 @@ internal class AssignPanel : Panel
 		{
 			((IDisposable)hb)?.Dispose();
 		}
-		Font tf = Theme.F(10f, (FontStyle)0);
+		Font tf = Theme.P(10f, (FontStyle)0);
 		try
 		{
 			Tx.Center(g, title, tf, Color.Silver, new RectangleF(0f, 0f, base.Width, 42f));
 		}
 		finally
 		{
-			((IDisposable)tf)?.Dispose();
 		}
 		Pen xp = new Pen(Color.Silver, 1.6f);
 		try
@@ -233,26 +232,19 @@ internal class AssignPanel : Panel
 					((IDisposable)sb)?.Dispose();
 				}
 			}
-			Font f = new Font(i switch
+			Font f = Theme.P(i switch
 			{
 				3 => "Segoe UI", 
 				2 => "Segoe UI Emoji", 
 				_ => "Segoe UI Symbol", 
 			}, (float)((i == 3) ? 11 : 13), (i == 3) ? FontStyle.Bold : FontStyle.Regular);
-			try
-			{
-				Tx.Center(g, Icons[i], f, (i == mode) ? Theme.Green : Color.FromArgb(150, 150, 150), r);
-			}
-			finally
-			{
-				((IDisposable)f)?.Dispose();
-			}
+			Tx.Center(g, Icons[i], f, (i == mode) ? Theme.Green : Color.FromArgb(150, 150, 150), r);
 		}
-		Font hf = Theme.F(10.5f, (FontStyle)0);
+		Font hf = Theme.P(10.5f, (FontStyle)0);
 		try
 		{
 			Tx.Left(g, Names[mode], hf, Theme.Green, new RectangleF(58f, 52f, base.Width - 70, 30f));
-			Font df = Theme.F(10f, (FontStyle)0);
+			Font df = Theme.P(10f, (FontStyle)0);
 			try
 			{
 				if (!editable)
@@ -271,7 +263,7 @@ internal class AssignPanel : Panel
 						try
 						{
 							g.DrawRectangle(bp, r2);
-							Font vf = Theme.F(11f, (FontStyle)0);
+							Font vf = Theme.P(11f, (FontStyle)0);
 							try
 							{
 								Tx.Center(g, defaultText, vf, Theme.Text, r2);
@@ -279,7 +271,6 @@ internal class AssignPanel : Panel
 							}
 							finally
 							{
-								((IDisposable)vf)?.Dispose();
 							}
 						}
 						finally
@@ -303,12 +294,10 @@ internal class AssignPanel : Panel
 			}
 			finally
 			{
-				((IDisposable)df)?.Dispose();
 			}
 		}
 		finally
 		{
-			((IDisposable)hf)?.Dispose();
 		}
 	}
 

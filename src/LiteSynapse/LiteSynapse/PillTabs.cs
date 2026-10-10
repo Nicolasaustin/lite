@@ -31,7 +31,7 @@ internal class PillTabs : Control
 
 	private float[] Widths()
 	{
-		Font f = Theme.F(9.5f, (FontStyle)0);
+		Font f = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
 			return Items.Select((string i) => Tx.Measure(i, f).Width + 38f).ToArray();
@@ -40,7 +40,6 @@ internal class PillTabs : Control
 		{
 			if (f != null)
 			{
-				((IDisposable)f).Dispose();
 			}
 		}
 	}
@@ -54,7 +53,7 @@ internal class PillTabs : Control
 		g.Clear(base.BackColor);
 		float[] w = Widths();
 		float x = 0f;
-		Font f = Theme.F(9.5f, (FontStyle)0);
+		Font f = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
 			for (int i = 0; i < Items.Length; i++)
@@ -98,7 +97,6 @@ internal class PillTabs : Control
 		}
 		finally
 		{
-			((IDisposable)f)?.Dispose();
 		}
 	}
 

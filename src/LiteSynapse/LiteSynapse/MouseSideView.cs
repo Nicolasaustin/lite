@@ -86,7 +86,7 @@ internal class MouseSideView : Control
 		SolidBrush kb = new SolidBrush(Theme.Green);
 		try
 		{
-			Font nf = Theme.F(7f, (FontStyle)1);
+			Font nf = Theme.P(7f, (FontStyle)1);
 			try
 			{
 				for (int r = 0; r < 4; r++)
@@ -106,10 +106,10 @@ internal class MouseSideView : Control
 						}
 					}
 				}
-				Font f = Theme.F(12f, (FontStyle)1);
+				Font f = Theme.P(12f, (FontStyle)1);
 				try
 				{
-					Font cf = Theme.F(10f, (FontStyle)1);
+					Font cf = Theme.P(10f, (FontStyle)1);
 					try
 					{
 						SolidBrush cb = new SolidBrush(Color.FromArgb(24, 24, 24));
@@ -154,17 +154,14 @@ internal class MouseSideView : Control
 					}
 					finally
 					{
-						((IDisposable)cf)?.Dispose();
 					}
 				}
 				finally
 				{
-					((IDisposable)f)?.Dispose();
 				}
 			}
 			finally
 			{
-				((IDisposable)nf)?.Dispose();
 			}
 		}
 		finally

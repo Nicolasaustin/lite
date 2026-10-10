@@ -135,8 +135,8 @@ internal sealed class CheckList : Control
 	{
 		int width = Math.Max(120, Width - bar.Width - Pad * 2 - Indent);
 		int y = 0;
-		Font title = Theme.F(10.5f);
-		Font small = Theme.F(9f);
+		Font title = Theme.P(10.5f);
+		Font small = Theme.P(9f);
 		try
 		{
 			int lineHeight = 6 + (int)Tx.Measure("X", title).Height;
@@ -165,8 +165,6 @@ internal sealed class CheckList : Control
 		}
 		finally
 		{
-			title.Dispose();
-			small.Dispose();
 		}
 		total = y;
 		int view = Math.Max(1, Height);
@@ -206,10 +204,10 @@ internal sealed class CheckList : Control
 		int view = Height;
 		int off = Scroll;
 		int width = Width - (bar.Visible ? bar.Width : 0);
-		Font title = Theme.F(10.5f);
-		Font small = Theme.F(9f);
-		Font head = Theme.F(9f, FontStyle.Bold);
-		Font pill = Theme.F(8f, FontStyle.Bold);
+		Font title = Theme.P(10.5f);
+		Font small = Theme.P(9f);
+		Font head = Theme.P(9f, FontStyle.Bold);
+		Font pill = Theme.P(8f, FontStyle.Bold);
 		try
 		{
 			for (int i = 0; i < items.Count; i++)
@@ -235,10 +233,6 @@ internal sealed class CheckList : Control
 		}
 		finally
 		{
-			title.Dispose();
-			small.Dispose();
-			head.Dispose();
-			pill.Dispose();
 		}
 	}
 

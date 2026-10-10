@@ -75,7 +75,7 @@ internal class ModeSwitch : Control
 			{
 				((IDisposable)p3)?.Dispose();
 			}
-			Font f = Theme.F(10f, (FontStyle)1);
+			Font f = Theme.P(10f, (FontStyle)1);
 			try
 			{
 				Tx.Center(g, "Standard", f, Color.Black, new RectangleF(54f, 5f, 76f, 29f));
@@ -84,14 +84,13 @@ internal class ModeSwitch : Control
 				try
 				{
 					g.FillEllipse((Brush)(object)qb, 240, 11, 17, 17);
-					Font qf = Theme.F(8f, (FontStyle)1);
+					Font qf = Theme.P(8f, (FontStyle)1);
 					try
 					{
 						Tx.Center(g, "?", qf, Color.Black, new RectangleF(240f, 11f, 17f, 17f));
 					}
 					finally
 					{
-						((IDisposable)qf)?.Dispose();
 					}
 				}
 				finally
@@ -101,7 +100,6 @@ internal class ModeSwitch : Control
 			}
 			finally
 			{
-				((IDisposable)f)?.Dispose();
 			}
 		}
 		finally

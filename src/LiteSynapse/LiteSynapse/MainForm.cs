@@ -105,7 +105,8 @@ internal class MainForm : Form
 			try
 			{
 				pe.Graphics.FillEllipse((Brush)(object)b, 0, 0, 29, 29);
-				Tx.Center(pe.Graphics, "1", Theme.F(10f, (FontStyle)1), Color.Black, new RectangleF(0f, 0f, 30f, 30f));
+				// One font per paint and never disposed was a GDI handle leaked on every repaint of this badge.
+				Tx.Center(pe.Graphics, "1", Theme.P(10f, (FontStyle)1), Color.Black, new RectangleF(0f, 0f, 30f, 30f));
 			}
 			finally
 			{
@@ -936,6 +937,17 @@ internal class MainForm : Form
 		HookForeground();
 	}
 
+	// The last state that was not minimized, so closing from the taskbar while minimized still remembers
+	// "maximized" when the user maximized after the window first opened.
+	protected override void OnResize(EventArgs e)
+	{
+		base.OnResize(e);
+		if (base.WindowState != FormWindowState.Minimized)
+		{
+			shownState = base.WindowState;
+		}
+	}
+
 	protected override void OnFormClosing(FormClosingEventArgs e)
 	{
 		base.OnFormClosing(e);
@@ -1250,7 +1262,7 @@ internal class MainForm : Form
 						((IDisposable)val2)?.Dispose();
 					}
 				}
-				Tx.Left(d.Graphics, lstMacros.Items[d.Index].ToString(), Theme.F(11f, (FontStyle)0), flag ? Theme.Green : Theme.Text, new RectangleF(d.Bounds.X + 12, d.Bounds.Y, d.Bounds.Width - 14, d.Bounds.Height));
+				Tx.Left(d.Graphics, lstMacros.Items[d.Index].ToString(), Theme.P(11f, (FontStyle)0), flag ? Theme.Green : Theme.Text, new RectangleF(d.Bounds.X + 12, d.Bounds.Y, d.Bounds.Width - 14, d.Bounds.Height));
 			}
 			finally
 			{
@@ -1417,41 +1429,37 @@ internal class MainForm : Form
 						try
 						{
 							graphics.DrawEllipse(val4, 18, 17, 40, 40);
-							Font val5 = Theme.F(14f, (FontStyle)1);
+							Font val5 = Theme.P(14f, (FontStyle)1);
 							try
 							{
 								Tx.Center(graphics, (name.Length > 0) ? name.Substring(0, 1).ToUpperInvariant() : "?", val5, Theme.Green, new RectangleF(18f, 17f, 40f, 40f));
-								Font val6 = Theme.F(11.5f, (FontStyle)1);
+								Font val6 = Theme.P(11.5f, (FontStyle)1);
 								try
 								{
 									Tx.Left(graphics, name, val6, Theme.Text, new RectangleF(76f, 12f, ((Control)row).Width - 560, 26f));
-									Font val7 = Theme.F(9.5f, (FontStyle)0);
+									Font val7 = Theme.P(9.5f, (FontStyle)0);
 									try
 									{
 										Tx.Left(graphics, exes, val7, (g.Exes.Count > 0) ? Theme.Dim : Color.FromArgb(230, 170, 60), new RectangleF(76f, 40f, ((Control)row).Width - 560, 22f));
-										Font val8 = Theme.F(8f, (FontStyle)1);
+										Font val8 = Theme.P(8f, (FontStyle)1);
 										try
 										{
 											Tx.Left(graphics, "KEYBOARD PROFILE", val8, Theme.Dim, new RectangleF(((Control)row).Width - 462, 8f, 200f, 14f));
 										}
 										finally
 										{
-											((IDisposable)val8)?.Dispose();
 										}
 									}
 									finally
 									{
-										((IDisposable)val7)?.Dispose();
 									}
 								}
 								finally
 								{
-									((IDisposable)val6)?.Dispose();
 								}
 							}
 							finally
 							{
-								((IDisposable)val5)?.Dispose();
 							}
 						}
 						finally
@@ -1615,7 +1623,7 @@ internal class MainForm : Form
 		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup);
 		Row("Run selected profiles on the mouse itself", (Control)(object)tgLive, "Writes the profile into the mouse's memory (slots 1-2) and switches to it, so it keeps working if LiteSynapse is closed.");
 		Row("Close this window when a game starts", (Control)(object)tgCloseOnGame, "A window on top of a game costs frames. With this on, the window gets out of the way by itself when a linked game comes to the front.");
-		Row("Competitive safe", (Control)(object)tgSafe, "Keeps macros and Snap Tap switched off while a game is in front. Valve kicks for them on official servers and FACEIT bans for them, so leave this on unless you are in an offline practice session.");
+		Row("Competitive safe", (Control)(object)tgSafe, "Keeps macros and Snap Tap off while a game is in front. Valve kicks for them on official servers and FACEIT bans for them: leave this on outside offline practice.");
 		tgCloseOnGame.CheckedChanged += () =>
 		{
 			if (!loading)
@@ -1702,13 +1710,19 @@ internal class MainForm : Form
 			c.Location = new Point(420, y);
 			((Control)card2).Controls.Add((Control)(object)l);
 			((Control)card2).Controls.Add(c);
+			int step = 62;
 			if (note != null)
 			{
+				// Wrapped, and the row grows to fit: a long note on one line ran off the card, and five rows of
+				// fixed height ran off the bottom of it, which hid the last two switches entirely.
 				Label n = Lbl(note, Theme.Dim, 9f);
+				((Control)n).MaximumSize = new Size(620, 0);
 				((Control)n).Location = new Point(40, y + 26);
 				((Control)card2).Controls.Add((Control)(object)n);
+				step = Math.Max(step, 26 + ((Control)n).PreferredSize.Height + 14);
 			}
-			y += 62;
+			y += step;
+			((Control)card2).Height = y + 10;
 		}
 	}
 
@@ -1844,7 +1858,8 @@ internal class MainForm : Form
 				try
 				{
 					pe.Graphics.FillEllipse((Brush)(object)val7, 0, 0, 29, 29);
-					Tx.Center(pe.Graphics, "1", Theme.F(10f, (FontStyle)1), Color.Black, new RectangleF(0f, 0f, 30f, 30f));
+					// One font per paint and never disposed was a GDI handle leaked on every repaint of this badge.
+				Tx.Center(pe.Graphics, "1", Theme.P(10f, (FontStyle)1), Color.Black, new RectangleF(0f, 0f, 30f, 30f));
 				}
 				finally
 				{
@@ -2297,14 +2312,13 @@ internal class MainForm : Form
 			{
 				((IDisposable)val2)?.Dispose();
 			}
-			Font val3 = Theme.F(10f, (FontStyle)0);
+			Font val3 = Theme.P(10f, (FontStyle)0);
 			try
 			{
 				Tx.Center(graphics, "On-Board Memory", val3, Color.Silver, new RectangleF(0f, 0f, ((Control)memPanel).Width, 44f));
 			}
 			finally
 			{
-				((IDisposable)val3)?.Dispose();
 			}
 			Pen val4 = new Pen(Color.Silver, 1.6f);
 			try

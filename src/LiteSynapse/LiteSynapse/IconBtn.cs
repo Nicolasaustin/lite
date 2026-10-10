@@ -57,15 +57,7 @@ internal class IconBtn : Control
 			Icons.SdCard(g, (float)base.Width / 2f - 8f, (float)base.Height / 2f - 9f, 1f, hover ? Color.White : Color.FromArgb(215, 215, 215), SdDot);
 			return;
 		}
-		Font f = new Font("Segoe UI Symbol", 11f);
-		try
-		{
-			Tx.Center(g, Glyph, f, hover ? Theme.Green : Color.FromArgb(190, 190, 190), new RectangleF(0f, 0f, base.Width, base.Height));
-		}
-		finally
-		{
-			((IDisposable)f)?.Dispose();
-		}
+		Tx.Center(g, Glyph, Theme.P("Segoe UI Symbol", 11f), hover ? Theme.Green : Color.FromArgb(190, 190, 190), new RectangleF(0f, 0f, base.Width, base.Height));
 	}
 
 	protected override void OnMouseEnter(EventArgs e)

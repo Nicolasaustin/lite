@@ -94,7 +94,7 @@ internal class GreenSlider : Control
 				try
 				{
 					g.FillEllipse((Brush)(object)b, X(val) - 7f, y - 7f, 14f, 14f);
-					Font small = Theme.F(9f, (FontStyle)0);
+					Font small = Theme.P(9f, (FontStyle)0);
 					try
 					{
 						if (Labels)
@@ -128,7 +128,6 @@ internal class GreenSlider : Control
 					}
 					finally
 					{
-						((IDisposable)small)?.Dispose();
 					}
 				}
 				finally
