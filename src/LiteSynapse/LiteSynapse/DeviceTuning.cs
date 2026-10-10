@@ -348,6 +348,61 @@ internal static class DeviceTuning
 		return k?.GetValue("ActivePowerScheme") as string;
 	}
 
+	// Restarts the Naga's and the BlackWidow Lite's USB devices (the composite device, so every interface), which
+	// starts Razer's filter driver on them afresh: a remap Razer Synapse left in it goes with it. pnputil
+	// /restart-device (Windows 10 2004 and later), else disable and enable. Returns how many were restarted, -1 when
+	// none could be found. LiteSynapse runs as administrator, so this needs no prompt.
+	internal static string RestartScript(string pnputil)
+	{
+		return
+			"$failed = 0\n" +
+			"$ids = @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match '^USB\\\\VID_1532&PID_(008D|0235)\\\\' } | ForEach-Object { $_.InstanceId })\n" +
+			"foreach ($id in $ids) {\n" +
+			"  & " + RazerLeftovers.Ps(pnputil) + " /restart-device $id | Out-Null\n" +
+			"  if ($LASTEXITCODE -ne 0) {\n" +
+			"    try { Disable-PnpDevice -InstanceId $id -Confirm:$false -ErrorAction Stop; Start-Sleep -Milliseconds 500; " +
+			"Enable-PnpDevice -InstanceId $id -Confirm:$false -ErrorAction Stop } catch { $failed++ }\n" +
+			"  }\n" +
+			"}\n" +
+			"Write-Output ('RESTARTED|' + $ids.Count + '|' + $failed)\n" +
+			"exit $failed\n";
+	}
+
+	public static int RestartRazerDevices(out string problem)
+	{
+		problem = null;
+		string script = RestartScript(System.IO.Path.Combine(Environment.SystemDirectory, "pnputil.exe"));
+		try
+		{
+			string output = RazerLeftovers.RunPowerShell(script, 30000, out int code);
+			System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(output ?? "", "RESTARTED\\|(\\d+)\\|(\\d+)");
+			if (!m.Success)
+			{
+				problem = (code == -2) ? "it did not finish in time" : "it did not report back";
+				return -1;
+			}
+			int found = int.Parse(m.Groups[1].Value);
+			int failed = int.Parse(m.Groups[2].Value);
+			Cfg.Log($"resync: restarted {found - failed} of {found} Razer USB device(s)");
+			if (found == 0)
+			{
+				problem = "no Razer device was found";
+				return -1;
+			}
+			if (failed > 0)
+			{
+				problem = failed + " device(s) could not be restarted";
+			}
+			return found - failed;
+		}
+		catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is InvalidOperationException || ex is System.IO.IOException)
+		{
+			problem = ex.Message;
+			Cfg.Log("resync (restart devices): " + ex.Message);
+			return -1;
+		}
+	}
+
 	// ---- Changing ----------------------------------------------------------------------------------------
 
 	// The elevated script. instances: the WMI InstanceNames to change. allowPowerSaving true puts Windows'

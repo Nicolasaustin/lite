@@ -586,25 +586,42 @@ internal sealed class Service
 		worker.Post("devices", () => SyncDevices(reset: true));
 	}
 
-	// Settings' RESYNC MOUSE, and what LiteSynapse does itself when it sees Razer Synapse running: Synapse writes its
-	// own profiles into the mouse's memory and can leave it in driver mode, so a slot LiteSynapse recorded as
-	// holding "CS2" may hold something else (tilt left and right swapped, other buttons). Every slot record is
-	// dropped, the mouse goes back to normal mode, and the active profile, lighting and DPI are written again.
+	// Settings' RESYNC MOUSE: puts the mouse back the way LiteSynapse set it after Razer Synapse ran. Synapse remaps
+	// the buttons three ways - live through Razer's filter driver while it runs, in what it leaves in that driver,
+	// and in its own profiles written into the mouse's memory (with the mouse in driver mode) - so the tilt can come
+	// out swapped even after the slot is written again. In order: Synapse is closed and its autostart turned off,
+	// the Naga and the BlackWidow are restarted (the filter driver starts afresh), the mouse goes back to normal
+	// mode, every slot record is dropped and the active profile, lighting and DPI are written again.
 	public Task<string> ResyncMouseAsync()
 	{
 		return RunOnDevices("resync", () =>
 		{
+			string done = RazerLeftovers.CloseSynapse();
+			int restarted = DeviceTuning.RestartRazerDevices(out string problem);
+			if (restarted > 0)
+			{
+				done += "Restarted the Razer devices. ";
+				// They come back as new devices: give Windows a moment before looking for them again.
+				Thread.Sleep(2500);
+			}
 			liveProfile.ForgetAll();
+			SyncDevices(reset: true);
 			RazerDevice m = mouse;
 			bool mode = m != null && m.SetDeviceMode(0);
-			RazerDevice k = keyboard;
-			k?.SetDeviceMode(0);
+			keyboard?.SetDeviceMode(0);
 			Cfg.Log("resync: slot records dropped" + ((m != null) ? ", mouse in normal mode: " + mode : ", no mouse found") +
 				"; writing \"" + ActiveMouse + "\" again");
-			SyncDevices(reset: true);
-			return (m == null)
-				? "The Naga was not found. Plug it in and press RESYNC MOUSE again."
-				: "Writing \"" + ActiveMouse + "\" into the mouse again. Check the buttons in a few seconds; the log below says when it is done.";
+			if (m == null)
+			{
+				return done + "The Naga was not found. Plug it in and press RESYNC MOUSE again.";
+			}
+			string msg = done + "Writing \"" + ActiveMouse + "\" into the mouse again; the log below says when it is done.";
+			if (restarted <= 0)
+			{
+				msg += " Windows could not restart the mouse (" + (problem ?? "unknown") + "): if the buttons are still " +
+					"swapped, unplug it, plug it back in and press RESYNC MOUSE again.";
+			}
+			return msg;
 		});
 	}
 

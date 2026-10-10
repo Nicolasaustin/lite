@@ -1,5 +1,19 @@
 # Testing LiteSynapse
 
+## Build 19 (1.2.8): RESYNC MOUSE undoes everything Synapse changed
+
+Build 17's RESYNC MOUSE only wrote the slot again, and the tilt stayed swapped: Razer Synapse also remaps the buttons
+through Razer's filter driver (live while it runs, and in what it leaves in the driver), which the mouse's memory
+cannot override. RESYNC MOUSE now, in order:
+
+1. Closes Razer Synapse if it is running (RazerAppEngine and the rest) and turns its start with Windows off.
+2. Restarts the Naga's and the BlackWidow's USB devices, so the filter driver starts afresh (pnputil
+   /restart-device, else disable and enable). Mouse and keyboard drop out for a second or two.
+3. Puts the mouse back in normal mode, drops every slot record and writes the active profile again.
+
+The message after it says what it did. If Windows could not restart the mouse, it says so: unplug it, plug it back
+in and press RESYNC MOUSE again. A restart of Windows clears the filter driver too.
+
 ## Build 18 (1.2.7): installed in Program Files, profiles in your AppData
 
 LiteSynapse runs as administrator (build 17), so its program files now live where only an administrator can change

@@ -51,6 +51,8 @@ public class ScriptShapeTests
 		yield return ("services only with a result file", SystemScanner.Combine(
 			ServiceCatalog.Script(new[] { ("DiagTrack", false) }, report: true),
 			Tweaks.Script(null, Tweaks.MachineScope, "C:\\r.txt", force: true)));
+		yield return ("restart the Razer devices",
+			DeviceTuning.RestartScript("C:\\Windows\\System32\\pnputil.exe"));
 		yield return ("devices read as admin",
 			"$failed = 0\n" + DeviceTuning.QueryToFile("C:\\x\\device-power.txt") + "exit $failed\n");
 		// The settings scripts as Apply really runs them: with a result file, whose path can carry an

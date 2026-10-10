@@ -891,6 +891,12 @@ public class RazerLeftovers
 		}
 	}
 
+	// Settings' RESYNC MOUSE: Synapse closed and its autostart off (Win.CloseSynapse). What it did, "" for nothing.
+	public static string CloseSynapse()
+	{
+		return Win.CloseSynapse();
+	}
+
 	// Windows PowerShell by its full path: a bare name would also find a powershell.exe in the working directory
 	// (LiteSynapse's own, user-writable folder), and that copy would get the administrator rights.
 	private static string PowerShellPath => Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
@@ -1529,6 +1535,67 @@ public class RazerLeftovers
 		{
 			using RegistryKey k = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Services\\" + name);
 			return (k?.GetValue("Start") is int v) ? v : 0;
+		}
+
+		// Closes Razer Synapse (RazerAppEngine and the rest of SynapseProcesses) and turns its sign-in autostart off:
+		// while it runs it remaps the mouse through Razer's filter driver, whatever the mouse's own memory says.
+		// LiteSynapse runs as administrator, so neither asks for permission. Returns what it did, "" when nothing ran.
+		public static string CloseSynapse()
+		{
+			List<string> closed = new List<string>();
+			foreach (string name in SynapseProcesses)
+			{
+				foreach (System.Diagnostics.Process p in System.Diagnostics.Process.GetProcessesByName(name))
+				{
+					using (p)
+					{
+						try
+						{
+							p.Kill(entireProcessTree: true);
+							p.WaitForExit(3000);
+							if (!closed.Contains(name))
+							{
+								closed.Add(name);
+							}
+						}
+						catch (Exception ex) when (ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception
+							|| ex is NotSupportedException)
+						{
+							Cfg.Log("close Synapse: " + name + ": " + ex.Message);
+						}
+					}
+				}
+			}
+			List<string> autostart = new List<string>();
+			try
+			{
+				foreach (string v in RazerAutostart())
+				{
+					if (StartupApproved.State(v) == "enabled")
+					{
+						StartupApproved.Disable(v);
+						autostart.Add(v);
+					}
+				}
+			}
+			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+			{
+				Cfg.Log("close Synapse (autostart): " + ex.Message);
+			}
+			string done = "";
+			if (closed.Count > 0)
+			{
+				done += "Closed Razer Synapse (" + string.Join(", ", closed) + "). ";
+			}
+			if (autostart.Count > 0)
+			{
+				done += "Turned its start with Windows off (" + string.Join(", ", autostart) + "). ";
+			}
+			if (done.Length > 0)
+			{
+				Cfg.Log("resync: " + done.Trim());
+			}
+			return done;
 		}
 
 		public static bool SynapseRunning()
