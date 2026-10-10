@@ -1,0 +1,2 @@
+# Batch files are downloaded raw from GitHub and run by cmd.exe, so they keep the exact bytes committed (CRLF).
+*.bat -text
