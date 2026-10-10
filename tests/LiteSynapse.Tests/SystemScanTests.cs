@@ -266,7 +266,14 @@ public class TweaksTests
 			Assert.False(string.IsNullOrWhiteSpace(t.What));
 			Assert.Contains(t.Risk, new[] { Tweaks.Safe, Tweaks.Caution, Tweaks.Risky });
 			Assert.Contains(t.Group, Tweaks.Groups.Select(((string Id, string Title, string Blurb) g) => g.Id));
-			// Something has to actually happen, in both directions.
+			// Something has to actually happen, in both directions - except for a row that only reads (the power
+			// plan), which must do nothing at all.
+			if (t.ReportOnly)
+			{
+				Assert.True(t.Values.Length == 0 && t.OnCommands.Length == 0 && t.OffCommands.Length == 0,
+					t.Id + " is read only and must not write anything");
+				return;
+			}
 			Assert.True(t.Values.Length > 0 || t.OnCommands.Length > 0, t.Id + " does nothing when turned on");
 			Assert.True(t.Values.Length > 0 || t.OffCommands.Length > 0, t.Id + " cannot be turned off again");
 			foreach (Tweaks.Reg r in t.Values)
@@ -339,18 +346,34 @@ public class TweaksTests
 	}
 
 	[Fact]
-	public void TheLowLatencyPlanIsMadeActiveBeforeItsTimeoutsAreSet()
+	public void ThePowerPlanIsNeverWrittenFromHere()
 	{
-		// powercfg /change edits whichever scheme is ACTIVE. With /setactive last, the three timeouts landed
-		// on the plan that happened to be active - Balanced, on a first run - so our plan never got them and
-		// the user's Balanced plan was left unable to sleep, with nothing to put it back.
-		// Now the timeouts are written to our plan by its GUID, so they can never land on another plan - not even
-		// when our plan could not be made or activated.
-		string on = Both(("powerplan", true));
-		Assert.DoesNotContain("/change", on);
-		Assert.Contains("/setacvalueindex " + Tweaks.PlanGuid + " 7516b95f-f776-4464-8c53-06167f40cc99 3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e 0", on);
-		Assert.Contains("/setacvalueindex " + Tweaks.PlanGuid + " 238c9fa8-0aad-41ed-83f4-97be242c8f20 29f6c1db-86da-48c5-9fdb-f2b67b1f44da 0", on);
-		Assert.Contains("/setactive " + Tweaks.PlanGuid, on);
+		// The power plan is the user's (they switch between their own optimizer plans): the row only reads it.
+		Tweaks.Tweak plan = Tweaks.Find("powerplan");
+		Assert.True(plan.ReportOnly);
+		Assert.Empty(plan.Values);
+		Assert.Empty(plan.OnCommands);
+		Assert.Empty(plan.OffCommands);
+		foreach (string scope in new[] { Tweaks.UserScope, Tweaks.MachineScope })
+		{
+			Assert.False(Tweaks.HasWork(new[] { ("powerplan", true) }, scope));
+			Assert.False(Tweaks.HasWork(new[] { ("powerplan", false) }, scope));
+		}
+		Assert.DoesNotContain("powercfg", Both(("powerplan", true)));
+		Assert.DoesNotContain("powercfg", Both(("powerplan", false)));
+		// Nothing in the whole catalog, either way, touches a plan: hibernation is the only powercfg call left,
+		// and it is not part of any plan.
+		string all = Both(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
+			+ Both(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
+		foreach (string verb in new[] { "/setactive", "/s ", "/setacvalueindex", "/setdcvalueindex", "/duplicatescheme",
+			"/delete", "/change", "/import", "/x ", "/attributes" })
+		{
+			Assert.DoesNotContain("powercfg.exe " + verb, all);
+		}
+		foreach (string line in all.Split('\n').Where((string l) => l.Contains("powercfg")))
+		{
+			Assert.Contains("/hibernate", line);
+		}
 	}
 
 	[Fact]
@@ -450,8 +473,9 @@ public class TweaksTests
 			string on = Both((t.Id, true));
 			string off = Both((t.Id, false));
 			// Pointer speed is the one entry whose two states ask for the same value (the middle notch), so it
-			// is the only one allowed to produce the same script both ways.
-			if (t.Id == "pointerspeed")
+			// is the only switchable one allowed to produce the same script both ways. A read-only row produces
+			// nothing either way (ThePowerPlanIsNeverWrittenFromHere).
+			if (t.Id == "pointerspeed" || t.ReportOnly)
 			{
 				continue;
 			}
@@ -488,22 +512,19 @@ public class TweaksTests
 	[Fact]
 	public void RemovingSomethingThatIsNotThereIsNotAFailedStep()
 	{
-		// bcdedit /deletevalue on a value that was never set exits non-zero, and so does powercfg /delete on a
-		// plan that is not there. Both mean "already in the state you asked for", so neither may be counted.
+		// bcdedit /deletevalue on a value that was never set exits non-zero, which means "already in the state you
+		// asked for", so it may not be counted.
 		foreach ((string Id, bool On, string Expect) step in new[]
 		{
 			("platformclock", true, "bcdedit.exe /deletevalue useplatformclock"),
 			("dynamictick", false, "bcdedit.exe /deletevalue disabledynamictick"),
-			("dep", false, "bcdedit.exe /deletevalue nx"),
-			("powerplan", false, "powercfg.exe /delete " + Tweaks.PlanGuid)
+			("dep", false, "bcdedit.exe /deletevalue nx")
 		})
 		{
 			string script = Both((step.Id, step.On));
 			int at = script.IndexOf(step.Expect, StringComparison.Ordinal);
 			Assert.True(at >= 0, step.Id + " does not run " + step.Expect);
 			// The lines straight after the removal are its own try/catch, and must not check the exit code.
-			// (Turning the power plan off also puts Balanced back, and that step IS checked, so only the
-			// removal's own block is looked at here.)
 			string after = script.Substring(at, Math.Min(120, script.Length - at));
 			Assert.DoesNotContain("$failed++", after);
 		}
@@ -513,9 +534,8 @@ public class TweaksTests
 		Assert.DoesNotContain("  ?", all);
 		Assert.DoesNotContain("?bcdedit", all);
 		Assert.DoesNotContain("?powercfg", all);
-		// A step that really can fail is still checked: setting a boot value, and the power plan's own writes.
+		// A step that really can fail is still checked: setting a boot value.
 		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Both(("dynamictick", true)));
-		Assert.Contains("if ($LASTEXITCODE -ne 0) { $failed++ }", Both(("powerplan", true)));
 	}
 
 	[Fact]
@@ -677,24 +697,6 @@ public class TweaksTests
 	}
 
 	[Fact]
-	public void TheLowLatencyPowerPlanIsBuiltAndCanBeRemovedAgain()
-	{
-		string on = Both(("powerplan", true));
-		Assert.Contains("powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61", on);
-		Assert.Contains(Tweaks.PlanGuid, on);
-		// Processor minimum state and core parking at 100.
-		Assert.Contains("893dee8e-2bef-41e0-89c6-b55d0929964c 100", on);
-		Assert.Contains("0cc5b647-c1df-4637-891a-dec35c318583 100", on);
-		// USB selective suspend off.
-		Assert.Contains("48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0", on);
-		string off = Both(("powerplan", false));
-		// Turning it off puts Balanced back and removes the plan we made, not one of the user's own.
-		Assert.Contains("powercfg.exe /setactive scheme_balanced", off);
-		Assert.Contains("powercfg.exe /delete " + Tweaks.PlanGuid, off);
-		Assert.DoesNotContain("/duplicatescheme", off);
-	}
-
-	[Fact]
 	public void TheBootEntriesOnlyUseBcdeditAndAlwaysHaveAWayBack()
 	{
 		foreach (string id in new[] { "dynamictick", "platformclock", "dep" })
@@ -836,7 +838,7 @@ public class DeviceTuningTests
 	[Fact]
 	public void KeepingADeviceAwakeSetsBothCheckboxes()
 	{
-		string script = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: false, allowPowerSaving: false);
+		string script = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, allowPowerSaving: false);
 		Assert.Contains("MSPower_DeviceEnable", script);
 		Assert.Contains("MSPower_DeviceWakeEnable", script);
 		Assert.Contains("Enable = $false", script);
@@ -890,22 +892,22 @@ public class DeviceTuningTests
 	public void TheChangeReadsTheDevicesBackInTheSameElevatedRun()
 	{
 		string script = DeviceTuning.MixedScript(new[] { "USB\\VID_1532&PID_008D\\x_0" }, new[] { "USB\\VID_1532&PID_0235\\y_0" },
-			planAllow: false, "C:\\Users\\me\\AppData\\Local\\Programs\\LiteSynapse\\data\\device-power.txt");
+			"C:\\Users\\me\\AppData\\Local\\Programs\\LiteSynapse\\data\\device-power.txt");
 		Assert.StartsWith("$failed = 0\n", script);
 		Assert.EndsWith("exit $failed\n", script);
 		// Both directions in one run: one consent prompt.
 		Assert.Contains("Enable = $false", script);
 		Assert.Contains("Enable = $true", script);
-		Assert.Contains(DeviceTuning.UsbSuspendSetting + " 0", script);
-		Assert.DoesNotContain(DeviceTuning.UsbSuspendSetting + " 1", script);
+		// The power plan is the user's: the device change never writes it.
+		Assert.DoesNotContain("powercfg", script);
 		// The read-back comes after the change, and goes to the file.
 		Assert.True(script.LastIndexOf("Set-CimInstance", StringComparison.Ordinal) < script.IndexOf("READABLE|$ok", StringComparison.Ordinal));
 		Assert.Contains("Set-Content -LiteralPath 'C:\\Users\\me\\AppData\\Local\\Programs\\LiteSynapse\\data\\device-power.txt'", script);
 		// The halves are stitched: one counter, one exit, so the count cannot be reset halfway.
 		Assert.Equal(1, script.Split("$failed = 0").Length - 1);
 		Assert.Equal(1, script.Split("exit $failed").Length - 1);
-		// Nothing switched and the plan left alone: only the read.
-		string none = DeviceTuning.MixedScript(null, null, null, "C:\\x.txt");
+		// Nothing switched: only the read.
+		string none = DeviceTuning.MixedScript(null, null, "C:\\x.txt");
 		Assert.DoesNotContain("Set-CimInstance", none);
 		Assert.DoesNotContain("powercfg", none);
 	}
@@ -958,19 +960,20 @@ public class DeviceTuningTests
 	[Fact]
 	public void LettingWindowsManageItAgainIsTheSameCallTheOtherWay()
 	{
-		string script = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: true, allowPowerSaving: true);
+		string script = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, allowPowerSaving: true);
 		Assert.Contains("Enable = $true", script);
-		Assert.Contains(DeviceTuning.UsbSuspendSetting + " 1", script);
-		string other = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: true, allowPowerSaving: false);
-		Assert.Contains(DeviceTuning.UsbSuspendSetting + " 0", other);
+		string other = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, allowPowerSaving: false);
+		Assert.Contains("Enable = $false", other);
+		// Neither direction touches the power plan's own USB setting.
+		Assert.DoesNotContain("powercfg", script + other);
 	}
 
 	[Fact]
 	public void ADeviceThatIsNotOursIsNeverTouched()
 	{
-		string script = DeviceTuning.Script(new[] { "USB\\VID_046D&PID_C52B\\x_0", "", null }, powerPlan: false, allowPowerSaving: false);
+		string script = DeviceTuning.Script(new[] { "USB\\VID_046D&PID_C52B\\x_0", "", null }, allowPowerSaving: false);
 		Assert.Equal("$failed = 0\nexit $failed\n", script);
-		Assert.Equal("$failed = 0\nexit $failed\n", DeviceTuning.Script(null, powerPlan: false, allowPowerSaving: false));
+		Assert.Equal("$failed = 0\nexit $failed\n", DeviceTuning.Script(null, allowPowerSaving: false));
 	}
 
 	[Fact]
@@ -979,7 +982,7 @@ public class DeviceTuningTests
 		// The instance name comes from WMI rather than from a person, so this is belt-and-braces - but it is
 		// the one string in these scripts that is not a catalog literal, and it costs nothing to be sure.
 		string crafted = "USB\\VID_1532&PID_008D\\6&x'; sc.exe delete WinDefend; '_0";
-		string script = DeviceTuning.Script(new[] { crafted }, powerPlan: false, allowPowerSaving: false);
+		string script = DeviceTuning.Script(new[] { crafted }, allowPowerSaving: false);
 		// The text is of course still in the script - it is the data being matched. What matters is that it
 		// stays inside the literal: each apostrophe is doubled, so the quote count on every line is even and
 		// nothing after the name is read as a command.

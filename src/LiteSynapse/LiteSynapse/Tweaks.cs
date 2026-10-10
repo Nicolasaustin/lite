@@ -147,6 +147,10 @@ internal static class Tweaks
 		// value to put back. The Performance tab offers the switch only while it is not applied.
 		public bool OneWay;
 
+		// Read and shown, never written: the user's own choice, which LiteSynapse leaves exactly as it is (the
+		// power plan). Such an entry has no values and no commands, and Script skips it even if asked.
+		public bool ReportOnly;
+
 		// Which side of the thing helps performance. Applying this setting puts the thing on this side:
 		// "Pointer acceleration" helps when OFF, "Game Mode" helps when ON.
 		public bool PerfOn;
@@ -172,8 +176,7 @@ internal static class Tweaks
 		//
 		// A command may start with Optional ("?"), which means "run it, but do not count a non-zero exit as a
 		// failure". That is for the steps whose job is to remove something: bcdedit /deletevalue on a value
-		// that was never set, and powercfg /delete on a plan that is not there, both exit non-zero, and both
-		// mean the setting is already in the state we asked for.
+		// that was never set exits non-zero, and that means the setting is already in the state we asked for.
 		public string[] OnCommands = Array.Empty<string>();
 
 		public string[] OffCommands = Array.Empty<string>();
@@ -199,41 +202,9 @@ internal static class Tweaks
 
 	private const string KbdClass = "SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters";
 
-	// The power plan LiteSynapse creates, kept at a fixed GUID so it can be found and deleted again.
+	// The power plan LiteSynapse 1.2.4 and earlier could create. Nothing creates, activates or deletes a plan
+	// any more - the power plan is the user's - but a PC that still runs this one should read as it is.
 	internal const string PlanGuid = "e7c0a1a7-11e5-4d39-9e4c-5a1e5e0d0001";
-
-	// Ultimate Performance, duplicated to our GUID, then every setting that can idle something down turned off.
-	// Setting GUIDs are Microsoft's documented ones (powercfg /q lists them).
-	private static readonly string[] PowerPlanOn = new string[]
-	{
-		// Already there from a previous run: the duplicate fails and everything after it still applies to the
-		// plan that exists, so this one does not count as a failure either.
-		Optional + "powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 " + PlanGuid,
-		// Processor: minimum state 100%, core parking off, no throttling.
-		Ac("54533251-82be-4824-96c1-47b60b740d00", "893dee8e-2bef-41e0-89c6-b55d0929964c", "100"),
-		Ac("54533251-82be-4824-96c1-47b60b740d00", "bc5038f7-23e0-4960-96da-33abaf5935ec", "100"),
-		Ac("54533251-82be-4824-96c1-47b60b740d00", "0cc5b647-c1df-4637-891a-dec35c318583", "100"),
-		Ac("54533251-82be-4824-96c1-47b60b740d00", "ea062031-0e34-4ff1-9b6d-eb1059334028", "100"),
-		// USB: selective suspend off, no hub idle, no setting-off.
-		Ac("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", "0"),
-		Ac("2a737441-1930-4402-8d77-b2bebba308a3", "d4e98f31-5ffe-4ce1-be31-1b38b384c009", "0"),
-		Ac("2a737441-1930-4402-8d77-b2bebba308a3", "0853a681-27c8-4100-a2fd-82013e970683", "0"),
-		// PCI Express: link state power management off.
-		Ac("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5", "0"),
-		// Hard disk: never spin down.
-		Ac("0012ee47-9041-4b5d-9b77-535fba8b1442", "6738e2c4-e8a5-4a42-b16a-e040e769756e", "0"),
-		// Display and sleep off, so nothing dims mid-round - written to our plan by its GUID, never with
-		// powercfg /change, which edits whichever plan is active: if our plan could not be made or activated,
-		// /change zeroed the user's own plan's timeouts with nothing to put them back.
-		Ac("7516b95f-f776-4464-8c53-06167f40cc99", "3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e", "0"),
-		Ac("238c9fa8-0aad-41ed-83f4-97be242c8f20", "29f6c1db-86da-48c5-9fdb-f2b67b1f44da", "0"),
-		"powercfg.exe /setactive " + PlanGuid
-	};
-
-	private static string Ac(string group, string setting, string value)
-	{
-		return $"powercfg.exe /setacvalueindex {PlanGuid} {group} {setting} {value}";
-	}
 
 	internal static readonly Tweak[] Catalog = new Tweak[]
 	{
@@ -457,19 +428,11 @@ internal static class Tweaks
 			Title = "Low-latency power plan",
 			Thing = "Low-latency power plan",
 			PerfOn = true,
-			What = "Builds a power plan from Ultimate Performance and sets it active: processor never below 100%, " +
-				"core parking off, USB selective suspend off, PCIe link-state power management off, no disk or " +
-				"monitor sleep. Clocks that drop while you play are a common cause of stutter.",
-			Cost = "Higher idle power draw and a warmer PC, and the PC no longer goes to sleep by itself on mains power. " +
-				"On a laptop, use it on mains only. Switching it off puts Windows' Balanced plan back.",
+			What = "Whether your active power plan keeps the processor at full speed with core parking off, as the " +
+				"FR33THY and Chris Titus plans do. Clocks that drop while you play are a common cause of stutter.",
 			Source = "fr33thy",
-			NeedsAdmin = true,
-			OnCommands = PowerPlanOn,
-			OffCommands = new[]
-			{
-				"powercfg.exe /setactive scheme_balanced",
-				Optional + "powercfg.exe /delete " + PlanGuid
-			}
+			// The power plan is the user's: shown so they can see what it does, never changed from here.
+			ReportOnly = true
 		},
 		new Tweak
 		{
@@ -1215,7 +1178,7 @@ internal static class Tweaks
 		foreach ((string id, bool on) in choices)
 		{
 			Tweak t = Find(id);
-			if (t == null)
+			if (t == null || t.ReportOnly)
 			{
 				continue;
 			}
@@ -1243,7 +1206,7 @@ internal static class Tweaks
 		return user == wantUser && (t.OnCommands.Length > 0 || t.OffCommands.Length > 0);
 	}
 
-	// PowerShell for the chosen changes: (id, turn it on) pairs. Unknown ids are skipped. Each step counts its
+	// PowerShell for the chosen changes: (id, turn it on) pairs. Unknown and report-only ids are skipped. Each step counts its
 	// own failure into $failed, which the exit code carries back, so one refused value does not hide the rest.
 	//
 	// scope picks which half of the work to emit: UserScope for this account's own registry (run without
@@ -1281,7 +1244,7 @@ internal static class Tweaks
 		foreach ((string id, bool on) in choices)
 		{
 			Tweak t = Find(id);
-			if (t == null)
+			if (t == null || t.ReportOnly)
 			{
 				continue;
 			}

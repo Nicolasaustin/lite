@@ -31,15 +31,15 @@ public class ScriptShapeTests
 			ServiceCatalog.Script(ServiceCatalog.All.Select((ServiceCatalog.Row r) => (r.Service, true)).ToList()));
 		yield return ("devices kept awake",
 			DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0", "USB\\VID_1532&PID_0235\\5&b&0&1_0" },
-				powerPlan: true, allowPowerSaving: false));
-		// What Apply on the Device page really runs: both directions, the plan, and the read-back, with a path
+				allowPowerSaving: false));
+		// What Apply on the Device page really runs: both directions and the read-back, with a path
 		// carrying both kinds of apostrophe.
 		const string devFile = "C:\\Users\\o'brien\\O\u2019Neil\\data\\device-power.txt";
 		yield return ("devices both ways and read back", DeviceTuning.MixedScript(
 			new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0", "USB\\VID_1532&PID_008D&MI_00\\7&2&0&0000_0" },
-			new[] { "USB\\VID_1532&PID_0235\\5&b&0&1_0" }, planAllow: false, devFile));
-		yield return ("devices kept awake only", DeviceTuning.MixedScript(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" }, null, null, devFile));
-		yield return ("device plan only", DeviceTuning.MixedScript(null, null, true, devFile));
+			new[] { "USB\\VID_1532&PID_0235\\5&b&0&1_0" }, devFile));
+		yield return ("devices kept awake only", DeviceTuning.MixedScript(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" }, null, devFile));
+		yield return ("device read only", DeviceTuning.MixedScript(null, null, devFile));
 		// The loader that runs an oversized script from a file.
 		yield return ("loader", "$failed = 0\n" +
 			RazerLeftovers.Loader("C:\\Users\\o'brien\\O\u2019Neil\\data\\run-1.ps1", RazerLeftovers.Sha256("x")) + "exit $failed\n");
@@ -68,7 +68,7 @@ public class ScriptShapeTests
 			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList(), Tweaks.MachineScope, result)));
 		yield return ("devices handed back",
 			DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" },
-				powerPlan: true, allowPowerSaving: true));
+				allowPowerSaving: true));
 		// The merged script is the one that actually runs when a selection spans services and settings: the
 		// halves are stitched together by stripping each one's counter and exit line. That stitching is where
 		// a structural mistake would land, so it is checked at its largest and at its smallest.

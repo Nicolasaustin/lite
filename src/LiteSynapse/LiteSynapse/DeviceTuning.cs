@@ -8,8 +8,8 @@ using Microsoft.Win32;
 namespace LiteSynapse;
 
 // "Allow the computer to turn off this device to save power" for the Naga and the BlackWidow Lite, plus the
-// active power plan's USB selective suspend. These are the two settings that decide whether Windows is
-// allowed to let the mouse idle down between reports.
+// active power plan's USB selective suspend (read only: the power plan is the user's). These are the two
+// settings that decide whether Windows is allowed to let the mouse idle down between reports.
 //
 // Why this does not read the registry:
 //
@@ -351,12 +351,12 @@ internal static class DeviceTuning
 	// ---- Changing ----------------------------------------------------------------------------------------
 
 	// The elevated script. instances: the WMI InstanceNames to change. allowPowerSaving true puts Windows'
-	// own behaviour back; false keeps the device awake. powerPlan also sets the active plan's USB selective
-	// suspend to match.
+	// own behaviour back; false keeps the device awake. The power plan's USB selective suspend is only read
+	// (Check): the power plan is the user's, and nothing here writes it.
 	//
 	// Instance names are matched with -eq against the value WMI itself returned, and are quoted, so nothing
 	// here depends on text the user typed.
-	internal static string Script(IEnumerable<string> instances, bool powerPlan, bool allowPowerSaving)
+	internal static string Script(IEnumerable<string> instances, bool allowPowerSaving)
 	{
 		StringBuilder sb = new StringBuilder();
 		sb.Append("$failed = 0\n");
@@ -381,14 +381,6 @@ internal static class DeviceTuning
 				sb.Append("} catch { $failed++ }\n");
 			}
 		}
-		if (powerPlan)
-		{
-			string index = allowPowerSaving ? "1" : "0";
-			sb.Append("powercfg.exe /setacvalueindex SCHEME_CURRENT " + UsbSuspendSubGroup + " " + UsbSuspendSetting + " " + index + " | Out-Null\n");
-			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
-			sb.Append("powercfg.exe /setdcvalueindex SCHEME_CURRENT " + UsbSuspendSubGroup + " " + UsbSuspendSetting + " " + index + " | Out-Null\n");
-			sb.Append("powercfg.exe /setactive SCHEME_CURRENT | Out-Null\n");
-		}
 		sb.Append("exit $failed\n");
 		return sb.ToString();
 	}
@@ -396,22 +388,21 @@ internal static class DeviceTuning
 	// Applies the user's choice in one elevated run, and reads the devices back in the same run.
 	//
 	// awake: devices to keep awake (Windows may not power them down); allow: devices handed back to Windows.
-	// planAllow: null leaves the power plan alone; false turns its USB selective suspend off, true back on.
-	// Nothing the user did not switch is touched. after is the state read back, null when nothing ran.
-	public static string Apply(IReadOnlyList<string> awake, IReadOnlyList<string> allow, bool? planAllow, out DeviceTuningState after)
+	// Nothing the user did not switch is touched, and the power plan never is. after is the state read back,
+	// null when nothing ran.
+	public static string Apply(IReadOnlyList<string> awake, IReadOnlyList<string> allow, out DeviceTuningState after)
 	{
 		after = null;
 		int count = (awake?.Count ?? 0) + (allow?.Count ?? 0);
-		if (count == 0 && !planAllow.HasValue)
+		if (count == 0)
 		{
 			return "Nothing was switched.";
 		}
 		try
 		{
 			DateTime started = DateTime.UtcNow.AddSeconds(-2);
-			int code = RazerLeftovers.RunElevated(MixedScript(awake, allow, planAllow, SnapshotFile), 60000);
-			Cfg.Log($"device tuning: {awake?.Count ?? 0} kept awake, {allow?.Count ?? 0} handed back, power plan " +
-				$"{(planAllow.HasValue ? (planAllow.Value ? "suspend on" : "suspend off") : "untouched")} -> exit code {code}");
+			int code = RazerLeftovers.RunElevated(MixedScript(awake, allow, SnapshotFile), 60000);
+			Cfg.Log($"device tuning: {awake?.Count ?? 0} kept awake, {allow?.Count ?? 0} handed back -> exit code {code}");
 			after = Check();
 			if (code == -2)
 			{
@@ -454,11 +445,11 @@ internal static class DeviceTuning
 	}
 
 	// Both directions and the read-back in one script, so a mixed change costs one consent prompt.
-	internal static string MixedScript(IEnumerable<string> awake, IEnumerable<string> allow, bool? planAllow, string file)
+	internal static string MixedScript(IEnumerable<string> awake, IEnumerable<string> allow, string file)
 	{
 		return "$failed = 0\n" +
-			Body(Script(awake, planAllow == false, allowPowerSaving: false)) +
-			Body(Script(allow, planAllow == true, allowPowerSaving: true)) +
+			Body(Script(awake, allowPowerSaving: false)) +
+			Body(Script(allow, allowPowerSaving: true)) +
 			QueryToFile(file) +
 			"exit $failed\n";
 	}

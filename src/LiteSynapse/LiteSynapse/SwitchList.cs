@@ -229,6 +229,20 @@ internal sealed class SwitchList : Control
 		Raise();
 	}
 
+	// Drops the flips on these rows only (the ones an APPLY just tried), keeping any made since.
+	public void ClearPending(ICollection<string> ids)
+	{
+		foreach (Row r in items)
+		{
+			if (ids.Contains(r.Id))
+			{
+				r.Want = null;
+			}
+		}
+		Relayout();
+		Raise();
+	}
+
 	protected override void OnResize(EventArgs e)
 	{
 		base.OnResize(e);

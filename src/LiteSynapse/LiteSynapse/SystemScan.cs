@@ -180,11 +180,14 @@ public sealed class TweakRow
 	public bool PerfOn { get; set; }
 
 	// The side applying the setting puts the thing on (Tweaks.Tweak.PerfOn). Fixed per setting, unlike
-	// PerfOn: on a dual-chiplet X3D the low-latency power plan is applied ON and helps OFF.
+	// PerfOn: on a dual-chiplet X3D without Process Lasso the low-latency power plan reads ON and helps OFF.
 	public bool AppliedOn { get; set; }
 
 	// Can only be applied from here, not undone (Tweaks.Tweak.OneWay).
 	public bool OneWay { get; set; }
+
+	// Shown, never switched: the user's own choice (Tweaks.Tweak.ReportOnly).
+	public bool ReportOnly { get; set; }
 
 	// What it changes, and why someone would want it.
 	public string What { get; set; } = "";
@@ -627,6 +630,8 @@ internal static class SystemScanner
 		PerfLedger ledger = PerfLedger.Load();
 		DateTime boot = PerfLedger.BootUtc;
 		(Dictionary<string, string> admin, DateTime adminAt) = LoadAdminRead();
+		bool x3d = Hardware.DualCcdX3D;
+		bool lasso = x3d && Hardware.ProcessLassoRunning();
 		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{
 			string read = Tweaks.StateOf(t, ReadValue);
@@ -635,7 +640,7 @@ internal static class SystemScanner
 			bool waits = false;
 			if (read == "unknown")
 			{
-				(string probed, bool isRunning) = Probe(t);
+				(string probed, bool isRunning) = Probe(t, Hardware.DriverParksCores(x3d, lasso));
 				// What an administrator read of the stored setting said wins over a probe of the running boot
 				// when it is at least as new as the boot, and when there is no probe at all; the two disagreeing
 				// then means the stored setting is waiting for a restart.
@@ -658,7 +663,9 @@ internal static class SystemScanner
 			{
 				read = "part";
 			}
-			(string state, bool remembered, bool restart) = PerfLedger.Resolve(read, ledger.Get(t.Id), t.NeedsReboot, running, boot);
+			// A report-only row is never set from here, so what an older build once set says nothing about it now.
+			(string state, bool remembered, bool restart) = PerfLedger.Resolve(read, t.ReportOnly ? null : ledger.Get(t.Id),
+				t.NeedsReboot, running, boot);
 			restart |= waits && state == read;
 			if (fromAdmin && state == read)
 			{
@@ -673,6 +680,7 @@ internal static class SystemScanner
 				PerfOn = t.PerfOn,
 				AppliedOn = t.PerfOn,
 				OneWay = t.OneWay,
+				ReportOnly = t.ReportOnly,
 				What = t.What,
 				Cost = t.Cost,
 				Risk = t.Risk,
@@ -684,30 +692,41 @@ internal static class SystemScanner
 				Restart = restart,
 				FromAdmin = fromAdmin && state == read ? adminAt : (DateTime?)null
 			};
-			ForThisPc(row, Hardware.DualCcdX3D);
+			ForThisPc(row, x3d, lasso);
 			rows.Add(row);
 		}
 		return rows;
 	}
 
-	// Where this PC's hardware changes which side helps. Pure, so it is tested.
-	internal static void ForThisPc(TweakRow row, bool dualCcdX3D)
+	// Where this PC's hardware changes which side helps. Pure, so it is tested. lassoRunning: Process Lasso's
+	// engine is running, so it - not AMD's driver - is taken to keep games on the cache chiplet (Hardware).
+	internal static void ForThisPc(TweakRow row, bool dualCcdX3D, bool lassoRunning)
 	{
 		if (!dualCcdX3D)
 		{
+			return;
+		}
+		if (lassoRunning)
+		{
+			if (row.Id == "powerplan")
+			{
+				row.What += " Your CPU is a dual-chiplet Ryzen X3D and Process Lasso is running, so a plan with core parking " +
+					"off counts as helping: Process Lasso, not AMD's V-Cache driver, keeps games on the cache cores - as long " +
+					"as it has a CPU set or affinity rule pinning each game there.";
+			}
 			return;
 		}
 		switch (row.Id)
 		{
 		case "powerplan":
 			// AMD's V-Cache driver parks the chiplet without the cache while a game runs, and it can only do
-			// that in Balanced. This plan, Ultimate and High performance all turn core parking off.
+			// that with core parking on. Ultimate, High performance and most optimizer plans turn it off.
 			row.PerfOn = false;
 			row.What = "On your CPU (a dual-chiplet Ryzen X3D) AMD's V-Cache driver keeps games on the cache cores by " +
-				"parking the other chiplet, and it can only do that in Windows' Balanced plan. A plan with core parking off " +
-				"(this one, Ultimate or High performance) lets CS2 spread onto the cores without the cache, which costs " +
-				"frames. So on this PC the helping side is OFF, which puts Balanced back. USB selective suspend can still " +
-				"be turned off on the Device page.";
+				"parking the other chiplet, which needs core parking on (Windows' Balanced plan). A plan with core parking " +
+				"off (Ultimate, High performance, most optimizer plans) lets CS2 spread onto the cores without the cache, " +
+				"which costs frames - unless a tool such as Process Lasso pins games to the cache cores, and its engine " +
+				"was not running when this was read. So on this PC the helping side is OFF.";
 			row.Cost = "";
 			break;
 		case "gamemode":
@@ -750,7 +769,8 @@ internal static class SystemScanner
 	// Reads a command-only setting the way Windows reports it, without administrator rights. Returns the
 	// state (on = the setting is applied), or null when Windows will not say; running is true when the answer
 	// describes the running boot rather than the stored configuration (see PerfLedger.Resolve).
-	private static (string State, bool Running) Probe(Tweaks.Tweak t)
+	// driverParks: a dual-chiplet X3D whose games are kept on the cache cores by AMD's driver (Hardware).
+	private static (string State, bool Running) Probe(Tweaks.Tweak t, bool driverParks)
 	{
 		try
 		{
@@ -768,7 +788,7 @@ internal static class SystemScanner
 				(int? minState, int? minCores) = string.Equals(active, Tweaks.PlanGuid, StringComparison.OrdinalIgnoreCase)
 					? (null, null)
 					: ParseProcessorSettings(RunQuiet("powercfg.exe", "/qh SCHEME_CURRENT " + ProcessorGroup, 5000));
-				return (PlanState(active, Hardware.DualCcdX3D, minState, minCores), false);
+				return (PlanState(active, driverParks, minState, minCores), false);
 			}
 			case "hibernate":
 			{
@@ -854,23 +874,24 @@ internal static class SystemScanner
 	private const string MinUnparkedCores = "0cc5b647-c1df-4637-891a-dec35c318583";
 
 	// The low-latency plan's state from the active scheme and what that scheme sets:
-	//   - ours is on;
-	//   - on a dual-chiplet X3D the question is core parking, which the V-Cache driver needs: a plan with it off
-	//     (100% unparked - this one, Ultimate, High performance, most optimizer plans) is on, one with it is off;
+	//   - the plan LiteSynapse 1.2.4 and earlier could create is on;
+	//   - on a dual-chiplet X3D whose games AMD's driver keeps on the cache cores (driverParks) the question is
+	//     core parking, which that driver needs: a plan with it off (100% unparked - Ultimate, High performance,
+	//     most optimizer plans) is on, one with it is off;
 	//   - anywhere else a plan that holds the processor at 100% or keeps every core unparked is on - another
 	//     optimizer's low-latency plan - and one that does neither is off.
 	// When powercfg could not say, the well-known plans are judged by their GUID and anything else is "other".
-	internal static string PlanState(string active, bool dualCcdX3D, int? minState, int? minCores)
+	internal static string PlanState(string active, bool driverParks, int? minState, int? minCores)
 	{
 		if (string.Equals(active, Tweaks.PlanGuid, StringComparison.OrdinalIgnoreCase))
 		{
 			return "on";
 		}
-		if (dualCcdX3D && minCores.HasValue)
+		if (driverParks && minCores.HasValue)
 		{
 			return (minCores.Value >= 100) ? "on" : "off";
 		}
-		if (!dualCcdX3D && (minState.HasValue || minCores.HasValue))
+		if (!driverParks && (minState.HasValue || minCores.HasValue))
 		{
 			return (minState == 100 || minCores >= 100) ? "on" : "off";
 		}
@@ -1176,13 +1197,19 @@ internal static class SystemScanner
 				foreach ((string name, bool on) in svc)
 				{
 					string shown = svcNames.TryGetValue(name, out string n) ? n : name;
-					if (okMachine.Contains("svc:" + name))
+					bool ok = okMachine.Contains("svc:" + name);
+					if (ok)
 					{
 						done.Add(shown + (on ? " ON" : " OFF"));
 					}
 					else
 					{
 						refused.Add(shown);
+					}
+					// A timeout or a script that never ran says nothing about the service itself.
+					if (code >= 0 && code != RazerLeftovers.Tampered)
+					{
+						MarkRefused(name, !ok);
 					}
 				}
 				// Settings and services name themselves; this line is for what they cannot account for (a
@@ -1222,6 +1249,33 @@ internal static class SystemScanner
 		}
 		Record(tweaks, okUser, okMachine);
 		return Report(done, refused, already, reboot);
+	}
+
+	// Services Windows refused to change this session (Delivery Optimization is protected even from an
+	// administrator), so the Services page can say so on the row instead of offering the same APPLY again.
+	private static readonly HashSet<string> refusedServices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+	private static void MarkRefused(string service, bool refused)
+	{
+		lock (refusedServices)
+		{
+			if (refused)
+			{
+				refusedServices.Add(service);
+			}
+			else
+			{
+				refusedServices.Remove(service);
+			}
+		}
+	}
+
+	internal static bool Refused(string service)
+	{
+		lock (refusedServices)
+		{
+			return service != null && refusedServices.Contains(service);
+		}
 	}
 
 	// A setting counts as applied when every half it has work in reported it in full. A half that never ran

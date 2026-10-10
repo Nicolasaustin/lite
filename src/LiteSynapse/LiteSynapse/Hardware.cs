@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
@@ -11,6 +12,10 @@ namespace LiteSynapse;
 // through Windows' core parking - which it only gets in the Balanced plan, with Game Mode on, once Xbox Game Bar
 // has recognised the program as a game. A "maximum performance" plan with core parking off lets the game spread
 // onto the chiplet without the cache, which costs frames: the opposite of what that tweak promises everywhere else.
+//
+// Unless something else keeps games there. Process Lasso is the usual one: CPU sets or affinity rules pin games to
+// the cache chiplet and everything else to the other, so the plan can leave core parking off and AMD's driver has
+// nothing to do. LiteSynapse cannot see the rules themselves, so it goes by Process Lasso's engine running.
 internal static class Hardware
 {
 	public const string BalancedPlan = "381b4222-f694-41f0-9685-ff5bb260df2e";
@@ -45,6 +50,36 @@ internal static class Hardware
 	}
 
 	public static bool DualCcdX3D => IsDualCcdX3D(CpuName);
+
+	// Process Lasso's rule engine (ProcessGovernor.exe, run as a program or as a service) is running now.
+	public static bool ProcessLassoRunning()
+	{
+		Process[] found = Array.Empty<Process>();
+		try
+		{
+			found = Process.GetProcessesByName("ProcessGovernor");
+			return found.Length > 0;
+		}
+		catch (Exception ex) when (ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception
+			|| ex is PlatformNotSupportedException)
+		{
+			return false;
+		}
+		finally
+		{
+			foreach (Process p in found)
+			{
+				p.Dispose();
+			}
+		}
+	}
+
+	// Who keeps games on the cache chiplet, which decides whether core parking helps (see the top of this file):
+	// AMD's driver, unless Process Lasso is doing it. Only asked on a dual-chiplet X3D.
+	internal static bool DriverParksCores(bool dualCcdX3D, bool lassoRunning)
+	{
+		return dualCcdX3D && !lassoRunning;
+	}
 
 	// The X3D parts with two chiplets: model numbers ending in 900 or 950 (7900X3D, 7950X3D, 9900X3D,
 	// 9950X3D). The single-chiplet ones (5800X3D, 7800X3D, 9800X3D and the like) have the cache on every core.

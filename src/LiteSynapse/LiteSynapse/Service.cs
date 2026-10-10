@@ -792,11 +792,9 @@ internal sealed class Service
 		});
 	}
 
-	// A change made from one Performance page that another page's data describes (a power plan sets USB
-	// suspend; the Razer clean-up removes start-up entries): that page reads again next time it is shown.
+	// A change made from one Performance page that another page's data describes (the Razer clean-up removes
+	// start-up entries): that page reads again next time it is shown.
 	public volatile bool ScanStale;
-
-	public volatile bool TuningStale;
 
 	// The Performance tab's job in flight (an apply can outlive the window, which closes for a game), so a
 	// reopened tab waits for it and shows its result instead of offering a second one alongside.
@@ -813,10 +811,6 @@ internal sealed class Service
 			string msg = SystemScanner.Apply(choices);
 			Scan = SystemScanner.Check();
 			ScanStale = false;
-			if (choices.Any(((string Kind, string Id, bool On) c) => c.Kind == "tweak" && c.Id == "powerplan"))
-			{
-				TuningStale = true;
-			}
 			if (choices.Any(((string Kind, string Id, bool On) c) => c.Kind == "start"))
 			{
 				RefreshRazer(deep: false);
@@ -839,7 +833,6 @@ internal sealed class Service
 		try
 		{
 			Tuning = DeviceTuning.Check();
-			TuningStale = false;
 		}
 		catch (Exception ex)
 		{
@@ -854,11 +847,11 @@ internal sealed class Service
 
 	// Keeps some devices awake and hands others back to Windows (one UAC prompt), and keeps the state the same
 	// elevated run read back.
-	public Task<string> TuneDevicesAsync(IReadOnlyList<string> awake, IReadOnlyList<string> allow, bool? planAllow)
+	public Task<string> TuneDevicesAsync(IReadOnlyList<string> awake, IReadOnlyList<string> allow)
 	{
 		return Task.Run(() =>
 		{
-			string msg = DeviceTuning.Apply(awake, allow, planAllow, out DeviceTuningState after);
+			string msg = DeviceTuning.Apply(awake, allow, out DeviceTuningState after);
 			if (after != null)
 			{
 				Tuning = after;

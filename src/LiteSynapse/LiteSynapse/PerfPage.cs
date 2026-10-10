@@ -133,7 +133,7 @@ internal sealed class PerfPage
 			}
 			break;
 		case 1:
-			if (!app.Tuning.Checked || app.TuningStale)
+			if (!app.Tuning.Checked)
 			{
 				Work(1, "Asking Windows about the devices...", () =>
 				{
@@ -390,7 +390,8 @@ internal sealed class PerfPage
 	}
 
 	// Runs the slow part off the UI thread, with the buttons disabled while it does.
-	private void Work(int index, string pending, Func<string> job)
+	// applied: the rows an APPLY is trying; their flips are dropped when it ends (see Attach).
+	private void Work(int index, string pending, Func<string> job, ICollection<string> applied = null)
 	{
 		if (busy)
 		{
@@ -412,11 +413,11 @@ internal sealed class PerfPage
 		});
 		app.PerfJob = task;
 		app.PerfJobPage = index;
-		Attach(index, pending, task);
+		Attach(index, pending, task, applied);
 	}
 
 	// Disables the buttons until the job ends, then refreshes and says what it said.
-	private void Attach(int index, string pending, Task<string> task)
+	private void Attach(int index, string pending, Task<string> task, ICollection<string> applied = null)
 	{
 		busy = true;
 		foreach (PillButton b in buttons)
@@ -448,6 +449,14 @@ internal sealed class PerfPage
 					// one in front now.
 					Invalidate();
 					loaded[index] = true;
+					// An APPLY has had its go: what went through now reads as set, and what Windows refused is
+					// named in the message and on its row, instead of staying queued for an APPLY that cannot
+					// succeed either. A cancelled consent prompt changed nothing, so those flips are kept.
+					if (applied != null && lists[index] != null && !t.IsFaulted
+						&& !message.StartsWith("Cancelled", StringComparison.Ordinal))
+					{
+						lists[index].ClearPending(applied);
+					}
 					Refresh(index);
 					Say(index, message, t.IsFaulted);
 					// The page on screen may be another one, opened while this ran: its own read was dropped
@@ -545,9 +554,10 @@ internal sealed class PerfPage
 				return;
 			}
 		}
+		HashSet<string> applied = new HashSet<string>(rows.Select((SwitchList.Row r) => r.Id), StringComparer.Ordinal);
 		if (index == 1)
 		{
-			ApplyDevices(rows);
+			ApplyDevices(rows, applied);
 			return;
 		}
 		// A row's id is "<kind>:<what>"; the kind travels with it so Apply never has to guess which of three
@@ -576,28 +586,23 @@ internal sealed class PerfPage
 			return;
 		}
 		Work(index, "Applying " + choices.Count + " change(s)...",
-			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult());
+			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult(), applied);
 	}
 
 	// The Device page's switches are "power saving": OFF keeps the device awake.
-	private void ApplyDevices(List<SwitchList.Row> rows)
+	private void ApplyDevices(List<SwitchList.Row> rows, ICollection<string> applied)
 	{
 		List<string> awake = new List<string>();
 		List<string> allow = new List<string>();
-		bool? plan = null;
 		foreach (SwitchList.Row r in rows)
 		{
-			if (r.Id == "plan")
-			{
-				plan = r.Want.Value;
-			}
-			else if (r.Id.StartsWith("dev:", StringComparison.Ordinal))
+			if (r.Id.StartsWith("dev:", StringComparison.Ordinal))
 			{
 				(r.Want.Value ? allow : awake).Add(r.Id.Substring(4));
 			}
 		}
 		Work(1, "Waiting for Windows to ask permission...",
-			() => app.TuneDevicesAsync(awake, allow, plan).GetAwaiter().GetResult());
+			() => app.TuneDevicesAsync(awake, allow).GetAwaiter().GetResult(), applied);
 	}
 
 	// "tweak:accel" -> ("tweak", "accel"); "file:C:\\x.exe" -> ("file", "C:\\x.exe"). Only the first colon
@@ -791,7 +796,8 @@ internal sealed class PerfPage
 				Can = true
 			});
 		}
-		rows.Add(Header("Power plan", "The active plan's own USB setting, which applies to every USB port."));
+		rows.Add(Header("Power plan", "The active plan's own USB setting, which applies to every USB port. Shown only: " +
+			"LiteSynapse never changes your power plan."));
 		rows.Add(new SwitchList.Row
 		{
 			Id = "plan",
@@ -802,10 +808,11 @@ internal sealed class PerfPage
 				"off" => "The active power plan never suspends idle USB devices.",
 				_ => "Could not read it from the active power plan."
 			},
+			Note = "Read only: it is part of your power plan, which LiteSynapse leaves as it is.",
 			State = s.UsbSuspend,
 			HelpsWhenOn = false,
-			// Switching it does not need to know where it is now: powercfg sets the active plan either way.
-			Can = true
+			// The power plan is the user's: read, never written.
+			Can = false
 		});
 		rows.Add(Header("The rest of the input settings are on the Windows page",
 			"Pointer acceleration, pointer speed, the background raw-input cap and the mouse and keyboard buffers."));
@@ -860,19 +867,30 @@ internal sealed class PerfPage
 					Title = (t.Thing.Length > 0) ? t.Thing : t.Title,
 					Desc = t.What + " Source: " + Tweaks.SourceText(t.Source) + ".",
 					Cost = Costly(t),
-					Note = (t.OneWay && helping)
-						? "Already right, so there is no switch: this one has no other value worth setting from here."
-						: HowKnown(t),
+					Note = t.ReportOnly
+						? ReportOnlyNote(t)
+						: ((t.OneWay && helping)
+							? "Already right, so there is no switch: this one has no other value worth setting from here."
+							: HowKnown(t)),
 					State = thing,
 					HelpsWhenOn = t.PerfOn,
 					AppliedOn = t.AppliedOn,
 					Risk = t.Risk,
-					// A one-way setting has nothing to switch back to once it is applied.
-					Can = !(t.OneWay && helping)
+					// A one-way setting has nothing to switch back to once it is applied; a report-only one is never switched.
+					Can = !t.ReportOnly && !(t.OneWay && helping)
 				});
 			}
 		}
 		SetItems(2, rows);
+	}
+
+	// A row that is only read (the power plan): nothing about switching, since there is no switch.
+	private static string ReportOnlyNote(TweakRow t)
+	{
+		string note = "Read only: LiteSynapse never changes your power plan.";
+		return (t.State == "unknown" || t.State == "other")
+			? note + " Windows did not say what the active plan sets, so this cannot tell whether it helps."
+			: note;
 	}
 
 	// Why the state on a row is what it is, when it is not simply read off the PC.
@@ -993,6 +1011,14 @@ internal sealed class PerfPage
 
 	private static string ServiceNote(ScanItem i, bool can)
 	{
+		if (SystemScanner.Refused(i.Id))
+		{
+			// Delivery Optimization is the usual one: Windows protects it even from administrators.
+			return "Windows refused to change this one - it protects it even from administrators, so APPLY cannot either." +
+				(string.Equals(i.Id, "DoSvc", StringComparison.OrdinalIgnoreCase)
+					? " Turn off its uploading on the Windows page instead."
+					: "");
+		}
 		if (i.State == "disabled" && i.Running)
 		{
 			return "Disabled, but still running until the next restart.";
