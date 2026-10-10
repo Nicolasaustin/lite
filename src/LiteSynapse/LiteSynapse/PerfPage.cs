@@ -68,6 +68,13 @@ internal sealed class PerfPage
 		pages[2] = BuildWindows();
 		pages[3] = BuildServices();
 		pages[4] = BuildStartup();
+		// A job started by the window before this one (it closed for a game while an apply ran) is still
+		// running: wait for it rather than offer a second one, and show what it said when it ends.
+		Task<string> running = app.PerfJob;
+		if (running != null && !running.IsCompleted)
+		{
+			Attach(Math.Max(0, Math.Min(pages.Length - 1, app.PerfJobPage)), "Still applying what was started before...", running);
+		}
 	}
 
 	public Panel Page(int pill)
@@ -126,7 +133,7 @@ internal sealed class PerfPage
 			}
 			break;
 		case 1:
-			if (!app.Tuning.Checked)
+			if (!app.Tuning.Checked || app.TuningStale)
 			{
 				Work(1, "Asking Windows about the devices...", () =>
 				{
@@ -136,7 +143,7 @@ internal sealed class PerfPage
 			}
 			break;
 		default:
-			if (!app.Scan.Checked)
+			if (!app.Scan.Checked || app.ScanStale)
 			{
 				Work(i, "Reading the settings...", () =>
 				{
@@ -389,15 +396,9 @@ internal sealed class PerfPage
 		{
 			return;
 		}
-		busy = true;
-		foreach (PillButton b in buttons)
-		{
-			b.Enabled = false;
-		}
-		Say(index, pending);
 		// Below normal priority: these reads (every service, signatures, a WMI query) must not compete with a
 		// game that is starting while they finish.
-		Task.Run(() =>
+		Task<string> task = Task.Run(() =>
 		{
 			System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.BelowNormal;
 			try
@@ -408,7 +409,22 @@ internal sealed class PerfPage
 			{
 				System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.Normal;
 			}
-		}).ContinueWith((Task<string> t) =>
+		});
+		app.PerfJob = task;
+		app.PerfJobPage = index;
+		Attach(index, pending, task);
+	}
+
+	// Disables the buttons until the job ends, then refreshes and says what it said.
+	private void Attach(int index, string pending, Task<string> task)
+	{
+		busy = true;
+		foreach (PillButton b in buttons)
+		{
+			b.Enabled = false;
+		}
+		Say(index, pending);
+		task.ContinueWith((Task<string> t) =>
 		{
 			if (owner == null || owner.IsDisposed || !owner.IsHandleCreated)
 			{
@@ -959,9 +975,7 @@ internal sealed class PerfPage
 					Title = i.Name,
 					Desc = i.Costs,
 					Cost = "Turning it off: " + i.Lose,
-					Note = can ? "" : (i.State == "disabled"
-						? "Windows ships this one disabled too, so there is nothing to turn back on."
-						: "Reported only: LiteSynapse does not switch this one."),
+					Note = ServiceNote(i, can),
 					State = PerfModel.ServiceState(i.State),
 					HelpsWhenOn = i.KeepOn,
 					Badge = i.Network ? "Uses the network" : (i.KeepOn ? "Keep on" : ""),
@@ -975,6 +989,25 @@ internal sealed class PerfPage
 			rows.Add(Header("Nothing to show", "None of the catalog's services are installed on this PC."));
 		}
 		SetItems(3, rows);
+	}
+
+	private static string ServiceNote(ScanItem i, bool can)
+	{
+		if (i.State == "disabled" && i.Running)
+		{
+			return "Disabled, but still running until the next restart.";
+		}
+		if (i.State == "manual" && !i.Running)
+		{
+			return "Not running now: it starts only when something asks for it.";
+		}
+		if (!can)
+		{
+			return (i.State == "disabled")
+				? "Windows ships this one disabled too, so there is nothing to turn back on."
+				: "Reported only: LiteSynapse does not switch this one.";
+		}
+		return "";
 	}
 
 	// ---- Start-up ------------------------------------------------------------------------------------

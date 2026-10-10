@@ -110,6 +110,10 @@ internal static class Tweaks
 
 		public string[] OnAny;
 
+		// Other values that count as Off: what Windows itself writes for its default side (telemetry at 1 or 3,
+		// advertising ID enabled, visual effects "let Windows choose"), which otherwise read as "partly on".
+		public string[] OffAny;
+
 		public Reg(string hive, string key, string name, string kind, string on, string off)
 		{
 			Hive = hive;
@@ -133,6 +137,11 @@ internal static class Tweaks
 		// acceleration", not "Pointer acceleration off". The Performance tab shows whether the thing is on or
 		// off and whether that is helping or hurting, so the name must never carry a direction of its own.
 		public string Thing = "";
+
+		// The commands go first and the registry values are written only if every command succeeded, so a
+		// refused command cannot leave a value claiming the setting is applied (memory compression: the MMAgent
+		// cmdlets fail with SysMain off, and EnablePrefetcher=0 then said "applied").
+		public bool CommandsFirst;
 
 		// Can only be applied, not undone from here: its Off is NotOn ("any other value"), so there is no
 		// value to put back. The Performance tab offers the switch only while it is not applied.
@@ -213,15 +222,12 @@ internal static class Tweaks
 		Ac("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5", "0"),
 		// Hard disk: never spin down.
 		Ac("0012ee47-9041-4b5d-9b77-535fba8b1442", "6738e2c4-e8a5-4a42-b16a-e040e769756e", "0"),
-		// /setactive comes BEFORE the /change calls, because powercfg /change edits whichever scheme is
-		// active. With it last, the three timeouts below landed on whatever plan was active instead - on a
-		// first run that is Balanced, so our plan never got them (the monitor still blanked mid-round) and
-		// the user's Balanced plan was left unable to sleep, with nothing to put it back.
-		"powercfg.exe /setactive " + PlanGuid,
-		// Display and sleep off, so nothing dims mid-round.
-		"powercfg.exe /change monitor-timeout-ac 0",
-		"powercfg.exe /change standby-timeout-ac 0",
-		"powercfg.exe /change disk-timeout-ac 0"
+		// Display and sleep off, so nothing dims mid-round - written to our plan by its GUID, never with
+		// powercfg /change, which edits whichever plan is active: if our plan could not be made or activated,
+		// /change zeroed the user's own plan's timeouts with nothing to put them back.
+		Ac("7516b95f-f776-4464-8c53-06167f40cc99", "3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e", "0"),
+		Ac("238c9fa8-0aad-41ed-83f4-97be242c8f20", "29f6c1db-86da-48c5-9fdb-f2b67b1f44da", "0"),
+		"powercfg.exe /setactive " + PlanGuid
 	};
 
 	private static string Ac(string group, string setting, string value)
@@ -322,6 +328,7 @@ internal static class Tweaks
 			Thing = "Shortest key-repeat delay",
 			PerfOn = true,
 			What = "Shortens the pause before a held key starts repeating.",
+			Cost = "Takes effect at the next sign-in.",
 			Source = "winutil",
 			// REG_SZ, not a DWord: everything under Control Panel\Keyboard and Control Panel\Mouse is a
 			// legacy win.ini-mapped string. Writing a DWord over Windows' own REG_SZ leaves a value of the
@@ -438,7 +445,8 @@ internal static class Tweaks
 			Values = new[]
 			{
 				// Game Mode is on when these are missing, which is how Windows ships.
-				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AllowAutoGameMode", "dword", "1", "0") { Absent = "1" },
+				// Settings' own switch writes only AutoGameModeEnabled, so a missing AllowAutoGameMode says nothing.
+				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AllowAutoGameMode", "dword", "1", "0") { Absent = AbsentUnknown },
 				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AutoGameModeEnabled", "dword", "1", "0") { Absent = "1" }
 			}
 		},
@@ -479,6 +487,7 @@ internal static class Tweaks
 			Source = "fr33thy",
 			NeedsAdmin = true,
 			NeedsReboot = true,
+			CommandsFirst = true,
 			Values = new[]
 			{
 				new Reg("HKLM", MemoryManagement + "\\PrefetchParameters", "EnablePrefetcher", "dword", "0", "3")
@@ -574,6 +583,7 @@ internal static class Tweaks
 			Risk = Caution,
 			Source = "fr33thy",
 			NeedsAdmin = true,
+			NeedsReboot = true,
 			Values = new[] { new Reg("HKLM", "SOFTWARE\\Microsoft\\Windows\\Dwm", "OverlayTestMode", "dword", "5", Delete) }
 		},
 		new Tweak
@@ -611,14 +621,14 @@ internal static class Tweaks
 			PerfOn = false,
 			What = "Menus, window minimise and the taskbar stop animating, so a click acts immediately instead of " +
 				"after a 200 ms slide. Nothing to do with frame rate; everything to do with how the PC feels.",
-			Cost = "Windows looks plainer.",
+			Cost = "Windows looks plainer. Takes effect at the next sign-in.",
 			Source = "winutil",
 			Values = new[]
 			{
 				new Reg("HKCU", "Control Panel\\Desktop", "MenuShowDelay", "string", "0", "400"),
 				new Reg("HKCU", "Control Panel\\Desktop", "DragFullWindows", "string", "0", "1"),
 				new Reg("HKCU", "Control Panel\\Desktop\\WindowMetrics", "MinAnimate", "string", "0", "1"),
-				new Reg("HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "VisualFXSetting", "dword", "3", "1"),
+				new Reg("HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "VisualFXSetting", "dword", "3", "1") { OffAny = new[] { "0" } },
 				new Reg("HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "TaskbarAnimations", "dword", "0", "1"),
 				new Reg("HKCU", "Software\\Microsoft\\Windows\\DWM", "EnableAeroPeek", "dword", "0", "1")
 			}
@@ -653,6 +663,7 @@ internal static class Tweaks
 			Source = "fr33thy",
 			Risk = Caution,
 			NeedsAdmin = true,
+			NeedsReboot = true,
 			OnCommands = new[] { "[LiteSynapse.Net]::Nagle($true)" },
 			OffCommands = new[] { "[LiteSynapse.Net]::Nagle($false)" }
 		},
@@ -683,6 +694,7 @@ internal static class Tweaks
 				"own defaults apply - it does not restore values you had set by hand.",
 			Source = "fr33thy",
 			NeedsAdmin = true,
+			NeedsReboot = true,
 			OnCommands = new[] { "[LiteSynapse.Net]::AdapterPower($false)" },
 			OffCommands = new[] { "[LiteSynapse.Net]::AdapterPower($true)" }
 		},
@@ -717,10 +729,10 @@ internal static class Tweaks
 			NeedsAdmin = true,
 			Values = new[]
 			{
-				new Reg("HKLM", "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection", "AllowTelemetry", "dword", "0", Delete),
+				new Reg("HKLM", "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection", "AllowTelemetry", "dword", "0", Delete) { OffAny = new[] { "1", "2", "3" } },
 				new Reg("HKLM", "SOFTWARE\\Policies\\Microsoft\\Windows\\System", "PublishUserActivities", "dword", "0", Delete),
 				new Reg("HKLM", "SOFTWARE\\Policies\\Microsoft\\Windows\\System", "UploadUserActivities", "dword", "0", Delete),
-				new Reg("HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "Enabled", "dword", "0", Delete),
+				new Reg("HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "Enabled", "dword", "0", Delete) { OffAny = new[] { "1" } },
 				new Reg("HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled", "dword", "0", Delete)
 			}
 		},
@@ -1079,7 +1091,7 @@ internal static class Tweaks
 			}
 			// The two states can want the same value, so this is not an else - except for NotOn, which is
 			// by definition everything that is not On (missing included).
-			if ((r.Off == NotOn) ? !isOn : Matches(r.Off, actual))
+			if ((r.Off == NotOn) ? !isOn : (Matches(r.Off, actual) || (r.OffAny != null && r.OffAny.Any((string v) => Matches(v, actual)))))
 			{
 				off++;
 			}
@@ -1118,6 +1130,7 @@ internal static class Tweaks
 			"  'BCD'\n" +
 			"  try { bcdedit.exe /enum '{current}' } catch { }\n" +
 			"  try { 'autotuning|' + (Get-NetTCPSetting -SettingName Internet -ErrorAction Stop).AutoTuningLevelLocal } catch { }\n" +
+			"  try { $m = Get-MMAgent -ErrorAction Stop; 'mmagent|' + $m.MemoryCompression + '|' + $m.PageCombining } catch { }\n" +
 			"} | Set-Content -LiteralPath " + RazerLeftovers.Ps(file) + " -Encoding UTF8 -ErrorAction SilentlyContinue\n";
 	}
 
@@ -1142,6 +1155,15 @@ internal static class Tweaks
 			string nx = BcdValue(t, "nx");
 			states["dep"] = (nx == null || nx.Equals("OptIn", StringComparison.OrdinalIgnoreCase)) ? "off"
 				: (nx.Equals("AlwaysOff", StringComparison.OrdinalIgnoreCase) ? "on" : "other");
+		}
+		// Memory compression and page combining, which the prefetch row also turns off: both off is applied.
+		System.Text.RegularExpressions.Match mm = System.Text.RegularExpressions.Regex.Match(t, "^\\s*mmagent\\|(\\w+)\\|(\\w+)",
+			System.Text.RegularExpressions.RegexOptions.Multiline);
+		if (mm.Success)
+		{
+			bool compression = mm.Groups[1].Value.Equals("True", StringComparison.OrdinalIgnoreCase);
+			bool combining = mm.Groups[2].Value.Equals("True", StringComparison.OrdinalIgnoreCase);
+			states["prefetch-mm"] = (!compression && !combining) ? "on" : ((compression && combining) ? "off" : "part");
 		}
 		System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(t, "^\\s*autotuning\\|(\\S+)",
 			System.Text.RegularExpressions.RegexOptions.Multiline);
@@ -1313,6 +1335,8 @@ internal static class Tweaks
 			{
 				sb.Append("$step = $failed\n");
 			}
+			bool commands = CommandsInScope(t, scope);
+			StringBuilder values = new StringBuilder();
 			foreach (Reg r in t.Values)
 			{
 				if (!InScope(r, scope))
@@ -1325,13 +1349,35 @@ internal static class Tweaks
 					// No single value to put back (see Tweak.OneWay).
 					continue;
 				}
-				sb.Append(want == Delete ? RemoveValue(r) : SetValue(r, want));
+				if (want == Delete && r.Kind == "keylist")
+				{
+					// Only our keys come out of a key list; what Windows keeps beside them (Auto HDR) stays.
+					values.Append(UnmergeKeyList(r));
+					continue;
+				}
+				values.Append(want == Delete ? RemoveValue(r) : SetValue(r, want));
 			}
-			if (CommandsInScope(t, scope))
+			if (commands && t.CommandsFirst)
 			{
+				sb.Append("$before = $failed\n");
 				foreach (string cmd in on ? t.OnCommands : t.OffCommands)
 				{
 					sb.Append(Run(cmd));
+				}
+				if (values.Length > 0)
+				{
+					sb.Append("if ($failed -eq $before) {\n").Append(values).Append("}\n");
+				}
+			}
+			else
+			{
+				sb.Append(values);
+				if (commands)
+				{
+					foreach (string cmd in on ? t.OnCommands : t.OffCommands)
+					{
+						sb.Append(Run(cmd));
+					}
 				}
 			}
 			if (report)
@@ -1421,6 +1467,34 @@ internal static class Tweaks
 		sb.Append("  $out = ''\n");
 		sb.Append("  foreach ($k in $map.Keys) { $out += \"$k=$($map[$k]);\" }\n");
 		sb.Append($"  New-ItemProperty -LiteralPath {path} -Name {name} -PropertyType String -Value $out -Force -ErrorAction Stop | Out-Null\n");
+		sb.Append("} catch { $failed++ }\n");
+		return sb.ToString();
+	}
+
+	// The off side of a key list: our keys are taken out and the rest written back; the value goes only when
+	// nothing is left in it. Deleting the whole value, as before, also deleted Windows' own Auto HDR choice.
+	private static string UnmergeKeyList(Reg r)
+	{
+		string path = Path(r);
+		string name = RazerLeftovers.Ps(r.Name);
+		StringBuilder sb = new StringBuilder();
+		sb.Append("try {\n");
+		sb.Append($"  $cur = (Get-ItemProperty -LiteralPath {path} -Name {name} -ErrorAction SilentlyContinue).{r.Name}\n");
+		sb.Append("  if ($null -ne $cur) {\n");
+		sb.Append("    $map = [ordered]@{}\n");
+		sb.Append("    foreach ($part in ($cur -split ';')) {\n");
+		sb.Append("      $at = $part.IndexOf('=')\n");
+		sb.Append("      if ($at -gt 0) { $map[$part.Substring(0, $at)] = $part.Substring($at + 1) }\n");
+		sb.Append("    }\n");
+		foreach (KeyValuePair<string, string> kv in Pairs(r.On))
+		{
+			sb.Append($"    $map.Remove({RazerLeftovers.Ps(kv.Key)})\n");
+		}
+		sb.Append("    $out = ''\n");
+		sb.Append("    foreach ($k in $map.Keys) { $out += \"$k=$($map[$k]);\" }\n");
+		sb.Append($"    if ($out.Length -gt 0) {{ New-ItemProperty -LiteralPath {path} -Name {name} -PropertyType String -Value $out -Force -ErrorAction Stop | Out-Null }}\n");
+		sb.Append($"    else {{ Remove-ItemProperty -LiteralPath {path} -Name {name} -ErrorAction Stop }}\n");
+		sb.Append("  }\n");
 		sb.Append("} catch { $failed++ }\n");
 		return sb.ToString();
 	}

@@ -430,7 +430,9 @@ public class RazerLeftovers
 			(s.Driver ? p.Delete : p.Disable).Add(s.Name);
 			p.Labels[s.Name] = string.IsNullOrWhiteSpace(s.Label) ? s.Name : s.Label;
 		}
-		p.DisableTask = r.UpgradeTask == "ready";
+		// A task the cache proves is there but schtasks would not describe is turned off too: skipping it left the
+		// task that reinstalls Synapse in place.
+		p.DisableTask = r.UpgradeTask == "ready" || r.UpgradeTask == "unknown";
 		p.Tasks.AddRange((r.Tasks ?? new List<RazerTask>())
 			// Anything not known to be off: a walked task's state is "unknown" because the task cache cannot
 			// tell us, and dropping those was how they came to be missed.
@@ -439,6 +441,19 @@ public class RazerLeftovers
 		p.Firewall = r.FirewallRules > 0;
 		p.RunOnce.AddRange((r.RunOnce ?? new List<string>()).Where((string v) => CpuzRunOnce.Contains(v, StringComparer.OrdinalIgnoreCase)));
 		return p;
+	}
+
+	// Which of these services are running right now.
+	internal static HashSet<string> RunningServices(IEnumerable<string> names)
+	{
+		try
+		{
+			return Win.Running(names);
+		}
+		catch (Exception ex) when (ex is DllNotFoundException || ex is EntryPointNotFoundException)
+		{
+			return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		}
 	}
 
 	// A PowerShell single-quoted string.
@@ -560,8 +575,17 @@ public class RazerLeftovers
 			}
 			foreach (string t in p.Tasks)
 			{
-				bool still = (after?.Tasks ?? new List<RazerTask>()).Any((RazerTask x) => x != null && x.State != "disabled" && string.Equals(x.Path, t, StringComparison.OrdinalIgnoreCase));
-				(still ? on : off).Add("task " + t.TrimStart('\\'));
+				// "Still on" only for a task known to be enabled. One whose state cannot be read is reported as
+				// turned off but not verified - it used to read "still on" after every successful run.
+				RazerTask now = (after?.Tasks ?? new List<RazerTask>()).FirstOrDefault((RazerTask x) => x != null && string.Equals(x.Path, t, StringComparison.OrdinalIgnoreCase));
+				if (now?.State == "ready")
+				{
+					on.Add("task " + t.TrimStart('\\'));
+				}
+				else
+				{
+					off.Add("task " + t.TrimStart('\\') + ((now?.State == "unknown") ? " (not verified)" : ""));
+				}
 			}
 			if (p.Firewall)
 			{
@@ -754,7 +778,9 @@ public class RazerLeftovers
 
 	private static string DisableGameManager(RazerLeftovers current)
 	{
-		string state = current?.Checked == true ? current.GmsService : Win.GmsState();
+		// Asked now, not from the last check: Synapse can turn it back on in between, and the button then said
+		// "already disabled" while the page showed it on.
+		string state = Win.GmsState();
 		if (state == "absent")
 		{
 			return GmsServiceName + " is not installed. Nothing to do.";
@@ -1080,6 +1106,32 @@ public class RazerLeftovers
 		}
 
 		// dwCurrentState of a service (1 stopped ... 4 running), 0 when it cannot be read.
+		// Which of these services are running now (SERVICE_RUNNING), one service-manager connection for all.
+		public static HashSet<string> Running(IEnumerable<string> names)
+		{
+			HashSet<string> running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			nint scm = OpenSCManager(null, null, SC_MANAGER_CONNECT);
+			if (scm == IntPtr.Zero)
+			{
+				return running;
+			}
+			try
+			{
+				foreach (string n in names ?? Enumerable.Empty<string>())
+				{
+					if (!string.IsNullOrEmpty(n) && RunState(scm, n) == 4)
+					{
+						running.Add(n);
+					}
+				}
+			}
+			finally
+			{
+				CloseServiceHandle(scm);
+			}
+			return running;
+		}
+
 		private static int RunState(nint scm, string name)
 		{
 			if (scm == IntPtr.Zero)
@@ -1197,8 +1249,35 @@ public class RazerLeftovers
 			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException)
 			{
 			}
+			return Query(name, cacheSaysThere: CacheHas(name));
+		}
+
+		// The task cache has an entry for this task (null when the cache could not be read).
+		private static bool? CacheHas(string name)
+		{
+			try
+			{
+				using RegistryKey tree = Registry.LocalMachine.OpenSubKey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree");
+				if (tree == null)
+				{
+					return null;
+				}
+				using RegistryKey task = tree.OpenSubKey(name.TrimStart('\\'));
+				return task != null;
+			}
+			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException)
+			{
+				return null;
+			}
+		}
+
+		// ready | disabled from schtasks. A task the cache proves exists but that schtasks would not describe
+		// (refused, timed out) is "unknown", never "absent".
+		private static string Query(string name, bool? cacheSaysThere)
+		{
 			string xml = RunTool(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN \"" + name + "\" /XML", 5000, out int code);
-			return TaskStateFromXml(code, xml);
+			string state = TaskStateFromXml(code, xml);
+			return (state == "absent" && cacheSaysThere == true) ? "unknown" : state;
 		}
 
 		// Razer's scheduled tasks, from the task cache in the registry: no process is started and the task's own
@@ -1256,13 +1335,13 @@ public class RazerLeftovers
 						found.Add(new RazerTask
 						{
 							Path = full,
-							// The task cache does not carry an enabled flag - which is exactly why the
-							// upgrade task's state is read by shelling out to schtasks /XML instead. This used
-							// to guess from the "Index" value, which is not that flag, so every task whose
-							// Index happened to be 0 was reported disabled and then silently dropped from the
-							// clean-up plan. Unknown is the truth, and the plan includes anything not known to
-							// be off; schtasks /Change /DISABLE on an already-disabled task does no harm.
-							State = "unknown"
+							// The task cache does not carry an enabled flag, so schtasks /XML is asked (there are
+							// only ever a few of these, and this runs only in the deep check). Guessing from the
+							// "Index" value - which is not that flag - once dropped tasks from the clean-up; always
+							// saying "unknown" made the clean-up ask for permission on every press and report
+							// "still on" after it had worked. What schtasks will not describe stays "unknown",
+							// and the plan includes anything not known to be off.
+							State = Query(full, cacheSaysThere: true)
 						});
 					}
 				}

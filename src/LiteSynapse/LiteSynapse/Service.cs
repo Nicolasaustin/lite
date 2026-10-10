@@ -751,6 +751,8 @@ internal sealed class Service
 			r.Services = old.Services;
 			r.UpgradeTask = old.UpgradeTask;
 			r.RunOnce = old.RunOnce;
+			r.Tasks = old.Tasks;
+			r.FirewallRules = old.FirewallRules;
 		}
 		string before = old?.ToString();
 		Razer = r;
@@ -770,6 +772,7 @@ internal sealed class Service
 	{
 		string msg = RazerLeftovers.Cleanup(action, Razer);
 		RefreshRazer();
+		ScanStale = true;
 		return msg;
 	}
 
@@ -784,9 +787,22 @@ internal sealed class Service
 		return Task.Run(() =>
 		{
 			Scan = SystemScanner.Check();
+			ScanStale = false;
 			Notify();
 		});
 	}
+
+	// A change made from one Performance page that another page's data describes (a power plan sets USB
+	// suspend; the Razer clean-up removes start-up entries): that page reads again next time it is shown.
+	public volatile bool ScanStale;
+
+	public volatile bool TuningStale;
+
+	// The Performance tab's job in flight (an apply can outlive the window, which closes for a game), so a
+	// reopened tab waits for it and shows its result instead of offering a second one alongside.
+	public Task<string> PerfJob;
+
+	public int PerfJobPage;
 
 	// Turns the chosen start-up entries, services and Windows settings on or off, then scans again. Each
 	// choice is (what kind of thing, which one, turn it on); nothing the user did not tick is touched.
@@ -796,6 +812,15 @@ internal sealed class Service
 		{
 			string msg = SystemScanner.Apply(choices);
 			Scan = SystemScanner.Check();
+			ScanStale = false;
+			if (choices.Any(((string Kind, string Id, bool On) c) => c.Kind == "tweak" && c.Id == "powerplan"))
+			{
+				TuningStale = true;
+			}
+			if (choices.Any(((string Kind, string Id, bool On) c) => c.Kind == "start"))
+			{
+				RefreshRazer(deep: false);
+			}
 			Notify();
 			return msg;
 		});
@@ -814,6 +839,7 @@ internal sealed class Service
 		try
 		{
 			Tuning = DeviceTuning.Check();
+			TuningStale = false;
 		}
 		catch (Exception ex)
 		{

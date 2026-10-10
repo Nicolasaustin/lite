@@ -344,11 +344,13 @@ public class TweaksTests
 		// powercfg /change edits whichever scheme is ACTIVE. With /setactive last, the three timeouts landed
 		// on the plan that happened to be active - Balanced, on a first run - so our plan never got them and
 		// the user's Balanced plan was left unable to sleep, with nothing to put it back.
+		// Now the timeouts are written to our plan by its GUID, so they can never land on another plan - not even
+		// when our plan could not be made or activated.
 		string on = Both(("powerplan", true));
-		int active = on.IndexOf("/setactive " + Tweaks.PlanGuid, StringComparison.Ordinal);
-		int change = on.IndexOf("/change monitor-timeout-ac", StringComparison.Ordinal);
-		Assert.True(active >= 0 && change >= 0);
-		Assert.True(active < change, "the plan has to be active before /change can edit it");
+		Assert.DoesNotContain("/change", on);
+		Assert.Contains("/setacvalueindex " + Tweaks.PlanGuid + " 7516b95f-f776-4464-8c53-06167f40cc99 3c0bc021-c8a8-4e07-a973-6b14cbcb2b7e 0", on);
+		Assert.Contains("/setacvalueindex " + Tweaks.PlanGuid + " 238c9fa8-0aad-41ed-83f4-97be242c8f20 29f6c1db-86da-48c5-9fdb-f2b67b1f44da 0", on);
+		Assert.Contains("/setactive " + Tweaks.PlanGuid, on);
 	}
 
 	[Fact]
@@ -620,6 +622,44 @@ public class TweaksTests
 		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 0));
 		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 20));
 		Assert.Equal("other", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 14));
+	}
+
+	[Fact]
+	public void WindowsOwnDefaultValuesReadAsTheOffSide()
+	{
+		// Telemetry at Windows' own levels, advertising ID enabled, "let Windows choose" effects: the Windows side.
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("telemetry"), (Tweaks.Reg r) => r.Name switch
+		{
+			"AllowTelemetry" => 3,
+			"Enabled" => 1,
+			_ => null
+		}));
+		// Game Mode turned off in Settings writes only AutoGameModeEnabled.
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("gamemode"), (Tweaks.Reg r) => (r.Name == "AutoGameModeEnabled") ? 0 : null));
+	}
+
+	[Fact]
+	public void TurningWindowedOptimizationsBackOnKeepsWindowsOwnKeys()
+	{
+		// Only our two keys come out; Auto HDR and anything else Windows keeps in the value stays.
+		string off = Tweaks.Script(new[] { ("flip", false) }, Tweaks.UserScope);
+		Assert.Contains("$map.Remove('VRROptimizeEnable')", off);
+		Assert.Contains("$map.Remove('SwapEffectUpgradeEnable')", off);
+		Assert.DoesNotContain("$map['AutoHDREnable']", off);
+	}
+
+	[Fact]
+	public void MemoryCompressionIsMarkedOnlyWhenItsCommandsWentThrough()
+	{
+		string on = Tweaks.Script(new[] { ("prefetch", true) }, Tweaks.MachineScope);
+		int command = on.IndexOf("Disable-MMAgent -MemoryCompression", StringComparison.Ordinal);
+		int value = on.IndexOf("EnablePrefetcher", StringComparison.Ordinal);
+		Assert.True(command >= 0 && value > command, "the commands come first");
+		Assert.Contains("if ($failed -eq $before) {", on);
+		Dictionary<string, string> read = Tweaks.ParseAdminRead("mmagent|True|True\n");
+		Assert.Equal("off", read["prefetch-mm"]);
+		Assert.Equal("on", Tweaks.ParseAdminRead("mmagent|False|False\n")["prefetch-mm"]);
+		Assert.Equal("part", Tweaks.ParseAdminRead("mmagent|False|True\n")["prefetch-mm"]);
 	}
 
 	[Fact]

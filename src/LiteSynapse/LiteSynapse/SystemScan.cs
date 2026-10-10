@@ -254,6 +254,9 @@ public sealed class ScanItem
 	// A service that helps performance while it runs (ServiceCatalog.Row.KeepOn).
 	public bool KeepOn { get; set; }
 
+	// For a service: running right now.
+	public bool Running { get; set; }
+
 	// The Run value's name, or the service name: what the turn-off step works on.
 	public string Id { get; set; } = "";
 
@@ -603,6 +606,13 @@ internal static class SystemScanner
 			{
 			}
 		}
+		// Whether each is running now: a demand-start service that is not running costs nothing at the moment,
+		// and a disabled one that is still running goes only at the next restart. Both say so on their row.
+		HashSet<string> running = RazerLeftovers.RunningServices(list.Select((ScanItem i) => i.Id));
+		foreach (ScanItem i in list)
+		{
+			i.Running = running.Contains(i.Id);
+		}
 		return list;
 	}
 
@@ -641,6 +651,12 @@ internal static class SystemScanner
 					read = probed ?? "unknown";
 					running = isRunning;
 				}
+			}
+			// The prefetch row's registry value says nothing about memory compression, which it also turns off:
+			// when an administrator read says the two disagree, it is only partly applied.
+			if (t.Id == "prefetch" && (read == "on" || read == "off") && admin.TryGetValue("prefetch-mm", out string mm) && mm != read)
+			{
+				read = "part";
 			}
 			(string state, bool remembered, bool restart) = PerfLedger.Resolve(read, ledger.Get(t.Id), t.NeedsReboot, running, boot);
 			restart |= waits && state == read;
