@@ -151,12 +151,10 @@ internal class InputEngine : IDisposable
 
 	private GCLatencyMode savedGcMode;
 
-	// The GC is held in low-latency mode only while the hook is live AND a linked game is in front. A profile
-	// picked by hand keeps the hook for as long as it stays picked - days, possibly - and holding off gen-2
-	// collections that long only kept the window's leftovers in memory. The hook path allocates nothing, so
-	// outside a game the mode protects nothing.
-	private bool wantLowLatency;
-
+	// The GC is held in low-latency mode while the hook is live. Garbage collection here is not concurrent, so
+	// a gen-2 collection triggered by any other thread (window, tray, device worker) stops every thread - and a
+	// keystroke arriving then waits in Windows for the hook. The hook is removed (and the mode restored)
+	// whenever the window comes to the front, so this does not hold memory for days.
 	private bool lowLatencySet;
 
 	private Action<int, bool> calibrating;
@@ -425,10 +423,10 @@ internal class InputEngine : IDisposable
 			heldAtInstall.Clear();
 			Cfg.Log("keyboard hook off");
 		}
-		GcMode(hook != IntPtr.Zero && wantLowLatency);
+		GcMode(hook != IntPtr.Zero);
 	}
 
-	// No gen-2 collections while a linked game is in front with the hook live; restored as soon as either ends.
+	// No gen-2 collections while the hook is live; restored as soon as it is removed.
 	private void GcMode(bool low)
 	{
 		if (low && !lowLatencySet)
@@ -475,7 +473,7 @@ internal class InputEngine : IDisposable
 		});
 	}
 
-	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame, bool linkedGame = false)
+	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame)
 	{
 		// Build everything on the caller's thread; the input thread only swaps references, so it is never
 		// busy with LINQ or allocation while a game is in front.
@@ -520,7 +518,6 @@ internal class InputEngine : IDisposable
 			Array.Copy(arrows, arrowMacros, 4);
 			anyArrowMacro = anyArrow;
 			snapTapActive = snapOn;
-			wantLowLatency = linkedGame;
 			UpdateRegistration(reinstall: true);
 		});
 	}

@@ -4,8 +4,7 @@ using System.Collections.Generic;
 namespace LiteSynapse;
 
 // What the keyboard hook (InputEngine.SetProfile) is given.
-// LinkedGame: a linked game is actually in front (not just a profile picked by hand), which is when the
-// engine may hold the GC in low-latency mode.
+// LinkedGame: a linked game is actually in front, rather than a profile picked by hand.
 internal readonly record struct EngineInputs(MouseProfile Mouse, KbProfile Keyboard, bool InGame, bool LinkedGame = false)
 {
 	public static readonly EngineInputs Off = new EngineInputs(null, null, InGame: false);

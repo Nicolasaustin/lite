@@ -2221,10 +2221,12 @@ internal class MainForm : Form
 		((Control)card3).Location = new Point(20, 20);
 		((Control)card3).Size = new Size(640, 180);
 		Card sc = card3;
-		Label sd = Lbl("When both A and D are held, the most recent one wins. Only active in a game profile.", Theme.Text);
+		Label sd = Lbl("When both A and D are held, the most recent one wins. Active while a linked game is in front, or anywhere but the desktop's own programs (browser, chat, editors) while you have picked a profile by hand.", Theme.Text);
 		((Control)sd).Location = new Point(40, 78);
 		((Control)sd).MaximumSize = new Size(560, 0);
-		((Control)snap).Location = new Point(40, 120);
+		// Under the text however many lines it wraps to, and the card grows to fit.
+		((Control)snap).Location = new Point(40, 78 + ((Control)sd).PreferredSize.Height + 12);
+		((Control)sc).Height = Math.Max(180, ((Control)snap).Bottom + 24);
 		((Control)sc).Controls.Add((Control)(object)sd);
 		((Control)sc).Controls.Add((Control)(object)snap);
 		((Control)pKbPerf).Controls.Add((Control)(object)sc);

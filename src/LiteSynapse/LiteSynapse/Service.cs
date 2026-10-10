@@ -1154,7 +1154,7 @@ internal sealed class Service
 		// profiles.json) is logged and tried again, instead of being skipped as "already applied" forever.
 		try
 		{
-			engine.SetProfile(e.Mouse, e.Keyboard, store.Macros, e.InGame, e.LinkedGame);
+			engine.SetProfile(e.Mouse, e.Keyboard, store.Macros, e.InGame);
 			engineInputs = e;
 			engineSet = true;
 		}
