@@ -620,8 +620,9 @@ internal sealed class PerfPage
 	{
 		return Shell(0, "Razer software left on this PC",
 			"What Razer's own software installed and still runs. LiteSynapse talks to the devices directly, so none of it " +
-			"is needed. Anything ON here is HURTING: it runs alongside your game. The filter drivers are left alone " +
-			"unless you say so, because removing the wrong one takes the mouse with it.",
+			"is needed. Anything ON here is HURTING: it runs alongside your game. TURN ON RAZER SERVICES puts back what " +
+			"TURN OFF turned off, if you want to run Synapse again (it installs nothing). The filter drivers are left " +
+			"alone unless you say so, because removing the wrong one takes the mouse with it.",
 			false,
 			Plain("CHECK AGAIN", false, () => Work(0, "Checking...", () =>
 			{
@@ -630,6 +631,8 @@ internal sealed class PerfPage
 			})),
 			Plain("TURN OFF RAZER SERVICES", true, () => Work(0, "Waiting for Windows to ask permission...",
 				() => app.RazerCleanup("disableServices"))),
+			Plain("TURN ON RAZER SERVICES", false, () => Work(0, "Waiting for Windows to ask permission...",
+				() => app.RazerCleanup("enableServices"))),
 			Plain("TURN OFF GAME MANAGER", false, () => Work(0, "Waiting for Windows to ask permission...",
 				() => app.RazerCleanup("disableGameManager"))),
 			Plain("FILTER DRIVERS", false, () => Work(0, "Working...", () => app.RazerCleanup("driverGuide"))));

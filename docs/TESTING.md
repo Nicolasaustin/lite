@@ -1,5 +1,17 @@
 # Testing LiteSynapse
 
+## Build 21 (1.2.10): TURN ON RAZER SERVICES (undo the cleanup)
+
+Performance > RAZER now has a **TURN ON RAZER SERVICES** button next to TURN OFF, so anything LiteSynapse disabled
+can be put back if you want to run Razer Synapse again:
+
+- Re-enables Razer's sign-in autostart, the Razer services (Game Manager to automatic, the rest to demand-start,
+  each started) and the upgrade task. One UAC prompt.
+- It only restores what LiteSynapse turned off - it installs nothing and never touches the filter drivers. Razer
+  Synapse has to be installed for the services to exist; a Synapse reinstall is the complete restore.
+- It does not add anything to LiteSynapse's own input path. Running Synapse again is what brings Synapse's
+  behaviour back.
+
 ## Build 20 (1.2.9): upgrade-path hardening (from the build 18 review)
 
 No change for a normal upgrade; these cover the edges an adversarial review found:

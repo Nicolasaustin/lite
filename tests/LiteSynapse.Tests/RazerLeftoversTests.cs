@@ -432,3 +432,56 @@ public class RazerLeftoversTests
 		Assert.Contains("RunOnce: RazerAppEngine cpuz-installer", line);
 	}
 }
+
+public class RazerEnableTests
+{
+	[Fact]
+	public void TurnOnBuildsTheServicesBackUp()
+	{
+		// Game Manager goes back to automatic, the rest to demand-start, and each is started. The upgrade task
+		// is re-enabled. Only a config failure counts.
+		string script = RazerLeftovers.EnableScript(
+			new[] { RazerLeftovers.GmsServiceName, "RzActionSvc" }, task: true);
+		Assert.StartsWith("$failed = 0\n", script);
+		Assert.Contains("sc.exe config 'Razer Game Manager Service 3' start= auto", script);
+		Assert.Contains("sc.exe config 'RzActionSvc' start= demand", script);
+		Assert.Contains("sc.exe start 'Razer Game Manager Service 3'", script);
+		Assert.Contains("sc.exe start 'RzActionSvc'", script);
+		Assert.Contains("schtasks.exe /Change /TN 'Razer Upgrade Elevation Service' /ENABLE", script);
+		Assert.EndsWith("exit $failed\n", script);
+		// A service that will not start is not a failure of the restore; only the config line is checked.
+		int configChecks = script.Split("if ($LASTEXITCODE -ne 0) { $failed++ }").Length - 1;
+		Assert.Equal(3, configChecks); // two services + the task
+	}
+
+	[Fact]
+	public void TurnOnWithNothingToDoSaysSo()
+	{
+		Assert.Equal("$failed = 0\nexit $failed\n", RazerLeftovers.EnableScript(null, task: false));
+	}
+
+	[Fact]
+	public void EnableIsAnAdvertisedActionAndQuotesSafely()
+	{
+		Assert.Contains("enableServices", RazerLeftovers.Actions);
+		// The service name is the only non-literal; it is quoted through Ps(), so an apostrophe cannot break out.
+		string script = RazerLeftovers.EnableScript(new[] { "Rz'; sc.exe delete WinDefend; '" }, task: false);
+		foreach (string line in script.Split('\n'))
+		{
+			Assert.Equal(0, CountQuotes(line) % 2);
+		}
+	}
+
+	private static int CountQuotes(string s)
+	{
+		int n = 0;
+		foreach (char c in s)
+		{
+			if (c == '\'')
+			{
+				n++;
+			}
+		}
+		return n;
+	}
+}

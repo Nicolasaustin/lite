@@ -39,7 +39,7 @@ public class RazerLeftovers
 	internal static readonly string[] ProtectedServices = new string[4] { "Audiosrv", "AudioEndpointBuilder", "VSSrv", "XTU3SERVICE" };
 
 	// The clean-up steps the window can ask for.
-	internal static readonly string[] Actions = new string[3] { "disableServices", "disableGameManager", "driverGuide" };
+	internal static readonly string[] Actions = new string[4] { "disableServices", "enableServices", "disableGameManager", "driverGuide" };
 
 	// Razer services known to open a network or localhost listener: the Chroma SDK server (its REST API on
 	// 127.0.0.1), Razer Central and the Synapse service itself (updates and sign-in). Only used to say so in the
@@ -757,6 +757,8 @@ public class RazerLeftovers
 			{
 			case "disableServices":
 				return DisableServices();
+			case "enableServices":
+				return EnableServices();
 			case "disableGameManager":
 				return DisableGameManager(current);
 			case "driverGuide":
@@ -837,6 +839,116 @@ public class RazerLeftovers
 			}
 		}
 		return ServicesOutcome(plan, before, Check(deep: true), code, adminRan);
+	}
+
+	// The reverse of TURN OFF RAZER SERVICES: re-enables Razer's sign-in autostart (no UAC), then the Razer
+	// services LiteSynapse set to disabled and the upgrade task (one UAC prompt). It only restores what LiteSynapse
+	// turned off - it installs nothing and touches no drivers - so Razer Synapse has to be installed for the
+	// services to exist. Game Manager goes back to automatic, the rest to demand-start.
+	private static string EnableServices()
+	{
+		RazerLeftovers before = Check(deep: true);
+		List<string> autostart = new List<string>();
+		foreach (string v in Win.RazerAutostart())
+		{
+			try
+			{
+				if (StartupApproved.State(v) == "disabled")
+				{
+					StartupApproved.Enable(v);
+					autostart.Add(v);
+					Cfg.Log("razer restore: autostart \"" + v + "\" turned back on");
+				}
+			}
+			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+			{
+			}
+		}
+		List<string> services = new List<string>();
+		if (before.GmsService == "disabled")
+		{
+			services.Add(GmsServiceName);
+		}
+		foreach (RazerService s in before.Services ?? new List<RazerService>())
+		{
+			if (s != null && !string.IsNullOrWhiteSpace(s.Name) && s.State == "disabled" && !s.Driver
+				&& !ProtectedServices.Contains(s.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+				&& !s.Name.Trim().Equals(GmsServiceName, StringComparison.OrdinalIgnoreCase))
+			{
+				services.Add(s.Name.Trim());
+			}
+		}
+		bool task = before.UpgradeTask == "disabled";
+		if (services.Count == 0 && !task && autostart.Count == 0)
+		{
+			return "Nothing of Razer's was turned off. Nothing to turn back on." +
+				(before.SynapseInstalled ? "" : " (Razer Synapse is not installed, so there are no Razer services here.)");
+		}
+		int code = 0;
+		bool adminRan = false;
+		if (services.Count > 0 || task)
+		{
+			try
+			{
+				code = RunElevatedPowerShell(EnableScript(services, task), hidden: true, waitMs: 60000);
+				adminRan = true;
+				Cfg.Log("razer restore: enable " + (services.Count > 0 ? string.Join(", ", services) : "(no services)") +
+					(task ? "; upgrade task" : "") + " -> exit code " + code);
+			}
+			catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+			{
+				Cfg.Log("razer restore: services not changed (UAC prompt declined)");
+				return "Cancelled: Windows did not get administrator permission" +
+					((autostart.Count > 0) ? ", so only the sign-in autostart was turned back on." : ", so nothing was changed.");
+			}
+		}
+		RazerLeftovers after = Check(deep: true);
+		List<string> parts = new List<string>();
+		if (autostart.Count > 0)
+		{
+			parts.Add("sign-in autostart");
+		}
+		if (services.Count > 0)
+		{
+			parts.Add(services.Count + " service(s)");
+		}
+		if (task)
+		{
+			parts.Add("the upgrade task");
+		}
+		string done = "Turned back on: " + string.Join(", ", parts) + ".";
+		if (adminRan && code != 0)
+		{
+			done += " Some of it did not take (exit code " + code + "); a Razer Synapse reinstall restores everything exactly.";
+		}
+		if (!before.SynapseInstalled)
+		{
+			done += " Razer Synapse is not installed, so you will not see Synapse itself until you reinstall it.";
+		}
+		return done;
+	}
+
+	// sc.exe to put each Razer service back to running (Game Manager automatic, the rest demand-start) and start
+	// it, and schtasks to re-enable the upgrade task. Only counts a config failure; a service that will not start
+	// (a missing dependency) is not treated as a failure of the restore.
+	internal static string EnableScript(IEnumerable<string> services, bool task)
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.Append("$failed = 0\n");
+		foreach (string n in services ?? Enumerable.Empty<string>())
+		{
+			string start = n.Equals(GmsServiceName, StringComparison.OrdinalIgnoreCase) ? "auto" : "demand";
+			sb.Append("sc.exe config " + Ps(n) + " start= " + start + " | Out-Null\n");
+			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
+			sb.Append("sc.exe start " + Ps(n) + " | Out-Null\n");
+		}
+		if (task)
+		{
+			sb.Append("schtasks.exe /Change /TN " + Ps(UpgradeTaskName) + " /ENABLE | Out-Null\n");
+			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
+		}
+		sb.Append("exit $failed\n");
+		return sb.ToString();
 	}
 
 	private static string DriverGuide(RazerLeftovers current)
