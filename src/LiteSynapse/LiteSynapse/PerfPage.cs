@@ -51,6 +51,12 @@ internal sealed class PerfPage
 	// Which pages have been filled since the window opened, so switching back does not re-read the PC.
 	private readonly bool[] loaded = new bool[5];
 
+	// Each page's header layout, re-run when its result line changes length.
+	private readonly Action[] layouts = new Action[5];
+
+	// The page on screen, so a job started on another one still refreshes it when it finishes.
+	private int current;
+
 	private bool busy;
 
 	public PerfPage(Service app, Form owner)
@@ -78,6 +84,7 @@ internal sealed class PerfPage
 	public void Show(int pill)
 	{
 		int i = Math.Max(0, Math.Min(pages.Length - 1, pill));
+		current = i;
 		if (loaded[i])
 		{
 			return;
@@ -246,7 +253,7 @@ internal sealed class PerfPage
 			ForeColor = Theme.Green,
 			BackColor = Color.Transparent,
 			Font = Theme.F(9.5f),
-			AutoEllipsis = true
+			AutoSize = false
 		};
 		head.Controls.Add(note);
 		notes[index] = note;
@@ -281,7 +288,11 @@ internal sealed class PerfPage
 					x += b.Width + 10;
 				}
 				int bottom = (row.Count > 0) ? (y + row[0].Height) : y;
-				note.SetBounds(18, bottom + 6, room, 22);
+				// The result line wraps: "Not changed: ..." and "Restart the PC" are exactly the parts that
+				// say whether a change went through, and a one-line ellipsis cut them off.
+				int noteH = (note.Text.Length == 0) ? 22 : Math.Min(4 * (note.Font.Height + 2),
+					TextRenderer.MeasureText(note.Text, note.Font, new Size(room, int.MaxValue), TextFormatFlags.WordBreak).Height + 4);
+				note.SetBounds(18, bottom + 6, room, Math.Max(22, noteH));
 				head.Height = note.Bottom + 8;
 			}
 			finally
@@ -290,6 +301,7 @@ internal sealed class PerfPage
 			}
 		}
 		head.Resize += (object _1, EventArgs _2) => Layout();
+		layouts[index] = Layout;
 		Layout();
 
 		SwitchList list = new SwitchList
@@ -333,6 +345,7 @@ internal sealed class PerfPage
 		}
 		note.ForeColor = problem ? Color.FromArgb(235, 120, 120) : Theme.Green;
 		note.Text = text ?? "";
+		layouts[i]?.Invoke();
 	}
 
 	// The counts on this page's buttons and next to its title.
@@ -361,9 +374,11 @@ internal sealed class PerfPage
 			int hurt = list.Items.Count((SwitchList.Row r) => !r.Header && r.Verdict == PerfModel.Hurting);
 			int help = list.Items.Count((SwitchList.Row r) => !r.Header && r.Verdict == PerfModel.Helping);
 			total.ForeColor = (hurt > 0) ? Color.FromArgb(240, 150, 60) : Theme.Green;
-			total.Text = (hurt + help == 0) ? "" : ((hurt > 0)
-				? $"{hurt} hurting performance  ·  {help} helping"
-				: $"Nothing here is hurting performance  ·  {help} helping");
+			int unknown = list.Items.Count((SwitchList.Row r) => !r.Header && r.Verdict == PerfModel.Unknown);
+			string tail = (unknown > 0) ? $"  ·  {unknown} can't tell" : "";
+			total.Text = (hurt + help + unknown == 0) ? "" : ((hurt > 0)
+				? $"{hurt} hurting performance  ·  {help} helping" + tail
+				: $"Nothing here is hurting performance  ·  {help} helping" + tail);
 		}
 	}
 
@@ -406,6 +421,14 @@ internal sealed class PerfPage
 					loaded[index] = true;
 					Refresh(index);
 					Say(index, message, t.IsFaulted);
+					// The page on screen may be another one, opened while this ran: its own read was dropped
+					// while busy, so fill it now and start that read.
+					if (current != index)
+					{
+						loaded[current] = true;
+						Refresh(current);
+						Fetch(current);
+					}
 				}));
 			}
 			catch (InvalidOperationException)
@@ -421,10 +444,35 @@ internal sealed class PerfPage
 	{
 		return new Action2("FIX ALL HURTING ({0})", "FIX ALL HURTING", false, "fixable", () =>
 		{
-			int n = lists[index].FixAll();
-			Say(index, (n == 0)
-				? "Nothing on this page is hurting performance (security trade-offs are never flipped for you)."
-				: $"{n} switch(es) flipped to the helping side. Check them, then press APPLY.");
+			SwitchList list = lists[index];
+			int n = list.FixAll();
+			List<SwitchList.Row> rows = list.Items.Where((SwitchList.Row r) => !r.Header).ToList();
+			int left = rows.Count((SwitchList.Row r) => r.Verdict == PerfModel.Hurting && !r.Pending);
+			int unknown = rows.Count((SwitchList.Row r) => r.Verdict == PerfModel.Unknown && r.Can && !r.Pending);
+			int pending = list.PendingCount;
+			string rest = (left > 0)
+				? $" {left} more hurting row(s) are marked 'use with care' or cannot be switched here - read them and switch them yourself."
+				: "";
+			if (unknown > 0)
+			{
+				rest += $" {unknown} row(s) can't be read" + ((index == 1 || index == 2) ? " - press CHECK AS ADMIN." : ".");
+			}
+			if (n > 0)
+			{
+				Say(index, $"{n} switch(es) flipped to the helping side. Check them, then press APPLY." + rest);
+			}
+			else if (pending > 0)
+			{
+				Say(index, $"{pending} change(s) are waiting - press APPLY." + rest);
+			}
+			else if (left > 0 || unknown > 0)
+			{
+				Say(index, "Nothing safe to flip for you." + rest);
+			}
+			else
+			{
+				Say(index, "Nothing on this page is hurting performance.");
+			}
 		});
 	}
 
@@ -685,6 +733,12 @@ internal sealed class PerfPage
 	{
 		DeviceTuningState s = app.Tuning;
 		List<SwitchList.Row> rows = new List<SwitchList.Row>();
+		if (!s.Checked)
+		{
+			rows.Add(Header("Not read yet", "Press CHECK AGAIN."));
+			SetItems(1, rows);
+			return;
+		}
 		string where = s.AdminAtUtc.HasValue
 			? $" Windows only tells an administrator, so these are as last read with administrator rights ({s.AdminAtUtc.Value.ToLocalTime():g})."
 			: "";
@@ -721,7 +775,8 @@ internal sealed class PerfPage
 			},
 			State = s.UsbSuspend,
 			HelpsWhenOn = false,
-			Can = s.UsbSuspend != "unknown"
+			// Switching it does not need to know where it is now: powercfg sets the active plan either way.
+			Can = true
 		});
 		rows.Add(Header("The rest of the input settings are on the Windows page",
 			"Pointer acceleration, pointer speed, the background raw-input cap and the mouse and keyboard buffers."));
@@ -1076,7 +1131,7 @@ internal sealed class PerfPage
 				}
 			}
 		}
-		list.Items = rows;
+		list.Refill(rows);
 	}
 
 	private void Refresh(int index)

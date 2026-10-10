@@ -81,6 +81,10 @@ internal sealed class SwitchList : Control
 
 		internal float TitleW;
 
+		internal float BadgeTextW;
+
+		internal float TagW;
+
 		internal int DescH;
 
 		internal int CostH;
@@ -92,8 +96,14 @@ internal sealed class SwitchList : Control
 
 	private const int Pad = 14;
 
-	// The badge column on the left, wide enough for "PARTLY ON · HURTING".
-	private const int BadgeW = 168;
+	// The badge column on the left: at least this wide, and wider when the badge text needs it (a larger
+	// display scale makes the text wider but not this number).
+	private const int MinBadgeW = 168;
+
+	private int badgeW = MinBadgeW;
+
+	// The width rows were last measured at, so a height-only resize does not measure them again.
+	private int measuredWidth = -1;
 
 	// The switch and its ON/OFF label on the right.
 	private const int SwitchW = 40;
@@ -132,7 +142,12 @@ internal sealed class SwitchList : Control
 		bar.Width = 14;
 		bar.SmallChange = 24;
 		bar.LargeChange = 120;
-		bar.ValueChanged += (object _1, EventArgs _2) => Invalidate();
+		bar.ValueChanged += (object _1, EventArgs _2) =>
+		{
+			// The rows moved under a pointer that did not: the highlight has to follow what is under it now.
+			UpdateHover(PointToClient(Cursor.Position));
+			Invalidate();
+		};
 		Controls.Add(bar);
 		DarkScroll.Apply(bar);
 	}
@@ -151,7 +166,26 @@ internal sealed class SwitchList : Control
 			hover = -1;
 			selected = -1;
 			bar.Value = 0;
+			measuredWidth = -1;
 			Relayout();
+		}
+	}
+
+	// New rows for the same page (a re-read after APPLY or CHECK AGAIN): the list stays where it was and the
+	// selected row stays selected, so the user can see the row they just changed instead of the top.
+	public void Refill(List<Row> rows)
+	{
+		int keep = bar.Value;
+		string selectedId = SelectedRow?.Id;
+		bool placeholder = !items.Any((Row r) => !r.Header);
+		items = rows ?? new List<Row>();
+		hover = -1;
+		selected = string.IsNullOrEmpty(selectedId) ? -1 : items.FindIndex((Row r) => !r.Header && r.Id == selectedId);
+		measuredWidth = -1;
+		Relayout();
+		if (!placeholder)
+		{
+			bar.Value = Math.Max(bar.Minimum, Math.Min(keep, Math.Max(0, total - Math.Max(1, Height))));
 		}
 	}
 
@@ -198,16 +232,34 @@ internal sealed class SwitchList : Control
 	protected override void OnResize(EventArgs e)
 	{
 		base.OnResize(e);
+		if (Width <= 0 || Height <= 0)
+		{
+			return;
+		}
+		// Row heights depend only on the width: a height-only resize just moves the scroll range.
+		if (TextWidth == measuredWidth)
+		{
+			UpdateScroll();
+			Invalidate();
+			return;
+		}
 		Relayout();
 	}
 
-	private int TextWidth => Math.Max(120, Width - (bar.Visible ? bar.Width : 0) - Pad * 2 - BadgeW - 12);
+	// The scroll bar's width is always kept free, shown or not: measuring at one width and painting at another
+	// (the bar appearing after the rows were measured) cut the last line off wrapped descriptions.
+	private int ListWidth => Math.Max(0, Width - bar.Width);
+
+	private int TextWidth => Math.Max(120, ListWidth - Pad * 2 - badgeW - 12);
 
 	// Row heights depend on how the text wraps, so they are measured here and kept: painting and scrolling
 	// never measure anything.
 	private void Relayout()
 	{
+		Font pillFont = Theme.P(8f, FontStyle.Bold);
+		badgeW = Math.Max(MinBadgeW, (int)Tx.Measure("PARTLY ON  ·  SAFE DEFAULT", pillFont).Width + 20);
 		int width = TextWidth;
+		measuredWidth = width;
 		Font title = Theme.P(10.5f);
 		Font small = Theme.P(9f);
 		int titleLine = (int)Tx.Measure("X", title).Height;
@@ -241,7 +293,7 @@ internal sealed class SwitchList : Control
 			r.Y = y;
 			if (r.Header)
 			{
-				r.DescH = (r.Desc.Length > 0) ? Lines(r.Desc, small, width + BadgeW + 12) : 0;
+				r.DescH = (r.Desc.Length > 0) ? Lines(r.Desc, small, width + badgeW + 12) : 0;
 				r.H = 40 + r.DescH;
 			}
 			else
@@ -251,6 +303,12 @@ internal sealed class SwitchList : Control
 			y += r.H;
 		}
 		total = y;
+		UpdateScroll();
+		Invalidate();
+	}
+
+	private void UpdateScroll()
+	{
 		int view = Math.Max(1, Height);
 		int maxScroll = Math.Max(0, total - view);
 		bar.Visible = total > view;
@@ -264,7 +322,6 @@ internal sealed class SwitchList : Control
 		{
 			bar.Value = maxScroll;
 		}
-		Invalidate();
 	}
 
 	// One row's height changed (its pending line came or went): measure that row only and move the ones below
@@ -286,20 +343,7 @@ internal sealed class SwitchList : Control
 				items[i].Y += delta;
 			}
 			total += delta;
-			int view = Math.Max(1, Height);
-			if ((total > view) != bar.Visible)
-			{
-				// The scroll bar comes or goes, which changes the width every row wraps to.
-				Relayout();
-				return;
-			}
-			bar.Maximum = Math.Max(0, total - 1);
-			bar.LargeChange = Math.Max(1, view);
-			int maxScroll = Math.Max(0, total - view);
-			if (bar.Value > maxScroll)
-			{
-				bar.Value = maxScroll;
-			}
+			UpdateScroll();
 		}
 		Invalidate();
 	}
@@ -329,7 +373,11 @@ internal sealed class SwitchList : Control
 		r.DescH = (r.Desc.Length > 0) ? Lines(r.Desc, small, width) : 0;
 		r.CostH = (r.Cost.Length > 0) ? Lines(r.Cost, small, width) + 2 : 0;
 		r.NoteH = (r.Note.Length > 0) ? Lines(r.Note, small, width) + 2 : 0;
-		r.PendH = r.Pending ? Lines(PendingText(r), small, width) + 4 : 0;
+		// Measured in the bold it is painted in.
+		r.PendH = r.Pending ? Lines(PendingText(r), Theme.P(9f, FontStyle.Bold), width) + 4 : 0;
+		Font pill = Theme.P(8f, FontStyle.Bold);
+		r.BadgeTextW = (r.State.Length > 0) ? Tx.Measure(BadgeText(r), pill).Width : 0f;
+		r.TagW = (r.Badge.Length > 0) ? Tx.Measure(r.Badge, pill).Width : 0f;
 		r.H = Math.Max(SwitchH + 20, 12 + r.TitleH + r.DescH + r.CostH + r.NoteH + r.PendH + 12);
 	}
 
@@ -386,7 +434,7 @@ internal sealed class SwitchList : Control
 		g.Clear(Theme.Bg);
 		int view = Height;
 		int off = Scroll;
-		int width = Width - (bar.Visible ? bar.Width : 0);
+		int width = ListWidth;
 		for (int i = 0; i < items.Count; i++)
 		{
 			Row r = items[i];
@@ -459,15 +507,15 @@ internal sealed class SwitchList : Control
 		// The badge: ON/OFF and helping/hurting, in one place, in one colour.
 		if (r.State.Length > 0)
 		{
-			PaintBadge(g, BadgeText(r), VerdictColor(r.Verdict), pill, Pad, y + 12f, BadgeW);
+			PaintBadge(g, BadgeText(r), r.BadgeTextW, VerdictColor(r.Verdict), pill, Pad, y + 12f, badgeW);
 		}
-		int tx = Pad + BadgeW + 12;
+		int tx = Pad + badgeW + 12;
 		int textRight = width - Pad - (r.Can ? RightW : 0);
 		Tx.Left(g, r.Title, title, Theme.Text, new RectangleF(tx, y + 10f, Math.Max(40f, textRight - tx), r.TitleH + 2));
 		if (r.Badge.Length > 0)
 		{
 			float bx = tx + Math.Min(r.TitleW + 10f, Math.Max(40f, textRight - tx - 140f));
-			PaintTag(g, r.Badge, RiskColor(r.Risk), pill, bx, y + 12f);
+			PaintTag(g, r.Badge, r.TagW, RiskColor(r.Risk), pill, bx, y + 12f);
 		}
 		if (r.Can)
 		{
@@ -525,9 +573,9 @@ internal sealed class SwitchList : Control
 		g.FillEllipse(knob, kx, y + 5f, d, d);
 	}
 
-	private static void PaintBadge(Graphics g, string text, Color colour, Font f, float x, float y, float maxWidth)
+	private static void PaintBadge(Graphics g, string text, float textW, Color colour, Font f, float x, float y, float maxWidth)
 	{
-		float w = Math.Min(maxWidth, Tx.Measure(text, f).Width + 18f);
+		float w = Math.Min(maxWidth, textW + 18f);
 		using (GraphicsPath path = Theme.Round(new RectangleF(x, y, w, 18f), 9f))
 		{
 			using SolidBrush b = new SolidBrush(Color.FromArgb(46, colour.R, colour.G, colour.B));
@@ -538,9 +586,9 @@ internal sealed class SwitchList : Control
 		Tx.Center(g, text, f, colour, new RectangleF(x, y, w, 18f));
 	}
 
-	private static void PaintTag(Graphics g, string text, Color colour, Font f, float x, float y)
+	private static void PaintTag(Graphics g, string text, float textW, Color colour, Font f, float x, float y)
 	{
-		float w = Tx.Measure(text, f).Width + 12f;
+		float w = textW + 12f;
 		using (GraphicsPath path = Theme.Round(new RectangleF(x, y + 1, w, 16f), 8f))
 		{
 			using Pen p = new Pen(Color.FromArgb(150, colour.R, colour.G, colour.B), 1f);
@@ -585,17 +633,34 @@ internal sealed class SwitchList : Control
 	protected override void OnMouseMove(MouseEventArgs e)
 	{
 		base.OnMouseMove(e);
-		int at = RowAt(e.Y);
+		if (UpdateHover(e.Location))
+		{
+			Invalidate();
+		}
+	}
+
+	// The row under a point, and the hand cursor over a switch. True when the highlighted row changed.
+	private bool UpdateHover(Point p)
+	{
+		int at = ClientRectangle.Contains(p) ? RowAt(p.Y) : -1;
 		if (at >= 0 && items[at].Header)
 		{
 			at = -1;
 		}
-		if (at != hover)
+		Cursor = (at >= 0 && items[at].Can && OnSwitch(p.X)) ? Cursors.Hand : Cursors.Default;
+		if (at == hover)
 		{
-			hover = at;
-			Cursor = (at >= 0 && items[at].Can) ? Cursors.Hand : Cursors.Default;
-			Invalidate();
+			return false;
 		}
+		hover = at;
+		return true;
+	}
+
+	// The switch, its ON/OFF label and the badge are what flip a row; the rest of the row only selects it,
+	// so picking a start-up program to scan does not also queue turning it off.
+	private bool OnSwitch(int x)
+	{
+		return x >= ListWidth - Pad - RightW - 8 || (x >= Pad && x < Pad + badgeW);
 	}
 
 	protected override void OnMouseEnter(EventArgs e)
@@ -621,8 +686,8 @@ internal sealed class SwitchList : Control
 		}
 	}
 
-	// A click anywhere on a row flips its switch (a big target beats a small one) and selects it; a row
-	// without a switch is only selected, so its file can still be scanned.
+	// A click on a row's switch (or its badge) flips it; a click anywhere else on the row selects it, for
+	// SCAN WITH DEFENDER, without changing anything.
 	protected override void OnMouseDown(MouseEventArgs e)
 	{
 		base.OnMouseDown(e);
@@ -641,7 +706,7 @@ internal sealed class SwitchList : Control
 		}
 		Row r = items[at];
 		selected = at;
-		if (r.Can)
+		if (r.Can && OnSwitch(e.X))
 		{
 			r.Want = PerfModel.NextWant(r.Current, r.Want, r.HelpsWhenOn);
 			if (!r.Pending)
@@ -676,7 +741,9 @@ internal sealed class SwitchList : Control
 		{
 			return;
 		}
-		int step = -(e.Delta / 120) * 60;
+		// Scaled rather than divided: a touchpad or a free-spinning wheel sends deltas under 120, which
+		// integer division turned into no scroll at all.
+		int step = -e.Delta * 60 / 120;
 		// The same reachable maximum the scrollbar itself enforces, worked out from the content rather than
 		// from the clamped LargeChange getter.
 		int maxScroll = Math.Max(0, total - Math.Max(1, Height));

@@ -143,12 +143,16 @@ internal static class DeviceTuning
 		// Without administrator rights root\WMI says nothing, but Plug and Play will still list the devices.
 		// They are shown with their state unknown ("?") instead of not at all, so the page can still offer
 		// the change - which runs elevated anyway, and reads the real state back as it does.
+		// LISTED|1 says the listing itself ran, so "nothing listed" means nothing is plugged in rather than
+		// "could not ask" - and an old administrator read is then not shown as if the devices were there.
 		"if ($ok -eq 0) {\n" +
 		"  try {\n" +
-		"    foreach ($p in @(Get-PnpDevice -PresentOnly -ErrorAction Stop | Where-Object { $_.InstanceId -like 'USB\\VID_1532*' })) {\n" +
+		"    $l = @(Get-PnpDevice -PresentOnly -ErrorAction Stop | Where-Object { $_.InstanceId -like 'USB\\VID_1532*' })\n" +
+		"    'LISTED|1'\n" +
+		"    foreach ($p in $l) {\n" +
 		"      \"?|$($p.InstanceId)|$($p.FriendlyName)\"\n" +
 		"    }\n" +
-		"  } catch { }\n" +
+		"  } catch { 'LISTED|0' }\n" +
 		"}\n";
 
 	// Where the elevated steps leave what they read with administrator rights, so the page can show it
@@ -164,16 +168,18 @@ internal static class DeviceTuning
 			" -Encoding UTF8 -ErrorAction SilentlyContinue\n";
 	}
 
-	// The change and the read-back in one elevated run, so the result is known without a second prompt.
-	internal static string ApplyScript(IEnumerable<string> instances, bool powerPlan, bool allowPowerSaving, string file)
+	// "VID_1532&PID_008D|<location>" for an instance id: the rows of one physical device on one port - the
+	// composite parent and its interfaces share the product and the location - group together.
+	internal static string Product(string instance)
 	{
-		const string tail = "exit $failed\n";
-		string body = Script(instances, powerPlan, allowPowerSaving);
-		if (body.EndsWith(tail, StringComparison.Ordinal))
+		string[] parts = (instance ?? "").Split('\\');
+		if (parts.Length < 3)
 		{
-			body = body.Substring(0, body.Length - tail.Length);
+			return instance ?? "";
 		}
-		return body + QueryToFile(file) + tail;
+		System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(parts[1], "VID_[0-9A-F]{4}&PID_[0-9A-F]{4}",
+			System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		return m.Success ? m.Value : parts[1];
 	}
 
 	// A WMI InstanceName without its power-management suffix, so it compares equal to the Plug and Play
@@ -200,10 +206,16 @@ internal static class DeviceTuning
 		DeviceTuningState s = new DeviceTuningState();
 		foreach (string line in (output ?? "").Split('\n'))
 		{
-			bool? readable = ParseReadable(line.TrimStart('\uFEFF'));
+			string trimmed = line.Trim().TrimStart('\uFEFF');
+			bool? readable = ParseReadable(trimmed);
 			if (readable.HasValue)
 			{
 				s.Readable = readable.Value;
+				continue;
+			}
+			if (trimmed == "LISTED|1")
+			{
+				s.Listed = true;
 				continue;
 			}
 			TunedDevice d = ParseDevice(line);
@@ -226,7 +238,11 @@ internal static class DeviceTuning
 		}
 		if (s.Devices.Count == 0)
 		{
-			s.Devices.AddRange(admin.Devices);
+			// Plug and Play listed nothing: nothing is plugged in, and an old read must not say otherwise.
+			if (!s.Listed)
+			{
+				s.Devices.AddRange(admin.Devices);
+			}
 		}
 		else
 		{
@@ -242,8 +258,13 @@ internal static class DeviceTuning
 					d.Instance = a.Instance;
 				}
 			}
-			// What Plug and Play lists but WMI has no power switch for (a HID child, say) has nothing to change.
-			s.Devices.RemoveAll((TunedDevice x) => !x.Known && admin.Devices.Count > 0);
+			// What Plug and Play lists but WMI has no power switch for (a HID child, say) has nothing to change -
+			// but only for a device the read did see. A device it never saw (plugged in since, or moved to
+			// another port, which gives it a new instance id) keeps its rows as unknown, so it can still be
+			// switched and read back.
+			HashSet<string> seen = new HashSet<string>(s.Devices.Where((TunedDevice x) => x.Known)
+				.Select((TunedDevice x) => Product(x.Instance)), StringComparer.OrdinalIgnoreCase);
+			s.Devices.RemoveAll((TunedDevice x) => !x.Known && seen.Contains(Product(x.Instance)));
 		}
 		s.AdminAtUtc = adminAtUtc;
 	}
@@ -311,7 +332,14 @@ internal static class DeviceTuning
 			return null;
 		}
 		using RegistryKey setting = schemes.OpenSubKey(active + "\\" + UsbSuspendSubGroup + "\\" + UsbSuspendSetting);
-		return (setting?.GetValue("ACSettingIndex") is int v) ? v : null;
+		if (setting?.GetValue("ACSettingIndex") is int v)
+		{
+			return v;
+		}
+		// A plan nobody changed has no override of its own: the value is the plan's shipped default.
+		using RegistryKey defaults = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Control\\Power\\PowerSettings\\" +
+			UsbSuspendSubGroup + "\\" + UsbSuspendSetting + "\\DefaultPowerSchemeValues\\" + active);
+		return (defaults?.GetValue("ACSettingIndex") is int d) ? d : null;
 	}
 
 	private static string ActiveScheme()
@@ -380,6 +408,7 @@ internal static class DeviceTuning
 		}
 		try
 		{
+			DateTime started = DateTime.UtcNow.AddSeconds(-2);
 			int code = RazerLeftovers.RunElevated(MixedScript(awake, allow, planAllow, SnapshotFile), 60000);
 			Cfg.Log($"device tuning: {awake?.Count ?? 0} kept awake, {allow?.Count ?? 0} handed back, power plan " +
 				$"{(planAllow.HasValue ? (planAllow.Value ? "suspend on" : "suspend off") : "untouched")} -> exit code {code}");
@@ -392,11 +421,14 @@ internal static class DeviceTuning
 			{
 				return "The script file was changed before it ran, so it was not run.";
 			}
+			// The read-back goes through a file; an old file means this run could not write it, and what the page
+			// would show is the state from before the change.
+			string stale = Fresh(started) ? "" : " The devices could not be read back, so what is shown is from before the change.";
 			if (code > 0)
 			{
-				return $"{code} step(s) did not apply. " + Summary(after);
+				return $"{code} step(s) did not apply. " + Summary(after) + stale;
 			}
-			return Summary(after);
+			return Summary(after) + stale;
 		}
 		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
 		{
@@ -406,6 +438,18 @@ internal static class DeviceTuning
 		{
 			Cfg.Log("device tuning: " + ex2.Message);
 			return "Could not change it: " + ex2.Message;
+		}
+	}
+
+	private static bool Fresh(DateTime since)
+	{
+		try
+		{
+			return System.IO.File.Exists(SnapshotFile) && System.IO.File.GetLastWriteTimeUtc(SnapshotFile) >= since;
+		}
+		catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
+		{
+			return false;
 		}
 	}
 
@@ -441,8 +485,13 @@ internal static class DeviceTuning
 	{
 		try
 		{
+			DateTime started = DateTime.UtcNow.AddSeconds(-2);
 			int code = RazerLeftovers.RunElevated("$failed = 0\n" + QueryToFile(SnapshotFile) + "exit $failed\n", 60000);
 			Cfg.Log($"device tuning: read as administrator -> exit code {code}");
+			if (code == 0 && !Fresh(started))
+			{
+				return "It ran but could not save what it read.";
+			}
 			return (code == 0) ? null : ((code == -2) ? "It did not finish in time." : $"It exited with {code}.");
 		}
 		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
@@ -504,6 +553,9 @@ public sealed class DeviceTuningState
 	// The power-management query ran. False means root\WMI could not be read, and an empty device list below
 	// then says nothing about how the devices are set.
 	public bool Readable { get; set; }
+
+	// The unelevated Plug and Play listing ran (whether or not it found anything).
+	public bool Listed { get; set; }
 
 	public List<TunedDevice> Devices { get; set; } = new List<TunedDevice>();
 

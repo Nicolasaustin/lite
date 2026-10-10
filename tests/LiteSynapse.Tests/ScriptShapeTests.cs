@@ -32,9 +32,25 @@ public class ScriptShapeTests
 		yield return ("devices kept awake",
 			DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0", "USB\\VID_1532&PID_0235\\5&b&0&1_0" },
 				powerPlan: true, allowPowerSaving: false));
-		yield return ("devices changed and read back",
-			DeviceTuning.ApplyScript(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" }, powerPlan: true, allowPowerSaving: false,
-				"C:\\Users\\o'brien\\AppData\\Roaming\\LiteSynapse\\device-power.txt"));
+		// What Apply on the Device page really runs: both directions, the plan, and the read-back, with a path
+		// carrying both kinds of apostrophe.
+		const string devFile = "C:\\Users\\o'brien\\O\u2019Neil\\data\\device-power.txt";
+		yield return ("devices both ways and read back", DeviceTuning.MixedScript(
+			new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0", "USB\\VID_1532&PID_008D&MI_00\\7&2&0&0000_0" },
+			new[] { "USB\\VID_1532&PID_0235\\5&b&0&1_0" }, planAllow: false, devFile));
+		yield return ("devices kept awake only", DeviceTuning.MixedScript(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" }, null, null, devFile));
+		yield return ("device plan only", DeviceTuning.MixedScript(null, null, true, devFile));
+		// The loader that runs an oversized script from a file.
+		yield return ("loader", "$failed = 0\n" +
+			RazerLeftovers.Loader("C:\\Users\\o'brien\\O\u2019Neil\\data\\run-1.ps1", RazerLeftovers.Sha256("x")) + "exit $failed\n");
+		// The administrator read of the boot settings, alone and at the end of a settings run.
+		yield return ("admin read", "$failed = 0\n" + Tweaks.AdminReadScript("C:\\Users\\o'brien\\perf-admin.txt") + "exit $failed\n");
+		yield return ("services and settings with the admin read", SystemScanner.WithAdminRead(SystemScanner.Combine(
+			ServiceCatalog.Script(new[] { ("DiagTrack", false), ("SysMain", false) }, report: true),
+			Tweaks.Script(new[] { ("dynamictick", true) }, Tweaks.MachineScope, "C:\\r.txt", force: true))));
+		yield return ("services only with a result file", SystemScanner.Combine(
+			ServiceCatalog.Script(new[] { ("DiagTrack", false) }, report: true),
+			Tweaks.Script(null, Tweaks.MachineScope, "C:\\r.txt", force: true)));
 		yield return ("devices read as admin",
 			"$failed = 0\n" + DeviceTuning.QueryToFile("C:\\x\\device-power.txt") + "exit $failed\n");
 		// The settings scripts as Apply really runs them: with a result file, whose path can carry an
@@ -118,7 +134,9 @@ public class ScriptShapeTests
 			string[] lines = code.Split('\n');
 			for (int i = 0; i < lines.Length; i++)
 			{
-				if (lines[i].Count((char c) => c == '\'') % 2 != 0)
+				// Each quote character is counted on its own: PowerShell pairs any of the five, and an escaped one
+				// is doubled, so every kind has to come out even.
+				if (new[] { '\'', '\u2018', '\u2019', '\u201A', '\u201B' }.Any((char q) => lines[i].Count((char c) => c == q) % 2 != 0))
 				{
 					problems.Add($"{name}: line {i + 1} has an unclosed string: {lines[i].Trim()}");
 				}

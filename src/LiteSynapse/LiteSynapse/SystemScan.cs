@@ -1397,7 +1397,16 @@ internal static class SystemScanner
 
 	private static string Report(List<string> done, List<string> refused, List<string> already, bool reboot)
 	{
+		// What did not go through, and the restart, first: they are what the user must not miss.
 		List<string> parts = new List<string>();
+		if (refused.Count > 0)
+		{
+			parts.Add("Not changed: " + string.Join(", ", refused) + ".");
+		}
+		if (reboot && done.Count > 0)
+		{
+			parts.Add("Restart the PC for all of it to take effect.");
+		}
 		if (done.Count > 0)
 		{
 			parts.Add("Changed: " + string.Join(", ", done) + ".");
@@ -1406,17 +1415,9 @@ internal static class SystemScanner
 		{
 			parts.Add("Already like that: " + string.Join(", ", already) + ".");
 		}
-		if (refused.Count > 0)
-		{
-			parts.Add("Not changed: " + string.Join(", ", refused) + ".");
-		}
 		if (parts.Count == 0)
 		{
 			return "Nothing was changed.";
-		}
-		if (reboot)
-		{
-			parts.Add("Restart the PC for all of it to take effect.");
 		}
 		return string.Join(" ", parts);
 	}

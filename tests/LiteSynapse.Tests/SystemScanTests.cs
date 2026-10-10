@@ -844,17 +844,72 @@ public class DeviceTuningTests
 	[Fact]
 	public void TheChangeReadsTheDevicesBackInTheSameElevatedRun()
 	{
-		string script = DeviceTuning.ApplyScript(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: true,
-			allowPowerSaving: false, "C:\\Users\\me\\AppData\\Roaming\\LiteSynapse\\device-power.txt");
+		string script = DeviceTuning.MixedScript(new[] { "USB\\VID_1532&PID_008D\\x_0" }, new[] { "USB\\VID_1532&PID_0235\\y_0" },
+			planAllow: false, "C:\\Users\\me\\AppData\\Local\\Programs\\LiteSynapse\\data\\device-power.txt");
 		Assert.StartsWith("$failed = 0\n", script);
 		Assert.EndsWith("exit $failed\n", script);
-		Assert.Contains("Set-CimInstance", script);
+		// Both directions in one run: one consent prompt.
+		Assert.Contains("Enable = $false", script);
+		Assert.Contains("Enable = $true", script);
+		Assert.Contains(DeviceTuning.UsbSuspendSetting + " 0", script);
+		Assert.DoesNotContain(DeviceTuning.UsbSuspendSetting + " 1", script);
 		// The read-back comes after the change, and goes to the file.
-		Assert.True(script.IndexOf("Set-CimInstance", StringComparison.Ordinal) < script.IndexOf("READABLE|$ok", StringComparison.Ordinal));
-		Assert.Contains("Set-Content -LiteralPath 'C:\\Users\\me\\AppData\\Roaming\\LiteSynapse\\device-power.txt'", script);
+		Assert.True(script.LastIndexOf("Set-CimInstance", StringComparison.Ordinal) < script.IndexOf("READABLE|$ok", StringComparison.Ordinal));
+		Assert.Contains("Set-Content -LiteralPath 'C:\\Users\\me\\AppData\\Local\\Programs\\LiteSynapse\\data\\device-power.txt'", script);
+		// The halves are stitched: one counter, one exit, so the count cannot be reset halfway.
+		Assert.Equal(1, script.Split("$failed = 0").Length - 1);
 		Assert.Equal(1, script.Split("exit $failed").Length - 1);
+		// Nothing switched and the plan left alone: only the read.
+		string none = DeviceTuning.MixedScript(null, null, null, "C:\\x.txt");
+		Assert.DoesNotContain("Set-CimInstance", none);
+		Assert.DoesNotContain("powercfg", none);
 	}
 
+	[Fact]
+	public void ADeviceTheLastAdminReadNeverSawStaysOnThePage()
+	{
+		// The admin read saw only the Naga on port 3. Since then the Naga moved to port 4 and the BlackWidow
+		// was plugged in: both must stay listed (unknown), so they can still be switched and read back.
+		DeviceTuningState now = DeviceTuning.Parse("READABLE|0\nLISTED|1\n" +
+			"?|USB\\VID_1532&PID_008D\\6&x&0&4|\n?|USB\\VID_1532&PID_0235\\5&b&0&1|\n");
+		DeviceTuningState admin = DeviceTuning.Parse("READABLE|1\nTrue|USB\\VID_1532&PID_008D\\6&x&0&3_0|Naga\n");
+		DeviceTuning.Merge(now, admin, DateTime.UtcNow);
+		Assert.Equal(2, now.Devices.Count);
+		Assert.All(now.Devices, (TunedDevice d) => Assert.False(d.Known));
+		// A HID child of a device the read did see has no switch of its own and goes.
+		DeviceTuningState seen = DeviceTuning.Parse("READABLE|0\nLISTED|1\n" +
+			"?|USB\\VID_1532&PID_008D\\6&x&0&3|\n?|USB\\VID_1532&PID_008D&MI_02\\7&y&0&0002|\n");
+		DeviceTuning.Merge(seen, admin, DateTime.UtcNow);
+		Assert.Single(seen.Devices);
+		Assert.True(seen.Devices[0].Known);
+	}
+
+	[Fact]
+	public void NothingPluggedInShowsNothingEvenWithAnOldAdminRead()
+	{
+		DeviceTuningState admin = DeviceTuning.Parse("READABLE|1\nTrue|USB\\VID_1532&PID_008D\\6&x&0&3_0|Naga\n");
+		DeviceTuningState unplugged = DeviceTuning.Parse("READABLE|0\nLISTED|1\n");
+		Assert.True(unplugged.Listed);
+		DeviceTuning.Merge(unplugged, admin, DateTime.UtcNow);
+		Assert.Empty(unplugged.Devices);
+		// When the listing itself could not run, the old read is the best there is.
+		DeviceTuningState unknown = DeviceTuning.Parse("READABLE|0\nLISTED|0\n");
+		DeviceTuning.Merge(unknown, admin, DateTime.UtcNow);
+		Assert.Single(unknown.Devices);
+	}
+
+	[Fact]
+	public void EveryCharacterPowerShellTreatsAsAQuoteIsEscaped()
+	{
+		// A user name like O\u2019Brien, or a start-up entry's file name crafted to end the literal inside the
+		// elevated Defender scan: each of the five quote characters is doubled.
+		foreach (char q in new[] { '\'', '\u2018', '\u2019', '\u201A', '\u201B' })
+		{
+			string quoted = RazerLeftovers.Ps("C:\\Users\\O" + q + "Brien\\x" + q + ";calc;" + q + ".exe");
+			Assert.Equal("'C:\\Users\\O" + q + q + "Brien\\x" + q + q + ";calc;" + q + q + ".exe'", quoted);
+		}
+		Assert.Equal("''", RazerLeftovers.Ps(null));
+	}
 	[Fact]
 	public void LettingWindowsManageItAgainIsTheSameCallTheOtherWay()
 	{
