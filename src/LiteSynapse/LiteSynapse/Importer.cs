@@ -45,15 +45,43 @@ internal static class Importer
 		return JsonNode.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(item["payload"].GetValue<string>())));
 	}
 
-	// One macro from a file for the macro page's IMPORT: a Synapse macro export (.xml) or a LiteSynapse export
-	// (.json, MacroEdit.ToJson). Nothing is stored; the page decides what to do with a name that exists.
-	public static Macro ImportMacroFile(string path)
+	// The macros in a file for the macro page's IMPORT. Nothing is stored; the page decides what to do with a name
+	// that already exists. Handles:
+	//   .xml       - a Razer Synapse 3 macro export (one macro).
+	//   .synapse4  - a Razer Synapse 4 export, which can hold several macros (and profiles, which are ignored here).
+	//   .json      - a LiteSynapse export (MacroEdit.ToJson, one macro).
+	// A .synapse4 or Synapse .xml that holds no macro throws, so the page can say so.
+	public static List<Macro> ImportMacrosFromFile(string path)
 	{
 		if (path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
 		{
-			return ImportMacroXml(path);
+			return new List<Macro> { ImportMacroXml(path) };
 		}
-		return MacroEdit.FromJson(File.ReadAllText(path));
+		if (path.EndsWith(".synapse4", StringComparison.OrdinalIgnoreCase))
+		{
+			return MacrosFromSynapse4(path);
+		}
+		return new List<Macro> { MacroEdit.FromJson(File.ReadAllText(path)) };
+	}
+
+	// Every macro inside a Synapse 4 export (its "macros" array; each has a name and a base64 payload).
+	private static List<Macro> MacrosFromSynapse4(string path)
+	{
+		JsonNode root = JsonNode.Parse(File.ReadAllText(path)) ?? throw new InvalidDataException("The file is empty.");
+		List<Macro> macros = new List<Macro>();
+		foreach (JsonNode m in root["macros"]?.AsArray() ?? new JsonArray())
+		{
+			if (m == null)
+			{
+				continue;
+			}
+			macros.Add(MacroFromJson(Payload(m), m["name"]?.GetValue<string>()));
+		}
+		if (macros.Count == 0)
+		{
+			throw new InvalidDataException("This Synapse 4 file has no macros in it (it may hold only profiles). Export the macro itself from Synapse.");
+		}
+		return macros;
 	}
 
 	public static string Run(string[] files)

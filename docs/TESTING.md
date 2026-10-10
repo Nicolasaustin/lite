@@ -1,5 +1,19 @@
 # Testing LiteSynapse
 
+## Build 24 (1.2.13): import Razer Synapse macros
+
+The macro page's IMPORT now reads Razer Synapse's own macro files, not only LiteSynapse's:
+
+- **.synapse4** - a Razer Synapse 4 export. One file can hold several macros; all of them are imported (profiles
+  in the same file are ignored). If the file holds no macro, the message says so.
+- **.xml** - a Razer Synapse 3 macro export (one macro).
+- **.json** - a LiteSynapse export (MacroEdit.ToJson).
+
+How to get a file out of Synapse 4: open the macro, click the "..." menu next to its name, choose Export, and save
+the file. Then in LiteSynapse: MACRO > IMPORT, and pick it. A name that already exists is kept and the import is
+added as "name (2)". Keyboard steps and waits come across; mouse-button steps in a Synapse macro are not read yet
+(add those with ADD MOUSE).
+
 ## Build 23 (1.2.12): a real macro editor, start-up page fixes, click-swap that lands
 
 - **MACRO page is a full editor now.** Left: your macros, with NEW, DUPLICATE, RENAME, DELETE, IMPORT, EXPORT.

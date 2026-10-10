@@ -334,7 +334,7 @@ internal sealed class MacroPage : Panel
 	{
 		OpenFileDialog dlg = new OpenFileDialog
 		{
-			Filter = "Macros (*.json;*.xml)|*.json;*.xml|All files (*.*)|*.*",
+			Filter = "Macros (*.synapse4;*.xml;*.json)|*.synapse4;*.xml;*.json|Razer Synapse 4 (*.synapse4)|*.synapse4|Razer Synapse 3 macro (*.xml)|*.xml|LiteSynapse macro (*.json)|*.json|All files (*.*)|*.*",
 			Multiselect = true
 		};
 		try
@@ -349,10 +349,13 @@ internal sealed class MacroPage : Panel
 			{
 				try
 				{
-					Macro m = Importer.ImportMacroFile(file);
-					m.Name = MacroEdit.UniqueName(app.Store.Macros.Select((Macro x) => x.Name), m.Name);
-					app.Store.Macros.Add(m);
-					added.Add(m.Name);
+					// A Synapse 4 file can hold several macros; .xml / .json hold one.
+					foreach (Macro m in Importer.ImportMacrosFromFile(file))
+					{
+						m.Name = MacroEdit.UniqueName(app.Store.Macros.Select((Macro x) => x.Name), m.Name);
+						app.Store.Macros.Add(m);
+						added.Add(m.Name);
+					}
 				}
 				catch (Exception ex)
 				{
