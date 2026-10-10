@@ -318,6 +318,12 @@ internal class MainForm : Form
 
 	private readonly Toggle tgSafe;
 
+	// On the Macro keys and Snap Tap cards while Competitive safe keeps them off in anti-cheat games (CS2 among
+	// them): without it the cards look armed and nothing happens in the game.
+	private Label macroSafeWarn;
+
+	private Label snapSafeWarn;
+
 	private readonly Label lblHome1;
 
 	private readonly Label lblHome2;
@@ -1131,6 +1137,30 @@ internal class MainForm : Form
 		LoadAll();
 	}
 
+	// "Competitive safe is on" in the hurting colour, hidden until UpdateSafeWarnings shows it.
+	private static Label SafeWarning(string what)
+	{
+		Label w = Lbl("Competitive safe is ON (Settings): " + what + " in CS2 or other anti-cheat games. Turn it off in " +
+			"Settings for offline practice.", Color.FromArgb(240, 150, 60));
+		((Control)w).MaximumSize = new Size(560, 0);
+		// Measured at its widest wrap, so the card is tall enough before the first refresh shows it.
+		((Control)w).Size = ((Control)w).PreferredSize;
+		((Control)w).Visible = false;
+		return w;
+	}
+
+	private void UpdateSafeWarnings()
+	{
+		bool on = app.CompetitiveSafe;
+		foreach (Label w in new[] { macroSafeWarn, snapSafeWarn })
+		{
+			if (w != null && ((Control)w).Visible != on)
+			{
+				((Control)w).Visible = on;
+			}
+		}
+	}
+
 	private static Label Lbl(string t, Color? c = null, float size = 10f, bool bold = false)
 	{
 		//IL_0000: Unknown result type (might be due to invalid IL or missing references)
@@ -1651,6 +1681,7 @@ internal class MainForm : Form
 			if (!loading)
 			{
 				app.SetCompetitiveSafe(tgSafe.Checked);
+				UpdateSafeWarnings();
 			}
 		};
 		tgAuto.CheckedChanged += () =>
@@ -2223,6 +2254,10 @@ internal class MainForm : Form
 			((Control)card2).Controls.Add((Control)(object)c);
 			y += 52;
 		}
+		macroSafeWarn = SafeWarning("these macros do not run");
+		((Control)macroSafeWarn).Location = new Point(40, y + 4);
+		((Control)card2).Controls.Add((Control)(object)macroSafeWarn);
+		((Control)card2).Height = Math.Max(((Control)card2).Height, ((Control)macroSafeWarn).Bottom + 24);
 		((Control)pKbCustom).Controls.Add((Control)(object)card2);
 		((Control)pKbPerf).Padding = new Padding(20);
 		Card card3 = new Card
@@ -2237,9 +2272,12 @@ internal class MainForm : Form
 		((Control)sd).MaximumSize = new Size(560, 0);
 		// Under the text however many lines it wraps to, and the card grows to fit.
 		((Control)snap).Location = new Point(40, 78 + ((Control)sd).PreferredSize.Height + 12);
-		((Control)sc).Height = Math.Max(180, ((Control)snap).Bottom + 24);
+		snapSafeWarn = SafeWarning("Snap Tap does not run");
+		((Control)snapSafeWarn).Location = new Point(40, ((Control)snap).Bottom + 12);
+		((Control)sc).Height = Math.Max(180, ((Control)snapSafeWarn).Bottom + 24);
 		((Control)sc).Controls.Add((Control)(object)sd);
 		((Control)sc).Controls.Add((Control)(object)snap);
+		((Control)sc).Controls.Add((Control)(object)snapSafeWarn);
 		((Control)pKbPerf).Controls.Add((Control)(object)sc);
 		snap.CheckedChanged += () =>
 		{
@@ -3039,6 +3077,7 @@ internal class MainForm : Form
 				nagaBright.Value = 100;
 				nagaBrightOn.Checked = true;
 			}
+			UpdateSafeWarnings();
 			KbProfile kp = KP;
 			// With no keyboard profile active there is nothing for these to change: greyed out, so a flip can
 			// never look saved when it was not.
