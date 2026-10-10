@@ -39,6 +39,13 @@ public static class Cfg
 	// Setup copies them over from where an earlier version kept them; this does the same when Setup did not.
 	private static string Init()
 	{
+		// The test assembly points this at its own folder (a ModuleInitializer), so running the tests never reads or
+		// writes the real %LOCALAPPDATA%\LiteSynapse\data. The app never sets it.
+		if (AppContext.GetData("LiteSynapse.DataDir") is string forced && forced.Length > 0)
+		{
+			Directory.CreateDirectory(forced);
+			return forced;
+		}
 		string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 		string dir = Path.Combine(local, "LiteSynapse", "data");
 		try

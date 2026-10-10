@@ -1,5 +1,21 @@
 # Testing LiteSynapse
 
+## Build 20 (1.2.9): upgrade-path hardening (from the build 18 review)
+
+No change for a normal upgrade; these cover the edges an adversarial review found:
+
+- A 1.2.6 copy that was installed into a chosen folder (its data beside the exe) now has its profiles copied over,
+  instead of Setup seeding the bundled ones. The old per-user Apps & features entry is always removed, so the list
+  never shows two LiteSynapse entries.
+- Only LiteSynapse's own DLLs are deleted from an old install folder, never every DLL in a shared folder.
+- Uninstalling with "delete my profiles" leaves no empty %LOCALAPPDATA%\LiteSynapse folder behind.
+- The Options page names the data folder instead of saying "this folder".
+- Running the test suite no longer touches the real %LOCALAPPDATA%\LiteSynapse\data folder (it uses its own).
+
+**CS2 jumpthrow:** Valve's August 2024 update blocks automated jumpthrow (macro or bind) on official servers - that
+is why the macro reads "Windows took 0 of 8" in CS2. Use a one-key jump bind (`bind "mouse5" "+jump"`) and release
+the grenade by hand; the macro stays for offline practice (Competitive safe OFF).
+
 ## Build 19 (1.2.8): RESYNC MOUSE undoes everything Synapse changed
 
 Build 17's RESYNC MOUSE only wrote the slot again, and the tilt stayed swapped: Razer Synapse also remaps the buttons

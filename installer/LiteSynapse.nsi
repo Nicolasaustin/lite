@@ -356,6 +356,9 @@ Function DetectDataSource
   ${ElseIf} $OldInstall != ""
   ${AndIf} ${FileExists} "$OldInstall\data\profiles.json"
     StrCpy $DataSource "$OldInstall\data"
+  ${ElseIf} ${FileExists} "$INSTDIR\data\profiles.json"
+    ; A 1.2.6 copy installed into this same folder (the old build had a folder choice), with data beside the exe.
+    StrCpy $DataSource "$INSTDIR\data"
   ${ElseIf} ${FileExists} "$DOCUMENTS\${APP_NAME}\data\profiles.json"
     StrCpy $DataSource "$DOCUMENTS\${APP_NAME}\data"
   ${ElseIf} ${FileExists} "$PROFILE\Documents\${APP_NAME}\data\profiles.json"
@@ -520,7 +523,7 @@ Function OptionsShow
   ${NSD_CreateGroupBox} 0 28u 100% 40u "Profiles and settings"
   Pop $0
   ${If} $DataSource == "keep"
-    StrCpy $1 "The profiles and settings already in this folder are kept as they are."
+    StrCpy $1 "The profiles and settings already in $DataDir are kept as they are."
   ${ElseIf} $DataSource == "seed"
     StrCpy $1 "No existing profiles were found. ${APP_NAME} starts with the bundled profiles."
   ${Else}
@@ -662,20 +665,26 @@ Section "${APP_NAME}" SecMain
   ${If} $OldInstall != ""
     Delete "$OldInstall\${APP_EXE}"
     Delete "$OldInstall\${UNINST_EXE}"
-    Delete "$OldInstall\*.dll"
+    ; Only LiteSynapse's own DLLs (a shared install folder may hold other programs' files).
+    Delete "$OldInstall\LiteSynapse.dll"
+    Delete "$OldInstall\WebView2Loader.dll"
+    Delete "$OldInstall\Microsoft.Web.WebView2.Core.dll"
+    Delete "$OldInstall\Microsoft.Web.WebView2.WinForms.dll"
     Delete "$OldInstall\LiteSynapse.deps.json"
     Delete "$OldInstall\LiteSynapse.runtimeconfig.json"
     Delete "$OldInstall\LiteSynapse.pdb"
     Delete "$OldInstall\tools\remove-razer-filter-drivers.ps1"
     RMDir "$OldInstall\tools"
     RMDir "$OldInstall"
-    DeleteRegKey HKCU "${UNINST_KEY}"
     ${If} ${FileExists} "$OldInstall\${APP_EXE}"
       !insertmacro LOG "Old per-user install in $OldInstall: LiteSynapse.exe could not be removed (in use?)"
     ${Else}
       !insertmacro LOG "Moved from the per-user install in $OldInstall: program files removed, data folder kept as a backup"
     ${EndIf}
   ${EndIf}
+  ; The old per-user Apps & features entry (the new one is under HKLM): always, including a build-17 install that
+  ; was in this same Program Files folder, so the list never shows two LiteSynapse entries.
+  DeleteRegKey HKCU "${UNINST_KEY}"
 
   ; Shortcuts (they replace the old copy's shortcuts of the same name).
   SetOutPath "$INSTDIR"
@@ -834,7 +843,6 @@ Section "Uninstall"
     Sleep 1000
   ${EndIf}
   RMDir /r "$LOCALAPPDATA\${APP_NAME}\WebView2"
-  RMDir "$LOCALAPPDATA\${APP_NAME}"
 
   ${If} $8 = 1
     RMDir /r "$DataDir"
@@ -855,5 +863,7 @@ Section "Uninstall"
       FileClose $0
     ${EndIf}
   ${EndIf}
+  ; After the data folder is gone (when the user chose to delete it), the now-empty parent too.
+  RMDir "$LOCALAPPDATA\${APP_NAME}"
   RMDir "$INSTDIR"
 SectionEnd
