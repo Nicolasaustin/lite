@@ -47,15 +47,49 @@ AMD's V-Cache driver keeps games on the cache chiplet by parking the other one, 
   row OFF puts Balanced back. (USB selective suspend can still be turned off on the Device page.)
 - **Game DVR** is left out of FIX ALL; if CS2 ever seems to run on the wrong cores, turn it back on.
 
+### Rows that changed meaning
+
+- **Priority separation** at the Windows default reads ON · HELPING: stock Windows already favours the
+  program in front, and 26 hex schedules the same as the default 2. It is one-way: there is nothing worse
+  to switch it to.
+- **0.5 ms timer** and **Nagle off** are "use with care" now, so FIX ALL leaves them alone. The timer is
+  PC-wide (more wake-ups, more power); Nagle only touches TCP, and CS2's game traffic is UDP.
+- **Services** say when a disabled service is still running until the next restart, and an on-demand
+  service that is not running says so instead of reading as a problem. Defender, System Guard and
+  Hyper-V host services are "use with care".
+- Power plan OFF puts Balanced back (not the plan you had before), and NIC power saving ON goes back to
+  the driver defaults. Both rows say so.
+
 ### Fixed from the whole-app audit
 
-- DPI change then revert could leave a game running the old DPI from a stale slot record.
-- Game start no longer re-sends lighting already written into the slot, a refused lighting zone is not
-  retried every game start, and a pre-write stops if a game comes to the front.
-- Resume re-syncs the devices once, not twice.
-- Settings and profile files are written atomically (no truncated files after a crash or power cut).
+- **Tray panel:** closing it no longer forces a full memory clean-up (a blocking pause) when you click
+  straight back into CS2. Memory is released only after the main window closes and never with a game in front.
+- **Input:** the first Snap Tap or remap of a session no longer builds code on the hook thread; a Naga
+  side button held while alt-tabbing in no longer sticks; Print Screen and Pause send the right key; the
+  key-capture box records right-hand Shift/Ctrl/Alt correctly. Only the input threads opt out of power
+  throttling now, not the whole app.
+- **Devices:** DPI change then revert could leave a game running the old DPI from a stale slot record.
+  Game start no longer re-sends lighting already in the slot, a refused lighting zone is not retried, and
+  a pre-write stops if a game comes to the front. Resume re-syncs once, not twice. Keyboard brightness goes
+  through the device worker, and alt-tabbing out for a moment no longer re-sends keyboard lighting.
+- **Files:** settings, profiles, games and onboard slot records are written atomically with a backup;
+  a corrupt file is kept aside and the backup loaded, instead of your games list being replaced with defaults.
+  "Switch profiles automatically" is saved. RELOAD CONFIG reloads settings too. Program names typed under
+  Edit programs are cleaned up ("cs2" becomes cs2.exe; a full path becomes the file name).
+- **Leaks:** window and calibration icons, tooltips, dropdowns and menus are freed; process handles are
+  disposed; the log view reads only the last 64 KB and only when the Settings page is visible.
+- **Tray:** the icon retries if Explorer was not ready at start-up; double-click opens the window
+  instead of flashing the panel; Exit closes the window cleanly. Closing calibration early keeps your
+  old calibration.
+- **Window:** the BlackWidow page no longer shows the wrong profile as active; a disabled switch looks
+  disabled; clicking an open dropdown closes it.
 - The elevated script no longer fails when a big selection exceeds Windows' command-line limit, and
   PowerShell quoting escapes curly apostrophes (a user name like O'Brien, or a crafted file name).
+
+### Recommendation: turn on Competitive safe
+
+Settings > **Competitive safe** is off by default. On official Valve servers or FACEIT, turn it on: it
+keeps Snap Tap and macros out of anti-cheat games. Leave it off only for offline practice.
 
 Nothing here was seen on a real screen before shipping (it was built on Linux). A screenshot of anything
 clipped or wrong is the fastest fix.
