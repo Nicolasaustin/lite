@@ -101,8 +101,28 @@ public class ServicePlanTests
 		Assert.True(ServicePlan.BlockedByCompetitiveSafe(competitiveSafe: true, gameInFront: false, null, "PEAK", "VALORANT-Win64-Shipping.exe"));
 		// Competitive-safe off, or another program in front: nothing changes.
 		Assert.Same(Gamer, ServicePlan.Engine(renamed, Gamer, gameInFront: true, mouseOnboard: true, competitiveSafe: false, "CS2 Premier", suspended: false, foregroundExe: "cs2.exe").Keyboard);
-		Assert.Same(Gamer, ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: true, null, suspended: false, pickedByHand: true, foregroundExe: "notepad.exe").Keyboard);
+		Assert.Same(Gamer, ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: true, competitiveSafe: true, null, suspended: false, pickedByHand: true, foregroundExe: "SomeIndieGame.exe").Keyboard);
 		Assert.Same(Gamer, ServicePlan.Engine(Peak, Gamer, gameInFront: true, mouseOnboard: true, competitiveSafe: true, "PEAK", suspended: false, foregroundExe: "PEAK.exe").Keyboard);
+	}
+
+	[Fact]
+	public void APickedProfileLeavesTypingInTheDesktopsOwnProgramsAlone()
+	{
+		// Picked by hand, a browser or a text editor in front: Snap Tap and arrow macros would put stray keys
+		// into what the user types, so the keyboard part is off - the mouse's buttons keep the profile.
+		foreach (string exe in new[] { "chrome.exe", "C:\\Windows\\explorer.exe", "Discord.exe", "NOTEPAD.EXE", "LiteSynapse.exe" })
+		{
+			EngineInputs e = ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+				suspended: false, pickedByHand: true, foregroundExe: exe);
+			Assert.Null(e.Keyboard);
+			Assert.Same(Peak, e.Mouse);
+			Assert.False(e.LinkedGame);
+		}
+		// A linked game in front is a game whatever its name, and it is the only time the GC is held.
+		EngineInputs game = ServicePlan.Engine(Peak, Gamer, gameInFront: true, mouseOnboard: false, competitiveSafe: false, "PEAK",
+			suspended: false, foregroundExe: "PEAK.exe");
+		Assert.Same(Gamer, game.Keyboard);
+		Assert.True(game.LinkedGame);
 	}
 
 	[Fact]

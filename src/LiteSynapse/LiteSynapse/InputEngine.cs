@@ -151,6 +151,14 @@ internal class InputEngine : IDisposable
 
 	private GCLatencyMode savedGcMode;
 
+	// The GC is held in low-latency mode only while the hook is live AND a linked game is in front. A profile
+	// picked by hand keeps the hook for as long as it stays picked - days, possibly - and holding off gen-2
+	// collections that long only kept the window's leftovers in memory. The hook path allocates nothing, so
+	// outside a game the mode protects nothing.
+	private bool wantLowLatency;
+
+	private bool lowLatencySet;
+
 	private Action<int, bool> calibrating;
 
 	public Dictionary<string, BaseKey> Base = new Dictionary<string, BaseKey>();
@@ -220,7 +228,9 @@ internal class InputEngine : IDisposable
 		{
 			threadId = Environment.CurrentManagedThreadId;
 			Native.SetCurrentThreadTimeCritical();
-			Native.OptOutOfPowerThrottling(process: true);
+			// This thread only: the rest of the process (window, tray, device worker, scans) is background
+			// work Windows may run slower or on efficiency cores, away from the game's cores.
+			Native.OptOutOfPowerThrottling(process: false);
 			(nint, W32.WndProc) tuple = W32.CreateWindow(messageOnly: true, OnMessage);
 			hwnd = tuple.Item1;
 			keepAlive = tuple.Item2;
@@ -326,6 +336,24 @@ internal class InputEngine : IDisposable
 			RuntimeHelpers.PrepareMethod(typeof(Native).GetMethod("SendKeys").MethodHandle);
 			Native.SendKeys(new Native.INPUT[1], 0);
 			Native.KeyInput(65, ext: false, down: false);
+			// The P/Invoke marshalling stubs are not in the precompiled image: build them here, on this thread,
+			// rather than on the first counter-strafe of the first match. Same for the dictionary and set
+			// instantiations the hook uses.
+			foreach (Type t in new[] { typeof(Native), typeof(W32) })
+			{
+				try
+				{
+					System.Runtime.InteropServices.Marshal.PrelinkAll(t);
+				}
+				catch (Exception ex)
+				{
+					// One entry point this Windows lacks must not stop the rest.
+					Cfg.Log("warm-up (" + t.Name + "): " + ex.Message);
+				}
+			}
+			new Dictionary<(int, bool), KeyTarget>().ContainsKey((0, false));
+			heldAtInstall.Contains(0);
+			macroKeysDown.Contains(0);
 		}
 		catch (Exception ex)
 		{
@@ -373,20 +401,21 @@ internal class InputEngine : IDisposable
 					heldAtInstall.Add(vk);
 				}
 			}
+			// A Naga button already held when the remap table goes in (push-to-talk while alt-tabbing into the
+			// game) reached Windows as its own key: its release has to reach Windows too, or that key stays
+			// down until it is pressed again.
+			foreach ((int sc, bool ext) in map.Keys)
+			{
+				int held = (int)Native.MapVirtualKey((uint)(ext ? (0xE000 | sc) : sc), 3u);
+				if (held != 0 && (Native.GetAsyncKeyState(held) & 0x8000) != 0)
+				{
+					heldAtInstall.Add(held);
+				}
+			}
 			hook = Native.SetWindowsHookEx(13, hookProc, Native.GetModuleHandle(null), 0u);
 			if (hook == IntPtr.Zero)
 			{
 				Cfg.Log("keyboard hook could not be installed");
-			}
-			else
-			{
-				// No gen-2 garbage collections while the hook is live (the hook path does not allocate,
-				// so memory stays flat); restored as soon as the hook is removed.
-				if (GCSettings.LatencyMode != GCLatencyMode.LowLatency)
-				{
-					savedGcMode = GCSettings.LatencyMode;
-					GCSettings.LatencyMode = GCLatencyMode.LowLatency;
-				}
 			}
 		}
 		else if (!needHook && hook != IntPtr.Zero)
@@ -394,8 +423,24 @@ internal class InputEngine : IDisposable
 			Native.UnhookWindowsHookEx(hook);
 			hook = IntPtr.Zero;
 			heldAtInstall.Clear();
-			GCSettings.LatencyMode = savedGcMode;
 			Cfg.Log("keyboard hook off");
+		}
+		GcMode(hook != IntPtr.Zero && wantLowLatency);
+	}
+
+	// No gen-2 collections while a linked game is in front with the hook live; restored as soon as either ends.
+	private void GcMode(bool low)
+	{
+		if (low && !lowLatencySet)
+		{
+			savedGcMode = GCSettings.LatencyMode;
+			GCSettings.LatencyMode = GCLatencyMode.LowLatency;
+			lowLatencySet = true;
+		}
+		else if (!low && lowLatencySet)
+		{
+			GCSettings.LatencyMode = savedGcMode;
+			lowLatencySet = false;
 		}
 	}
 
@@ -430,30 +475,34 @@ internal class InputEngine : IDisposable
 		});
 	}
 
-	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame)
+	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame, bool linkedGame = false)
 	{
 		// Build everything on the caller's thread; the input thread only swaps references, so it is never
 		// busy with LINQ or allocation while a game is in front.
 		Dictionary<(int, bool), KeyTarget> m = new Dictionary<(int, bool), KeyTarget>();
 		Dictionary<string, BaseKey> baseKeys = Base;
-		if (mp != null && inGame)
+		// profiles.json is edited by hand sometimes: a null entry anywhere is skipped, never a crash that leaves
+		// the game without its profile.
+		if (mp?.Buttons != null && inGame && baseKeys != null)
 		{
 			foreach (var (id, t) in mp.Buttons)
 			{
-				if (baseKeys.TryGetValue(id, out var b) && !IsIdentity(b, t))
+				if (id != null && t?.Key != null && t.Mods != null && baseKeys.TryGetValue(id, out var b) && b != null && !IsIdentity(b, t))
 				{
 					m[(b.Sc, b.Ext)] = t;
 				}
 			}
 		}
-		Dictionary<string, Macro> byName = allMacros.GroupBy((Macro x) => x.Name).ToDictionary((IGrouping<string, Macro> g) => g.Key, (IGrouping<string, Macro> g) => g.First());
+		Dictionary<string, Macro> byName = (allMacros ?? Enumerable.Empty<Macro>())
+			.Where((Macro x) => x?.Name != null && x.Steps != null)
+			.GroupBy((Macro x) => x.Name).ToDictionary((IGrouping<string, Macro> g) => g.Key, (IGrouping<string, Macro> g) => g.First());
 		KbProfile kb = (inGame ? kp : null);
 		PreparedMacro[] arrows = new PreparedMacro[4];
 		bool anyArrow = false;
 		string[] arrowNames = new string[4] { "KEY_LEFT_ARROW", "KEY_UP_ARROW", "KEY_RIGHT_ARROW", "KEY_DOWN_ARROW" };
 		for (int i = 0; i < 4; i++)
 		{
-			arrows[i] = ((kb != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && byName.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? new PreparedMacro(macro) : null);
+			arrows[i] = ((kb?.MacroKeys != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && mname != null && byName.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? new PreparedMacro(macro) : null);
 			anyArrow |= arrows[i] != null;
 		}
 		bool snapOn = (kp?.SnapTap ?? false) && inGame;
@@ -471,6 +520,7 @@ internal class InputEngine : IDisposable
 			Array.Copy(arrows, arrowMacros, 4);
 			anyArrowMacro = anyArrow;
 			snapTapActive = snapOn;
+			wantLowLatency = linkedGame;
 			UpdateRegistration(reinstall: true);
 		});
 	}
@@ -575,6 +625,15 @@ internal class InputEngine : IDisposable
 			}
 			if (map.Count > 0 && map.ContainsKey((sc, ext)))
 			{
+				if (heldAtInstall.Count > 0 && heldAtInstall.Contains(vk))
+				{
+					// Held since before the remap table: Windows has its down, so it gets its up.
+					if (up)
+					{
+						heldAtInstall.Remove(vk);
+					}
+					return Native.CallNextHookEx(hook, n, w, l);
+				}
 				long now = Environment.TickCount64;
 				int raw = -1;
 				for (int i = 0; i < recentRaw.Count; i++)

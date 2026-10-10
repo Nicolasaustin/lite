@@ -4,7 +4,9 @@ using System.Collections.Generic;
 namespace LiteSynapse;
 
 // What the keyboard hook (InputEngine.SetProfile) is given.
-internal readonly record struct EngineInputs(MouseProfile Mouse, KbProfile Keyboard, bool InGame)
+// LinkedGame: a linked game is actually in front (not just a profile picked by hand), which is when the
+// engine may hold the GC in low-latency mode.
+internal readonly record struct EngineInputs(MouseProfile Mouse, KbProfile Keyboard, bool InGame, bool LinkedGame = false)
 {
 	public static readonly EngineInputs Off = new EngineInputs(null, null, InGame: false);
 
@@ -97,7 +99,34 @@ internal static class ServicePlan
 		{
 			return EngineInputs.Off;
 		}
-		return new EngineInputs(mouseOnboard ? null : mp, kp, InGame: true);
+		// A profile picked by hand runs its keyboard features (Snap Tap, arrow macros) wherever the user plays
+		// - but not while typing in the desktop's own programs, where Snap Tap turns "ad" into stray letters and
+		// an arrow macro fires into a text field. The mouse's buttons keep the profile everywhere.
+		KbProfile keyboard = (!gameInFront && pickedByHand && IsDesktopApp(foregroundExe)) ? null : kp;
+		return new EngineInputs(mouseOnboard ? null : mp, keyboard, InGame: true, LinkedGame: gameInFront);
+	}
+
+	// Programs people type in, which are never the game: the shell, browsers, chat, editors, terminals.
+	private static readonly HashSet<string> DesktopApps = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"explorer.exe", "LiteSynapse.exe", "SearchHost.exe", "SearchApp.exe", "StartMenuExperienceHost.exe",
+		"ShellExperienceHost.exe", "TextInputHost.exe", "ApplicationFrameHost.exe",
+		"chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "opera_gx.exe", "brave.exe", "vivaldi.exe",
+		"Discord.exe", "Teams.exe", "ms-teams.exe", "slack.exe", "WhatsApp.exe", "Telegram.exe",
+		"notepad.exe", "Notepad++.exe", "Code.exe", "devenv.exe", "WINWORD.EXE", "EXCEL.EXE", "POWERPNT.EXE",
+		"OUTLOOK.EXE", "OneNote.exe", "Obsidian.exe", "Notion.exe",
+		"cmd.exe", "powershell.exe", "pwsh.exe", "WindowsTerminal.exe", "conhost.exe",
+		"steamwebhelper.exe", "EpicGamesLauncher.exe", "Spotify.exe", "obs64.exe"
+	};
+
+	internal static bool IsDesktopApp(string exe)
+	{
+		if (string.IsNullOrEmpty(exe))
+		{
+			return false;
+		}
+		int slash = exe.LastIndexOfAny(new[] { '\\', '/' });
+		return DesktopApps.Contains((slash >= 0) ? exe.Substring(slash + 1) : exe);
 	}
 
 	// Delay before the mouse follows a new target: going from a game's profile back to the desktop profile waits,

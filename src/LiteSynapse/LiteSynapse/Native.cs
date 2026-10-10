@@ -181,15 +181,34 @@ internal static class Native
 		{
 			type = 1u
 		};
+		uint upFlag = (!down) ? 2u : 0u;
+		if (vk == VkPause)
+		{
+			// Pause is E1 1D 45 on the wire, which one scan code cannot say: sent by virtual key instead.
+			i.u.ki = new KEYBDINPUT
+			{
+				vk = (ushort)vk,
+				sc = 0,
+				flags = upFlag,
+				extra = MAGIC
+			};
+			return i;
+		}
+		// Print Screen's own code is E0 37; MapVirtualKey answers 54, the Alt+PrtSc (SysRq) code.
+		bool printScreen = vk == VkSnapshot;
 		i.u.ki = new KEYBDINPUT
 		{
 			vk = 0,
-			sc = ScanCode(vk),
-			flags = (uint)(8 | ((!down) ? 2 : 0)) | (ext ? 1u : 0u),
+			sc = printScreen ? (ushort)0x37 : ScanCode(vk),
+			flags = 8u | upFlag | ((ext || printScreen) ? 1u : 0u),
 			extra = MAGIC
 		};
 		return i;
 	}
+
+	private const int VkPause = 0x13;
+
+	private const int VkSnapshot = 0x2C;
 
 	public static void SendKey(int vk, bool ext, bool down)
 	{

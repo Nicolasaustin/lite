@@ -33,7 +33,23 @@ internal class KeyCapture : Control
 		{
 			return base.ProcessCmdKey(ref m, keyData);
 		}
-		string n = Keys2.NameFromVk((int)(keyData & Keys.KeyCode));
+		int vk = (int)(keyData & Keys.KeyCode);
+		// WinForms hands over the generic Shift/Ctrl/Alt codes; the message says which side. Shift is told
+		// apart by its scan code (Right Shift is 36), Ctrl and Alt by the extended-key bit.
+		long lp = (long)m.LParam;
+		if (vk == 16)
+		{
+			vk = (((lp >> 16) & 0xFF) == 0x36) ? 161 : 160;
+		}
+		else if (vk == 17)
+		{
+			vk = (((lp >> 24) & 1) != 0) ? 163 : 162;
+		}
+		else if (vk == 18)
+		{
+			vk = (((lp >> 24) & 1) != 0) ? 165 : 164;
+		}
+		string n = Keys2.NameFromVk(vk);
 		if (n != null)
 		{
 			KeyName = n;

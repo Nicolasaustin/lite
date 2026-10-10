@@ -1,5 +1,65 @@
 # Testing LiteSynapse
 
+## Build 15 (1.2.4): a Performance tab that says ON/OFF and HELPING/HURTING, and reads back what is set
+
+**What to check first:** open Performance > WINDOWS on your already-tuned PC and press **CHECK AS ADMIN** once.
+Most rows should read **ON · HELPING** (green). Anything that reads **HURTING** (orange) is something your
+optimizer did not set, or set differently - read the row before switching it.
+
+### The Performance tab, simplified
+
+- Every row names the thing itself ("Pointer acceleration", "Print Spooler", "Steam") and has **one badge**:
+  whether it is **ON** or **OFF**, and whether that is **HELPING** or **HURTING** performance. A security
+  feature left on reads **SAFE DEFAULT**; something Windows will not tell an ordinary account reads
+  **CAN'T TELL** until CHECK AS ADMIN reads it.
+- The **switch** on the right shows the side it is on. Flip it (click the switch or the badge) and the row
+  says what will happen - "Will turn OFF when you press Apply - that helps performance" - outlined in the
+  colour of where it is going. Nothing changes until **APPLY**; **CLEAR** drops the flips.
+- **FIX ALL HURTING** flips only rows marked safe. "Use with care" rows (Bluetooth, controllers, the
+  keyboard's media keys) and security trade-offs are never flipped for you.
+- The count next to each page's title says how many rows are hurting, helping and can't tell.
+- Process Lasso and LiteSynapse at sign-in read HELPING when on.
+
+### "It doesn't recognise if it went through"
+
+- Eight settings are commands with no readable value and always read blank. They are now read where
+  Windows allows it (power plan, hibernation, Nagle, NIC power saving, DEP, HPET), read with administrator
+  rights by **CHECK AS ADMIN** and at the end of every APPLY (dynamic tick, HPET, DEP, TCP auto-tuning),
+  and otherwise show what LiteSynapse last set, saying so.
+- A setting that needs a restart and was changed this session says "takes effect after a restart".
+- Values another optimizer chose that are as good as ours count as applied (for example a priority of 2A
+  hex, a mouse buffer of 20, SystemResponsiveness 0), and any low-latency power plan is recognised by what
+  it sets, not by its name. Windows' own defaults for missing values are understood (Game Mode reads ON on
+  a stock PC).
+- Start-up entries you turned off in Task Manager - including machine-wide ones and Startup-folder
+  shortcuts - read OFF.
+- The Device page lists the mouse and keyboard without admin rights, reads them back in the same admin
+  run that changes them, and has CHECK AS ADMIN.
+- The result line under the buttons names what did **not** change first, then the restart notice.
+
+### Your CPU (Ryzen 9 7950X3D)
+
+AMD's V-Cache driver keeps games on the cache chiplet by parking the other one, which needs Windows'
+**Balanced** plan with core parking, **Game Mode ON**, and Xbox Game Bar recognising the game. So on this PC:
+
+- **Low-latency power plan** helps **OFF**. A plan that turns core parking off - LiteSynapse's, Ultimate or
+  High performance, and most optimizer plans - reads ON · HURTING. If your optimizer set one, switching this
+  row OFF puts Balanced back. (USB selective suspend can still be turned off on the Device page.)
+- **Game DVR** is left out of FIX ALL; if CS2 ever seems to run on the wrong cores, turn it back on.
+
+### Fixed from the whole-app audit
+
+- DPI change then revert could leave a game running the old DPI from a stale slot record.
+- Game start no longer re-sends lighting already written into the slot, a refused lighting zone is not
+  retried every game start, and a pre-write stops if a game comes to the front.
+- Resume re-syncs the devices once, not twice.
+- Settings and profile files are written atomically (no truncated files after a crash or power cut).
+- The elevated script no longer fails when a big selection exceeds Windows' command-line limit, and
+  PowerShell quoting escapes curly apostrophes (a user name like O'Brien, or a crafted file name).
+
+Nothing here was seen on a real screen before shipping (it was built on Linux). A screenshot of anything
+clipped or wrong is the fastest fix.
+
 ## Build 14 (1.2.3): latency audit, bug check, modern look
 
 **What to check first:** the window looks different (below), and nothing about play should feel different

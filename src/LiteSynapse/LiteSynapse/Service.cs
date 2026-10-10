@@ -1150,9 +1150,19 @@ internal sealed class Service
 			Cfg.Log("competitive-safe: \"" + what + "\" is anti-cheat protected, so no Snap Tap, macros or remaps");
 		}
 		competitiveBlocked = blocked;
-		engineInputs = e;
-		engineSet = true;
-		engine.SetProfile(e.Mouse, e.Keyboard, store.Macros, e.InGame);
+		// Recorded as applied only once it is: a profile the engine cannot take (a broken entry in
+		// profiles.json) is logged and tried again, instead of being skipped as "already applied" forever.
+		try
+		{
+			engine.SetProfile(e.Mouse, e.Keyboard, store.Macros, e.InGame, e.LinkedGame);
+			engineInputs = e;
+			engineSet = true;
+		}
+		catch (Exception ex)
+		{
+			engineSet = false;
+			Cfg.Log("input engine: profile not applied: " + ex.Message);
+		}
 	}
 
 	// ---- Device worker jobs ----------------------------------------------------------------------------------
