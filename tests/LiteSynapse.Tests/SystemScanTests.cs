@@ -5,8 +5,8 @@ using Xunit;
 
 namespace LiteSynapse.Tests;
 
-// The scanner's rules: what it flags as worth a look, what it is allowed to turn off, and what it says about
-// Windows Update's uploads. It never decides that something is malware, so there is nothing to test for that.
+// The scanner's rules: what it flags as worth a look, and what it says about Windows Update's uploads. It
+// never decides that something is malware, so there is nothing to test for that.
 public class SystemScanTests
 {
 	[Theory]
@@ -47,41 +47,6 @@ public class SystemScanTests
 		Assert.Equal(new[] { "location", "unsigned", "missing", "" }, flags.OrderBy(ScanRules.Rank).ToArray());
 	}
 
-	[Fact]
-	public void OnlyTheAllowlistCanBeTurnedOff()
-	{
-		Assert.NotNull(ScanRules.OptionalService("DiagTrack"));
-		Assert.NotNull(ScanRules.OptionalService("sysmain"));
-		Assert.NotNull(ScanRules.OptionalService(" Spooler "));
-		// Nothing Windows needs, and nothing security-related, is ever offered.
-		foreach (string critical in new[]
-		{
-			"WinDefend", "wscsvc", "SecurityHealthService", "mpssvc", "BFE", "RpcSs", "Dhcp", "Dnscache",
-			"nsi", "LanmanWorkstation", "Power", "Themes", "AudioSrv", "Audiosrv", "UserManager", "ProfSvc",
-			"BITS", "wuauserv", "EventLog", "Schedule", "CryptSvc", "TrustedInstaller", "HidServ", "mouclass"
-		})
-		{
-			Assert.Null(ScanRules.OptionalService(critical));
-		}
-		Assert.Null(ScanRules.OptionalService(""));
-		Assert.Null(ScanRules.OptionalService(null));
-	}
-
-	[Fact]
-	public void EveryOptionalServiceSaysWhatItCostsAndWhatYouLose()
-	{
-		Assert.All(ScanRules.Optional, row =>
-		{
-			Assert.False(string.IsNullOrWhiteSpace(row.Service));
-			Assert.False(string.IsNullOrWhiteSpace(row.Title));
-			Assert.False(string.IsNullOrWhiteSpace(row.Costs));
-			Assert.False(string.IsNullOrWhiteSpace(row.Lose));
-		});
-		// The ones that take something away say so, so the window can warn before it turns them off.
-		Assert.Contains("Xbox", ScanRules.OptionalService("XblGameSave").Value.Lose);
-		Assert.Contains("printing", ScanRules.OptionalService("Spooler").Value.Lose, StringComparison.OrdinalIgnoreCase);
-	}
-
 	[Theory]
 	[InlineData("GoogleUpdate", true)]
 	[InlineData("OneDrive", true)]
@@ -112,147 +77,462 @@ public class SystemScanTests
 		Assert.Equal(expected, ScanRules.UploadsUpdates(mode));
 		Assert.False(string.IsNullOrWhiteSpace(ScanRules.DeliveryText(mode)));
 	}
+}
 
-	// ---- Harmful settings other optimizers leave behind ----
-
-	[Theory]
-	[InlineData(null, false)]
-	[InlineData(2, false)]
-	[InlineData(38, true)]
-	[InlineData(26, true)]
-	public void PrioritySeparationAwayFromTheDefault(int? value, bool expected)
-	{
-		Assert.Equal(expected, BadTweaks.PrioritySeparationOdd(value));
-	}
-
-	[Theory]
-	[InlineData(null, false)]
-	[InlineData(100, false)]
-	[InlineData(20, true)]
-	[InlineData(500, true)]
-	public void InputQueueSizeAwayFromTheDefault(int? value, bool expected)
-	{
-		Assert.Equal(expected, BadTweaks.QueueSizeOdd(value));
-	}
-
-	[Theory]
-	[InlineData(null, null, false)]
-	[InlineData(3, 3, true)]
-	[InlineData(3, null, true)]
-	[InlineData(0, null, true)]
-	public void CpuMitigationsTurnedOff(int? over, int? mask, bool expected)
-	{
-		Assert.Equal(expected, BadTweaks.MitigationsOff(over, mask));
-	}
-
-	[Theory]
-	[InlineData(null, false)]
-	[InlineData(1, false)]
-	[InlineData(0, true)]
-	public void UacTurnedOff(int? enableLua, bool expected)
-	{
-		Assert.Equal(expected, BadTweaks.UacOff(enableLua));
-	}
-
-	[Theory]
-	[InlineData("Receive Window Auto-Tuning Level : normal", false)]
-	[InlineData("Receive Window Auto-Tuning Level : disabled", true)]
-	[InlineData("Receive Window Auto-Tuning Level : restricted", true)]
-	[InlineData("something else entirely", false)]
-	[InlineData("", false)]
-	[InlineData(null, false)]
-	public void TcpAutoTuningAwayFromNormal(string output, bool expected)
-	{
-		Assert.Equal(expected, BadTweaks.AutoTuningBroken(output));
-	}
-
+// The service catalog: what the Performance page may offer, what it must never offer, and that every row can
+// be put back.
+public class ServiceCatalogTests
+{
 	[Fact]
-	public void TheRepairOnlyPutsWindowsDefaultsBack()
+	public void TheInputStackAndTheServicesWindowsCannotBootWithoutAreNeverOffered()
 	{
-		string all = BadTweaks.Script(new List<string> { "boot", "mitigations", "uac", "priority", "queues", "timer", "dwm", "csrss", "autotuning" });
-		// The boot overrides are deleted, never set.
-		Assert.All(BadTweaks.BootOverrides, (string v) => Assert.Contains("bcdedit.exe /deletevalue " + v, all));
-		Assert.DoesNotContain("bcdedit.exe /set", all);
-		// Windows defaults, by value.
-		Assert.Contains("'EnableLUA' -PropertyType DWord -Value 1", all);
-		Assert.Contains("'Win32PrioritySeparation' -PropertyType DWord -Value 2", all);
-		Assert.Contains("'MouseDataQueueSize' -PropertyType DWord -Value 100", all);
-		Assert.Contains("'KeyboardDataQueueSize' -PropertyType DWord -Value 100", all);
-		Assert.Contains("autotuninglevel=normal", all);
-		// Overrides are removed so Windows goes back to deciding for itself.
-		Assert.Contains("'FeatureSettingsOverride'", all);
-		Assert.Contains("'GlobalTimerResolutionRequests'", all);
-		Assert.Contains("'OverlayTestMode'", all);
-		// Only what was asked for.
-		string one = BadTweaks.Script(new List<string> { "uac" });
-		Assert.Contains("EnableLUA", one);
-		Assert.DoesNotContain("bcdedit", one);
-		Assert.DoesNotContain("Win32PrioritySeparation", one);
-		Assert.Equal("$failed = 0\nexit $failed\n", BadTweaks.Script(new List<string>()));
-		Assert.Equal("$failed = 0\nexit $failed\n", BadTweaks.Script(null));
-	}
-
-	[Fact]
-	public void TheRepairNeverTouchesTheHidStackOrSecurityServices()
-	{
-		string all = BadTweaks.Script(new List<string> { "boot", "mitigations", "uac", "priority", "queues", "timer", "dwm", "csrss", "autotuning" });
-		foreach (string never in new[] { "WinDefend", "mpssvc", "wscsvc", "mouhid", "kbdhid", "mshidkmdf", "HidUsb", "sc.exe delete", "Remove-Item -Path 'HKLM:\\SYSTEM" })
+		// Without these there is no mouse to undo the change with, which is the whole reason for the list.
+		foreach (string critical in new[]
 		{
-			Assert.DoesNotContain(never, all);
+			"mouclass", "mouhid", "kbdclass", "kbdhid", "mshidkmdf", "HidUsb", "hidi2c",
+			"usbhub", "USBXHCI", "usbccgp",
+			"DcomLaunch", "RpcSs", "RpcEptMapper", "PlugPlay", "Power", "LSM", "UserManager", "ProfSvc",
+			"CryptSvc", "Winmgmt", "gpsvc", "StorSvc", "Audiosrv", "AudioEndpointBuilder",
+			"nsi", "Dhcp", "Dnscache", "Themes", "TrustedInstaller"
+		})
+		{
+			Assert.True(ServiceCatalog.IsProtected(critical), critical + " must never be offered");
+			Assert.Null(ServiceCatalog.Find(critical));
+			// Not even by asking for it directly.
+			Assert.Equal("$failed = 0\nexit $failed\n",
+				ServiceCatalog.Script(new[] { (critical, false) }));
+		}
+		Assert.True(ServiceCatalog.IsProtected(""));
+		Assert.True(ServiceCatalog.IsProtected(null));
+	}
+
+	[Fact]
+	public void TheProtectedListAndTheOfferedListDoNotOverlap()
+	{
+		foreach (ServiceCatalog.Row row in ServiceCatalog.All)
+		{
+			Assert.False(ServiceCatalog.IsProtected(row.Service),
+				row.Service + " is both offered and protected");
 		}
 	}
 
 	[Fact]
-	public void TheTurnOffScriptDisablesBeforeItStopsAndOnlyTouchesWhatWasAsked()
+	public void EveryRowSaysWhatItCostsAndHowToPutItBack()
 	{
-		string script = SystemScanner.Script(new List<string> { "DiagTrack", "SysMain" }, delivery: true);
-		Assert.StartsWith("$failed = 0\n", script);
-		Assert.EndsWith("exit $failed\n", script);
-		Assert.Contains("@('DiagTrack', 'SysMain')", script);
-		Assert.True(script.IndexOf("start= disabled", StringComparison.Ordinal) < script.IndexOf("sc.exe stop", StringComparison.Ordinal));
-		Assert.Contains("DODownloadMode", script);
-		Assert.Contains("-Value 0", script);
-		// Nothing is deleted, ever.
-		Assert.DoesNotContain("sc.exe delete", script);
-		Assert.DoesNotContain("Remove-Item", script);
-		// Without the delivery option the registry is not touched at all.
-		string onlyServices = SystemScanner.Script(new List<string> { "DiagTrack" }, delivery: false);
-		Assert.DoesNotContain("DODownloadMode", onlyServices);
-		// Nothing selected: the script does nothing.
-		string empty = SystemScanner.Script(new List<string>(), delivery: false);
-		Assert.Equal("$failed = 0\nexit $failed\n", empty);
-		Assert.Equal(empty, SystemScanner.Script(null, delivery: false));
-	}
-
-	[Theory]
-	[InlineData(null, true)]
-	[InlineData(10, true)]
-	[InlineData(70, true)]
-	[InlineData(unchecked((int)0xFFFFFFFF), false)]
-	public void WindowsLimitsOtherNetworkTrafficWhileAGameRuns(int? index, bool expected)
-	{
-		Assert.Equal(expected, DeviceTuning.NetworkThrottled(index));
-	}
-
-	[Theory]
-	[InlineData(null, true)]
-	[InlineData(20, true)]
-	[InlineData(14, true)]
-	[InlineData(10, false)]
-	[InlineData(0, false)]
-	public void CpuKeptForBackgroundWork(int? value, bool expected)
-	{
-		Assert.Equal(expected, DeviceTuning.ResponsivenessHigh(value));
+		Assert.All(ServiceCatalog.All, (ServiceCatalog.Row row) =>
+		{
+			Assert.False(string.IsNullOrWhiteSpace(row.Service));
+			Assert.False(string.IsNullOrWhiteSpace(row.Title));
+			Assert.False(string.IsNullOrWhiteSpace(row.Costs));
+			Assert.False(string.IsNullOrWhiteSpace(row.Lose));
+			Assert.Contains(row.Risk, new[] { Tweaks.Safe, Tweaks.Caution, Tweaks.Risky });
+			// The start type to restore has to be a real one, or "turn it back on" cannot work.
+			Assert.Contains(row.Default, new[] { ServiceCatalog.Auto, ServiceCatalog.Manual, ServiceCatalog.Disabled });
+		});
+		// No row appears twice.
+		Assert.Equal(ServiceCatalog.All.Length,
+			ServiceCatalog.All.Select((ServiceCatalog.Row r) => r.Service.ToLowerInvariant()).Distinct().Count());
 	}
 
 	[Fact]
-	public void TheLatencyScriptSetsTheMultimediaValuesOnlyWhenAsked()
+	public void TheOnesThatTakeSomethingAwaySaySo()
 	{
-		string with = DeviceTuning.Script(new string[0], powerPlan: false, multimedia: true);
-		Assert.Contains("'NetworkThrottlingIndex' -PropertyType DWord -Value 0xFFFFFFFF", with);
-		Assert.Contains("'SystemResponsiveness' -PropertyType DWord -Value 10", with);
-		string without = DeviceTuning.Script(new string[0], powerPlan: false, multimedia: false);
-		Assert.DoesNotContain("NetworkThrottlingIndex", without);
-		Assert.DoesNotContain("SystemResponsiveness", without);
+		Assert.Contains("printing", ServiceCatalog.Find("Spooler").Lose, StringComparison.OrdinalIgnoreCase);
+		Assert.Contains("Xbox", ServiceCatalog.Find("XblGameSave").Lose);
+		// hidserv is the hotkey service, not the input stack: the row has to say the mouse keeps working.
+		Assert.Contains("mouse", ServiceCatalog.Find("hidserv").Lose, StringComparison.OrdinalIgnoreCase);
+	}
+
+	[Fact]
+	public void TurningOffDisablesBeforeItStopsAndNeverDeletes()
+	{
+		string script = ServiceCatalog.Script(new[] { ("DiagTrack", false), ("SysMain", false) });
+		Assert.StartsWith("$failed = 0\n", script);
+		Assert.EndsWith("exit $failed\n", script);
+		// Disabled first, so nothing restarts it between the stop and the config change.
+		Assert.True(script.IndexOf("start= disabled", StringComparison.Ordinal)
+			< script.IndexOf("sc.exe stop", StringComparison.Ordinal));
+		Assert.DoesNotContain("sc.exe delete", script);
+		Assert.DoesNotContain("Remove-Item", script);
+	}
+
+	[Fact]
+	public void TurningBackOnRestoresTheStartTypeWindowsShips()
+	{
+		// DiagTrack ships automatic, MapsBroker automatic, Fax manual.
+		string script = ServiceCatalog.Script(new[] { ("DiagTrack", true), ("Fax", true) });
+		Assert.Contains("sc.exe config 'DiagTrack' start= auto", script);
+		Assert.Contains("sc.exe config 'Fax' start= demand", script);
+		// An automatic service is also started, so turning it back on actually puts it back.
+		Assert.Contains("sc.exe start 'DiagTrack'", script);
+		Assert.DoesNotContain("sc.exe start 'Fax'", script);
+	}
+
+	[Fact]
+	public void NothingSelectedChangesNothing()
+	{
+		Assert.Equal("$failed = 0\nexit $failed\n", ServiceCatalog.Script(null));
+		Assert.Equal("$failed = 0\nexit $failed\n", ServiceCatalog.Script(new (string, bool)[0]));
+		Assert.Equal("$failed = 0\nexit $failed\n", ServiceCatalog.Script(new[] { ("NotAServiceWeKnow", false) }));
+	}
+}
+
+// The Windows-settings catalog. The point of these tests is that every entry goes both ways and that the
+// script generator cannot be talked into touching something that is not in the catalog.
+public class TweaksTests
+{
+	[Fact]
+	public void EveryEntryIsCompleteAndReversible()
+	{
+		Assert.All(Tweaks.Catalog, (Tweaks.Tweak t) =>
+		{
+			Assert.False(string.IsNullOrWhiteSpace(t.Id));
+			Assert.False(string.IsNullOrWhiteSpace(t.Title));
+			Assert.False(string.IsNullOrWhiteSpace(t.What));
+			Assert.Contains(t.Risk, new[] { Tweaks.Safe, Tweaks.Caution, Tweaks.Risky });
+			Assert.Contains(t.Group, Tweaks.Groups.Select(((string Id, string Title, string Blurb) g) => g.Id));
+			// Something has to actually happen, in both directions.
+			Assert.True(t.Values.Length > 0 || t.OnCommands.Length > 0, t.Id + " does nothing when turned on");
+			Assert.True(t.Values.Length > 0 || t.OffCommands.Length > 0, t.Id + " cannot be turned off again");
+			foreach (Tweaks.Reg r in t.Values)
+			{
+				Assert.Contains(r.Hive, new[] { "HKLM", "HKCU" });
+				Assert.False(string.IsNullOrWhiteSpace(r.Key));
+				Assert.False(string.IsNullOrWhiteSpace(r.Name));
+				Assert.Contains(r.Kind, new[] { "dword", "string", "qword" });
+				// Both states must be written out, or the entry is one-directional.
+				Assert.NotNull(r.On);
+				Assert.NotNull(r.Off);
+			}
+		});
+		Assert.Equal(Tweaks.Catalog.Length,
+			Tweaks.Catalog.Select((Tweaks.Tweak t) => t.Id.ToLowerInvariant()).Distinct().Count());
+	}
+
+	[Fact]
+	public void EveryEntryThatGivesSomethingUpSaysWhat()
+	{
+		foreach (Tweaks.Tweak t in Tweaks.Catalog.Where((Tweaks.Tweak x) => x.Risk != Tweaks.Safe))
+		{
+			Assert.False(string.IsNullOrWhiteSpace(t.Cost), t.Id + " is not safe but says no cost");
+		}
+		// The security trade-offs are the ones that must never be presented as free.
+		foreach (Tweaks.Tweak t in Tweaks.Catalog.Where((Tweaks.Tweak x) => x.Group == "sec"))
+		{
+			Assert.Equal(Tweaks.Risky, t.Risk);
+			Assert.True(t.Cost.Length > 60, t.Id + " needs a real explanation of what it gives up");
+		}
+	}
+
+	[Fact]
+	public void NothingInTheCatalogTouchesTheInputStackOrDeletesAnything()
+	{
+		string all = Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())
+			+ Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList());
+		foreach (string never in new[]
+		{
+			"mshidkmdf", "mouhid", "kbdhid", "HidUsb", "mouclass\\\\", "sc.exe delete",
+			"Remove-Item -Path", "Remove-Item -LiteralPath", "Format-Volume", "Stop-Service -Name TrustedInstaller"
+		})
+		{
+			Assert.DoesNotContain(never, all);
+		}
+		// The queue-size entries are the only ones under mouclass/kbdclass, and they only set a value.
+		Assert.Contains("mouclass\\Parameters", all);
+		Assert.Contains("kbdclass\\Parameters", all);
+	}
+
+	[Fact]
+	public void OnlyWhatWasAskedForEndsUpInTheScript()
+	{
+		string one = Tweaks.Script(new[] { ("accel", true) });
+		Assert.Contains("MouseThreshold1", one);
+		Assert.DoesNotContain("EnableLUA", one);
+		Assert.DoesNotContain("bcdedit", one);
+		Assert.StartsWith("$failed = 0\n", one);
+		Assert.EndsWith("exit $failed\n", one);
+		// An id that is not in the catalog is skipped, not guessed at.
+		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new[] { ("rm -rf /", true) }));
+		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(new (string, bool)[0]));
+		Assert.Equal("$failed = 0\nexit $failed\n", Tweaks.Script(null));
+	}
+
+	[Fact]
+	public void OnAndOffProduceDifferentScriptsForEveryEntry()
+	{
+		foreach (Tweaks.Tweak t in Tweaks.Catalog)
+		{
+			string on = Tweaks.Script(new[] { (t.Id, true) });
+			string off = Tweaks.Script(new[] { (t.Id, false) });
+			// Pointer speed is the one entry whose two states ask for the same value (the middle notch), so it
+			// is the only one allowed to produce the same script both ways.
+			if (t.Id == "pointerspeed")
+			{
+				continue;
+			}
+			Assert.NotEqual(on, off);
+		}
+	}
+
+	[Fact]
+	public void TheHelpersAreOnlyIncludedWhenSomethingNeedsThem()
+	{
+		// The pointer helper is a block of C# compiled at run time: it must not be emitted for a selection
+		// that never calls it.
+		string plain = Tweaks.Script(new[] { ("gamemode", true) });
+		Assert.DoesNotContain("LiteSynapse.Pointer", plain);
+		Assert.DoesNotContain("LiteSynapse.Net", plain);
+		Assert.Contains("LiteSynapse.Pointer", Tweaks.Script(new[] { ("accel", true) }));
+		Assert.Contains("LiteSynapse.Net", Tweaks.Script(new[] { ("nagle", true) }));
+		// And only once, however many entries want it.
+		string both = Tweaks.Script(new[] { ("accel", true), ("pointerspeed", true) });
+		Assert.Equal(1, both.Split("Add-Type").Length - 1);
+	}
+
+	[Theory]
+	// 0xFFFFFFFF does not fit a signed int, and New-ItemProperty takes a signed one: it has to arrive as -1.
+	[InlineData("netthrottle", "-1")]
+	// A hex value in the catalog is written as the decimal Windows expects.
+	[InlineData("priority", "38")]
+	public void NumbersAreWrittenAsWindowsWantsThem(string id, string expected)
+	{
+		Assert.Contains("-Value " + expected + " ", Tweaks.Script(new[] { (id, true) }));
+	}
+
+	[Theory]
+	[InlineData("0x26", 38)]
+	[InlineData("38", 38)]
+	[InlineData("0xFFFFFFFF", 4294967295L)]
+	[InlineData("10", 10)]
+	public void HexAndDecimalReadTheSame(string text, long expected)
+	{
+		Assert.True(Tweaks.TryNumber(text, out long value));
+		Assert.Equal(expected, value);
+	}
+
+	[Theory]
+	[InlineData("", false)]
+	[InlineData("   ", false)]
+	[InlineData("abc", false)]
+	[InlineData(null, false)]
+	public void WhatIsNotANumberIsNotTreatedAsOne(string text, bool expected)
+	{
+		Assert.Equal(expected, Tweaks.TryNumber(text, out _));
+	}
+
+	[Fact]
+	public void AValueMatchesWhateverFormItWasWrittenIn()
+	{
+		// 0x26 in the catalog and 38 in the registry are the same setting.
+		Assert.True(Tweaks.Matches("0x26", 38));
+		Assert.True(Tweaks.Matches("38", 38));
+		Assert.True(Tweaks.Matches("0", "0"));
+		Assert.False(Tweaks.Matches("0", "1"));
+		// Delete means "the value should not be there".
+		Assert.True(Tweaks.Matches(Tweaks.Delete, null));
+		Assert.False(Tweaks.Matches(Tweaks.Delete, 1));
+		Assert.False(Tweaks.Matches("1", null));
+	}
+
+	[Fact]
+	public void StateIsOnOnlyWhenEveryValueIsSet()
+	{
+		Tweaks.Tweak accel = Tweaks.Find("accel");
+		// All three thresholds at zero: acceleration is off, so the entry is on.
+		Assert.Equal("on", Tweaks.StateOf(accel, (Tweaks.Reg r) => "0"));
+		// Windows' own values: the entry is off.
+		Assert.Equal("off", Tweaks.StateOf(accel, (Tweaks.Reg r) => r.Off));
+		// One of the three left behind by something else: half set, which is worth showing as its own state.
+		Assert.Equal("part", Tweaks.StateOf(accel, (Tweaks.Reg r) =>
+			(r.Name == "MouseSpeed") ? "0" : r.Off));
+		// An entry with no registry values of its own cannot be read this way.
+		Assert.Equal("unknown", Tweaks.StateOf(Tweaks.Find("dynamictick"), (Tweaks.Reg r) => null));
+		Assert.Equal("unknown", Tweaks.StateOf(null, (Tweaks.Reg r) => null));
+	}
+
+	[Fact]
+	public void TheLowLatencyPowerPlanIsBuiltAndCanBeRemovedAgain()
+	{
+		string on = Tweaks.Script(new[] { ("powerplan", true) });
+		Assert.Contains("powercfg.exe /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61", on);
+		Assert.Contains(Tweaks.PlanGuid, on);
+		// Processor minimum state and core parking at 100.
+		Assert.Contains("893dee8e-2bef-41e0-89c6-b55d0929964c 100", on);
+		Assert.Contains("0cc5b647-c1df-4637-891a-dec35c318583 100", on);
+		// USB selective suspend off.
+		Assert.Contains("48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0", on);
+		string off = Tweaks.Script(new[] { ("powerplan", false) });
+		// Turning it off puts Balanced back and removes the plan we made, not one of the user's own.
+		Assert.Contains("powercfg.exe /setactive scheme_balanced", off);
+		Assert.Contains("powercfg.exe /delete " + Tweaks.PlanGuid, off);
+		Assert.DoesNotContain("/duplicatescheme", off);
+	}
+
+	[Fact]
+	public void TheBootEntriesOnlyUseBcdeditAndAlwaysHaveAWayBack()
+	{
+		foreach (string id in new[] { "dynamictick", "platformclock", "dep" })
+		{
+			Tweaks.Tweak t = Tweaks.Find(id);
+			Assert.NotEmpty(t.OnCommands);
+			Assert.NotEmpty(t.OffCommands);
+			Assert.True(t.NeedsReboot, id + " is a boot setting and must say it needs a restart");
+			Assert.True(t.NeedsAdmin);
+		}
+		// Leaving the timer alone is done by deleting the overrides, never by setting one.
+		string on = Tweaks.Script(new[] { ("platformclock", true) });
+		Assert.Contains("bcdedit.exe /deletevalue useplatformclock", on);
+		Assert.Contains("bcdedit.exe /deletevalue tscsyncpolicy", on);
+		Assert.DoesNotContain("/set useplatformclock", on);
+	}
+
+	[Fact]
+	public void EverySourceAndRiskHasWordsForTheWindow()
+	{
+		foreach (Tweaks.Tweak t in Tweaks.Catalog)
+		{
+			Assert.False(string.IsNullOrWhiteSpace(Tweaks.SourceText(t.Source)));
+			Assert.False(string.IsNullOrWhiteSpace(Tweaks.RiskText(t.Risk)));
+		}
+		foreach ((string id, string title, string blurb) in Tweaks.Groups)
+		{
+			Assert.False(string.IsNullOrWhiteSpace(title));
+			Assert.False(string.IsNullOrWhiteSpace(blurb));
+			Assert.Equal(title, Tweaks.GroupTitle(id));
+			// Every group has at least one entry, or the window draws an empty heading.
+			Assert.Contains(Tweaks.Catalog, (Tweaks.Tweak t) => t.Group == id);
+		}
+	}
+
+	[Fact]
+	public void AnythingUnderHklmOrRunAsAToolNeedsAdminRights()
+	{
+		foreach (Tweaks.Tweak t in Tweaks.Catalog)
+		{
+			bool hklm = t.Values.Any((Tweaks.Reg r) => r.Hive == "HKLM");
+			bool tool = t.OnCommands.Concat(t.OffCommands).Any((string c) =>
+				c.Contains("bcdedit") || c.Contains("powercfg") || c.Contains("netsh")
+				|| c.Contains("MMAgent") || c.Contains("LiteSynapse.Net"));
+			if (hklm || tool)
+			{
+				Assert.True(t.NeedsAdmin, t.Id + " writes outside this account and must ask for admin rights");
+			}
+		}
+		// And the mouse settings, which the user will flip most often, must not need it.
+		Assert.False(Tweaks.Find("accel").NeedsAdmin);
+		Assert.False(Tweaks.Find("rawthrottle").NeedsAdmin);
+		Assert.False(Tweaks.Find("gamemode").NeedsAdmin);
+	}
+}
+
+// The device-latency page: reading the power-management query, and the script that changes it.
+public class DeviceTuningTests
+{
+	[Theory]
+	[InlineData("USB\\VID_1532&PID_008D\\6&1ad0a2c8&0&3_0", true)]
+	[InlineData("USB\\VID_1532&PID_0235\\5&x&0&1_0", true)]
+	[InlineData("usb\\vid_1532&pid_008d\\a_0", true)]
+	// Another Razer device, and other vendors, are left alone.
+	[InlineData("USB\\VID_1532&PID_0099\\x_0", false)]
+	[InlineData("USB\\VID_046D&PID_C52B\\x_0", false)]
+	[InlineData("", false)]
+	[InlineData(null, false)]
+	public void OnlyOurTwoDevices(string instance, bool expected)
+	{
+		Assert.Equal(expected, DeviceTuning.IsOurDevice(instance));
+	}
+
+	[Fact]
+	public void TheQueryOutputIsRead()
+	{
+		TunedDevice d = DeviceTuning.ParseDevice("True|USB\\VID_1532&PID_008D\\6&x&0&3_0|Razer Naga");
+		Assert.NotNull(d);
+		Assert.True(d.PowerSaving);
+		Assert.Equal("Razer Naga", d.Name);
+		Assert.Equal("USB\\VID_1532&PID_008D\\6&x&0&3_0", d.Instance);
+		// No friendly name: one is made from the product id rather than shown blank.
+		TunedDevice e = DeviceTuning.ParseDevice("False|USB\\VID_1532&PID_0235\\x_0|");
+		Assert.False(e.PowerSaving);
+		Assert.Equal("Razer BlackWidow Lite", e.Name);
+	}
+
+	[Theory]
+	// Noise from PowerShell, another vendor's device, and anything malformed is ignored rather than shown.
+	[InlineData("")]
+	[InlineData("   ")]
+	[InlineData(null)]
+	[InlineData("some stray line")]
+	[InlineData("True|USB\\VID_046D&PID_C52B\\x_0|Logitech")]
+	[InlineData("maybe|USB\\VID_1532&PID_008D\\x_0|Razer Naga")]
+	[InlineData("True|")]
+	public void AnythingElseIsIgnored(string line)
+	{
+		Assert.Null(DeviceTuning.ParseDevice(line));
+	}
+
+	[Theory]
+	[InlineData(null, "unknown")]
+	[InlineData(0, "off")]
+	[InlineData(1, "on")]
+	public void ThePowerPlansUsbSetting(int? value, string expected)
+	{
+		Assert.Equal(expected, DeviceTuning.SuspendState(value));
+	}
+
+	[Fact]
+	public void KeepingADeviceAwakeSetsBothCheckboxes()
+	{
+		string script = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: false, allowPowerSaving: false);
+		Assert.Contains("MSPower_DeviceEnable", script);
+		Assert.Contains("MSPower_DeviceWakeEnable", script);
+		Assert.Contains("Enable = $false", script);
+		Assert.DoesNotContain("Enable = $true", script);
+		// The instance name is quoted and matched exactly, not used as a pattern.
+		Assert.Contains("-eq 'USB\\VID_1532&PID_008D\\x_0'", script);
+	}
+
+	[Fact]
+	public void LettingWindowsManageItAgainIsTheSameCallTheOtherWay()
+	{
+		string script = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: true, allowPowerSaving: true);
+		Assert.Contains("Enable = $true", script);
+		Assert.Contains(DeviceTuning.UsbSuspendSetting + " 1", script);
+		string other = DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: true, allowPowerSaving: false);
+		Assert.Contains(DeviceTuning.UsbSuspendSetting + " 0", other);
+	}
+
+	[Fact]
+	public void ADeviceThatIsNotOursIsNeverTouched()
+	{
+		string script = DeviceTuning.Script(new[] { "USB\\VID_046D&PID_C52B\\x_0", "", null }, powerPlan: false, allowPowerSaving: false);
+		Assert.Equal("$failed = 0\nexit $failed\n", script);
+		Assert.Equal("$failed = 0\nexit $failed\n", DeviceTuning.Script(null, powerPlan: false, allowPowerSaving: false));
+	}
+
+	[Fact]
+	public void TheSummarySaysWhatIsLeft()
+	{
+		DeviceTuningState none = new DeviceTuningState();
+		Assert.Contains("No Razer device", DeviceTuning.Summary(none));
+		Assert.Contains("No Razer device", DeviceTuning.Summary(null));
+		DeviceTuningState awake = new DeviceTuningState
+		{
+			Devices = new List<TunedDevice> { new TunedDevice { Instance = "a", PowerSaving = false } }
+		};
+		Assert.Contains("no longer power", DeviceTuning.Summary(awake));
+		Assert.False(awake.NeedsWork);
+		DeviceTuningState asleep = new DeviceTuningState
+		{
+			Devices = new List<TunedDevice>
+			{
+				new TunedDevice { Instance = "a", PowerSaving = true },
+				new TunedDevice { Instance = "b", PowerSaving = false }
+			}
+		};
+		Assert.Contains("1 of 2", DeviceTuning.Summary(asleep));
+		Assert.True(asleep.NeedsWork);
+		// The power plan on its own is also work worth doing.
+		Assert.True(new DeviceTuningState { UsbSuspend = "on" }.NeedsWork);
+		Assert.False(new DeviceTuningState { UsbSuspend = "unknown" }.NeedsWork);
 	}
 }

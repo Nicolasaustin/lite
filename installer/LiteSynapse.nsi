@@ -28,10 +28,7 @@ CRCCheck on
 !define APPROVED_KEY "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
 ; The app holds this mutex while it runs (Program.cs).
 !define APP_MUTEX "LiteSynapse.single"
-; Edge WebView2 Runtime client id (Microsoft's documented detection key).
-!define WEBVIEW2_KEY "Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 !define DOTNET_URL "https://dotnet.microsoft.com/download/dotnet/10.0"
-!define WEBVIEW2_URL "https://developer.microsoft.com/microsoft-edge/webview2/"
 
 !define ROOT ".."
 !define APP_ICON "${ROOT}\src\LiteSynapse\app.ico"
@@ -103,7 +100,6 @@ VIAddVersionKey "LegalCopyright" "${PUBLISHER}"
 Var StartupState      ; ${BST_CHECKED} / ${BST_UNCHECKED}: "Start LiteSynapse with Windows"
 Var StartupBox
 Var DotNetVersion     ; "" when the .NET 10 Desktop Runtime is missing
-Var WebView2Version   ; "" when the WebView2 Runtime is missing
 Var PrereqsShown      ; 1 once the missing-runtime messages were shown
 Var DataSource        ; "keep", a folder to copy from, or "seed"
 Var OldCopyDir        ; the old Documents\LiteSynapse folder, "" when there is none (or it is $INSTDIR)
@@ -324,7 +320,7 @@ FunctionEnd
   Call WriteLog
 !macroend
 
-; Sets $DotNetVersion and $WebView2Version ("" = missing).
+; Sets $DotNetVersion ("" = the .NET 10 Desktop Runtime is missing).
 Function DetectPrereqs
   Push $0
   Push $1
@@ -339,22 +335,6 @@ Function DetectPrereqs
     FindNext $0 $1
   ${Loop}
   FindClose $0
-  ; WebView2 Runtime: machine-wide install (32-bit registry view on 64-bit Windows), then per-user.
-  SetRegView 64
-  ReadRegStr $1 HKLM "SOFTWARE\WOW6432Node\${WEBVIEW2_KEY}" "pv"
-  SetRegView 32
-  ${If} $1 == ""
-  ${OrIf} $1 == "0.0.0.0"
-    ReadRegStr $1 HKLM "SOFTWARE\${WEBVIEW2_KEY}" "pv"
-  ${EndIf}
-  ${If} $1 == ""
-  ${OrIf} $1 == "0.0.0.0"
-    ReadRegStr $1 HKCU "Software\${WEBVIEW2_KEY}" "pv"
-  ${EndIf}
-  ${If} $1 == "0.0.0.0"
-    StrCpy $1 ""
-  ${EndIf}
-  StrCpy $WebView2Version $1
   Pop $1
   Pop $0
 FunctionEnd
@@ -583,7 +563,7 @@ Function OptionsShow
   ${NSD_CreateLabel} 8u 40u 284u 24u "$1"
   Pop $0
 
-  ${NSD_CreateGroupBox} 0 74u 100% 52u "Requirements"
+  ${NSD_CreateGroupBox} 0 74u 100% 34u "Requirements"
   Pop $0
   ${If} $DotNetVersion != ""
     StrCpy $1 ".NET 10 Desktop Runtime: installed ($DotNetVersion)."
@@ -591,13 +571,6 @@ Function OptionsShow
     StrCpy $1 ".NET 10 Desktop Runtime: NOT installed. ${APP_NAME} needs it to start."
   ${EndIf}
   ${NSD_CreateLabel} 8u 86u 284u 16u "$1"
-  Pop $0
-  ${If} $WebView2Version != ""
-    StrCpy $1 "WebView2 Runtime: installed ($WebView2Version)."
-  ${Else}
-    StrCpy $1 "WebView2 Runtime: not installed. ${APP_NAME} works, but shows its classic window until it is."
-  ${EndIf}
-  ${NSD_CreateLabel} 8u 104u 284u 18u "$1"
   Pop $0
 
   nsDialogs::Show
@@ -613,11 +586,6 @@ Function OptionsLeave
     MessageBox MB_YESNO|MB_ICONEXCLAMATION "${APP_NAME} needs the .NET 10 Desktop Runtime (x64), which is not installed.$\r$\n$\r$\nYes: open the official download page (pick $\".NET Desktop Runtime$\" for Windows x64). Setup continues; install the runtime before you start ${APP_NAME}.$\r$\n$\r$\nNo: continue without opening the page." /SD IDNO IDNO skipDotNet
     ExecShell "open" "${DOTNET_URL}"
   skipDotNet:
-  ${EndIf}
-  ${If} $WebView2Version == ""
-    MessageBox MB_YESNO|MB_ICONINFORMATION "The Microsoft Edge WebView2 Runtime is not installed. ${APP_NAME} works without it, but shows its classic window instead of the new one.$\r$\n$\r$\nYes: open the official download page (the $\"Evergreen Bootstrapper$\" is the small download). Setup continues.$\r$\n$\r$\nNo: continue without opening the page." /SD IDNO IDNO skipWebView2
-    ExecShell "open" "${WEBVIEW2_URL}"
-  skipWebView2:
   ${EndIf}
 FunctionEnd
 
@@ -767,12 +735,7 @@ Section "${APP_NAME}" SecMain
   ${Else}
     StrCpy $1 "NOT installed"
   ${EndIf}
-  ${If} $WebView2Version != ""
-    StrCpy $2 "$WebView2Version"
-  ${Else}
-    StrCpy $2 "not installed (classic window)"
-  ${EndIf}
-  !insertmacro LOG "Runtimes: .NET 10 Desktop $1; WebView2 $2"
+  !insertmacro LOG "Runtimes: .NET 10 Desktop $1"
   !insertmacro LOG "Done"
 SectionEnd
 
@@ -819,7 +782,8 @@ Section "Uninstall"
   ${EndIf}
   DeleteRegKey HKCU "${UNINST_KEY}"
 
-  ; The new window's WebView2 cache (WebWindow.cs). Its helper processes exit with the app.
+  ; The browser cache an older LiteSynapse left behind, when its window still used WebView2. Nothing writes
+  ; this any more; it is removed so uninstalling leaves nothing of it.
   ${If} $9 != "not running"
     Sleep 1000
   ${EndIf}

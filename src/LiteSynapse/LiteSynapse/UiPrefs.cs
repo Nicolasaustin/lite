@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 
 namespace LiteSynapse;
 
-// Preferences of the HTML window (data/ui.json). Kept out of settings.json, which the service owns.
+// Preferences of the main window (data/ui.json). Kept out of settings.json, which the service owns.
 public sealed class UiPrefs
 {
 	public const int DefaultWidth = 1180;
@@ -16,9 +16,6 @@ public sealed class UiPrefs
 	public const int MinWidth = 1000;
 
 	public const int MinHeight = 700;
-
-	// UI accent colour: one of WebOps.Accents.
-	public string Accent { get; set; } = WebOps.DefaultAccent;
 
 	// Close the window when a linked game comes to the front, so nothing renders while playing.
 	public bool CloseOnGame { get; set; } = true;
@@ -57,10 +54,6 @@ public sealed class UiPrefs
 	// Repairs values a hand-edited file may hold.
 	public void Normalize()
 	{
-		if (!WebOps.IsAccent(Accent))
-		{
-			Accent = WebOps.DefaultAccent;
-		}
 		if (Width < MinWidth || Width > 16000)
 		{
 			Width = DefaultWidth;

@@ -6,7 +6,6 @@ using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
-using Microsoft.Web.WebView2.Core;
 
 namespace LiteSynapse;
 
@@ -26,8 +25,6 @@ internal static class UiHost
 
 	private static Control invoker;
 
-	private static WebWindow web;
-
 	// Only for the memory release after the last window closed.
 	private static Service svcForMemory;
 
@@ -38,9 +35,6 @@ internal static class UiHost
 	private static Form calibration;
 
 	private static long flyoutClosedAt;
-
-	// null = not checked yet; false = the WebView2 runtime is missing or failed this session (classic window).
-	private static bool? webAvailable;
 
 	private static void Post(Action action)
 	{
@@ -143,9 +137,9 @@ internal static class UiHost
 		}
 	}
 
-	// The window is gone (with it WebView2 and everything the page needed): hand the memory back instead of
-	// sitting on tens of megabytes for the rest of the session. Skipped while the keyboard hook is live, because
-	// a compacting collection pauses every thread; the next time the window closes it runs.
+	// The window is gone: hand the memory back instead of sitting on it for the rest of the session. Skipped
+	// while the keyboard hook is live, because a compacting collection pauses every thread; the next time the
+	// window closes it runs.
 	private static void ReleaseMemory()
 	{
 		try
@@ -170,115 +164,37 @@ internal static class UiHost
 		}
 	}
 
-	// Opens (or brings back) the main window: the HTML window, or the classic one when WebView2 cannot run.
-	// page/tab/mem are the classic window's page numbers (see WebProtocol.PageFor); the HTML window gets them as
-	// a { type: "navigate" } message.
+	// Opens (or brings back) the main window. page/tab are the window's page and pill numbers (see
+	// MainForm.Goto); mem opens the on-board memory panel with it.
 	public static void ShowWindow(Service svc, int page = -1, int tab = 0, bool mem = false)
 	{
 		svcForMemory = svc;
 		Post(() =>
 		{
-			if (!WebAvailable())
+			if (main == null || main.IsDisposed)
 			{
-				OpenClassic(svc, page, tab, mem);
-				return;
-			}
-			if (web == null || web.IsDisposed)
-			{
-				WebWindow w = new WebWindow(svc);
-				w.InitFailed += (Exception ex) =>
+				main = new MainForm(svc);
+				main.FormClosed += (object _1, FormClosedEventArgs _2) =>
 				{
-					// A missing runtime stays missing this session; anything else (e.g. the previous window's
-					// WebView2 processes still shutting down) is tried again the next time the window opens.
-					if (ex is WebView2RuntimeNotFoundException || ex is DllNotFoundException || ex is BadImageFormatException)
-					{
-						webAvailable = false;
-					}
-					OpenClassic(svc, page, tab, mem);
-				};
-				w.FormClosed += (object _1, FormClosedEventArgs _2) =>
-				{
-					if (web == w)
-					{
-						web = null;
-					}
+					main = null;
 					BeginAfterClose();
 				};
-				web = w;
 			}
-			(string pageName, string tabName) = WebProtocol.PageFor(page, tab, mem);
-			web.NavigateTo(pageName, tabName);
-			web.ShowAndActivate();
-			// The two main windows take turns: this one replaces the classic window.
-			if (main != null && !main.IsDisposed)
+			if (page >= 0)
 			{
-				main.Close();
+				main.Goto(page, tab);
 			}
+			if (mem)
+			{
+				main.OpenMemory();
+			}
+			main.Show();
+			if (main.WindowState == FormWindowState.Minimized)
+			{
+				main.WindowState = FormWindowState.Normal;
+			}
+			main.Activate();
 		});
-	}
-
-	// The old WinForms window (kept as a fallback and for "Classic window").
-	public static void ShowClassicWindow(Service svc, int page = -1, int tab = 0, bool mem = false)
-	{
-		Post(() => OpenClassic(svc, page, tab, mem));
-	}
-
-	private static void OpenClassic(Service svc, int page, int tab, bool mem)
-	{
-		svcForMemory = svc;
-		if (main == null || main.IsDisposed)
-		{
-			main = new MainForm(svc);
-			main.FormClosed += (object _1, FormClosedEventArgs _2) =>
-			{
-				main = null;
-				BeginAfterClose();
-			};
-		}
-		if (page >= 0)
-		{
-			main.Goto(page, tab);
-		}
-		if (mem)
-		{
-			main.OpenMemory();
-		}
-		main.Show();
-		if (main.WindowState == FormWindowState.Minimized)
-		{
-			main.WindowState = FormWindowState.Normal;
-		}
-		main.Activate();
-		// The two main windows take turns: the classic window replaces the new one (Settings › Maintenance and the
-		// tray's "Classic window"); the tray's "LiteSynapse" switches back.
-		if (web != null && !web.IsDisposed)
-		{
-			web.Close();
-		}
-	}
-
-	// Checked once per session: a missing runtime (or WebView2Loader.dll) means the classic window.
-	private static bool WebAvailable()
-	{
-		if (webAvailable.HasValue)
-		{
-			return webAvailable.Value;
-		}
-		try
-		{
-			// A single-file exe extracts WebView2Loader.dll to its own folder. Loading it through .NET's native
-			// library probing (which knows that folder) first lets the WebView2 library find it by name.
-			NativeLibrary.TryLoad("WebView2Loader.dll", typeof(CoreWebView2Environment).Assembly, null, out _);
-			string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
-			webAvailable = !string.IsNullOrEmpty(version);
-			Cfg.Log("WebView2 runtime " + (version ?? "not found"));
-		}
-		catch (Exception ex)
-		{
-			webAvailable = false;
-			Cfg.Log("WebView2 is not available, using the classic window: " + ex.GetType().Name + ": " + ex.Message);
-		}
-		return webAvailable.Value;
 	}
 
 	public static void ToggleFlyout(Service svc, int x, int y)

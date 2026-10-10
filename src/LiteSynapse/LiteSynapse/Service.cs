@@ -738,17 +738,6 @@ internal sealed class Service
 			r.UpgradeTask = old.UpgradeTask;
 			r.RunOnce = old.RunOnce;
 		}
-		if (deep)
-		{
-			try
-			{
-				Tuning = DeviceTuning.Check();
-			}
-			catch (Exception ex)
-			{
-				Cfg.Log("device tuning check: " + ex.Message);
-			}
-		}
 		string before = old?.ToString();
 		Razer = r;
 		if (r.ToString() != before)
@@ -785,24 +774,13 @@ internal sealed class Service
 		});
 	}
 
-	// Turns the chosen start-up entries and services off, then scans again.
-	public Task<string> ScanApplyAsync(IReadOnlyList<string> ids, bool delivery)
+	// Turns the chosen start-up entries, services and Windows settings on or off, then scans again. Each pair
+	// is (what, turn it on); nothing the user did not tick is touched.
+	public Task<string> ScanApplyAsync(IReadOnlyList<(string Id, bool On)> choices)
 	{
 		return Task.Run(() =>
 		{
-			string msg = SystemScanner.Apply(ids, delivery);
-			Scan = SystemScanner.Check();
-			Notify();
-			return msg;
-		});
-	}
-
-	// Puts the chosen harmful settings back to their Windows default, then scans again.
-	public Task<string> RepairAsync(IReadOnlyList<string> ids)
-	{
-		return Task.Run(() =>
-		{
-			string msg = SystemScanner.Repair(ids);
+			string msg = SystemScanner.Apply(choices);
 			Scan = SystemScanner.Check();
 			Notify();
 			return msg;
@@ -815,13 +793,33 @@ internal sealed class Service
 		return Task.Run(() => SystemScanner.DefenderScan(path));
 	}
 
-	// Turns Windows' USB power saving off for the Naga and the BlackWidow Lite (UAC prompt), then checks again.
-	public Task<string> TuneDevicesAsync()
+	// Asks Windows how the devices' power management is set. This starts PowerShell for a WMI query, so it
+	// happens only when the Device page is open or a change was just made - never at start-up.
+	public void RefreshTuning()
+	{
+		try
+		{
+			Tuning = DeviceTuning.Check();
+		}
+		catch (Exception ex)
+		{
+			Cfg.Log("device tuning check: " + ex.Message);
+		}
+	}
+
+	public Task RefreshTuningAsync()
+	{
+		return Task.Run(RefreshTuning);
+	}
+
+	// Keeps the chosen devices awake, or lets Windows power them down again (UAC prompt), then checks again.
+	public Task<string> TuneDevicesAsync(IReadOnlyList<string> instances, bool powerPlan, bool keepAwake)
 	{
 		return Task.Run(() =>
 		{
-			string msg = DeviceTuning.Apply();
-			RefreshRazer(deep: true);
+			string msg = DeviceTuning.Apply(instances, powerPlan, keepAwake);
+			RefreshTuning();
+			Notify();
 			return msg;
 		});
 	}

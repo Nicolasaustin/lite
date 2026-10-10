@@ -824,6 +824,50 @@ public class RazerLeftovers
 		return RunElevatedPowerShell(script, hidden: true, waitMs);
 	}
 
+	// PowerShell without elevation, with its output captured. Used for reading (the device power-management
+	// query) and for the settings that belong to this Windows account, so toggling those costs no UAC prompt.
+	// exitCode is -2 when the script did not finish in time.
+	public static string RunPowerShell(string script, int waitMs, out int exitCode)
+	{
+		exitCode = -1;
+		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script ?? ""));
+		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath,
+			"-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encoded)
+		{
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			RedirectStandardOutput = true,
+			RedirectStandardError = true
+		};
+		using Process p = Process.Start(psi);
+		if (p == null)
+		{
+			return "";
+		}
+		// Read both pipes before waiting: a script that fills one would otherwise block on the write.
+		Task<string> stdout = p.StandardOutput.ReadToEndAsync();
+		Task<string> stderr = p.StandardError.ReadToEndAsync();
+		if (!p.WaitForExit(waitMs))
+		{
+			try
+			{
+				p.Kill(entireProcessTree: true);
+			}
+			catch
+			{
+			}
+			exitCode = -2;
+			return "";
+		}
+		exitCode = p.ExitCode;
+		string output = stdout.Wait(2000) ? stdout.Result : "";
+		if (stderr.Wait(500) && !string.IsNullOrWhiteSpace(stderr.Result))
+		{
+			Cfg.Log("powershell: " + stderr.Result.Trim());
+		}
+		return output;
+	}
+
 	// Exit code of the script; -2 when it did not finish within waitMs.
 	private static int RunElevatedPowerShell(string script, bool hidden, int waitMs)
 	{
@@ -1063,7 +1107,19 @@ public class RazerLeftovers
 			{
 				return;
 			}
-			foreach (string name in key.GetSubKeyNames())
+			// Parts of the task cache are readable only by SYSTEM. Listing one of those branches throws, and
+			// it used to unwind the whole walk: every check logged an access error and found no tasks at all.
+			// An unreadable branch is skipped instead, so the branches that can be read are still reported.
+			string[] names;
+			try
+			{
+				names = key.GetSubKeyNames();
+			}
+			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+			{
+				return;
+			}
+			foreach (string name in names)
 			{
 				try
 				{

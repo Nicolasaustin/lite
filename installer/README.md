@@ -65,16 +65,12 @@ Pages: Welcome, Install folder, Options, Install, Finish (with "Launch LiteSynap
   - Checked: Setup writes `"<install folder>\LiteSynapse.exe" --tray`.
   - Unchecked: Setup deletes the value, but only when it starts a `LiteSynapse.exe` (this copy or an
     older one).
-- **Requirements**: the Options page shows whether each runtime is installed.
-  - The .NET 10 Desktop Runtime is required. Setup looks for
-    `%ProgramFiles%\dotnet\shared\Microsoft.WindowsDesktop.App\10.*`.
-  - The WebView2 Runtime is needed for the new window; without it, LiteSynapse uses the classic one. Setup
-    looks for a `pv` value other than `0.0.0.0` under
-    `HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` or under
-    the same key in HKCU.
+- **Requirements**: the Options page shows whether the runtime is installed. The .NET 10 Desktop Runtime is
+  the only one LiteSynapse needs; Setup looks for
+  `%ProgramFiles%\dotnet\shared\Microsoft.WindowsDesktop.App\10.*`.
 
-  If either runtime is missing, a message box offers to open the official download page. Installation
-  continues either way. If .NET is missing, "Launch LiteSynapse" starts unchecked.
+  If it is missing, a message box offers to open the official download page. Installation continues either
+  way, and "Launch LiteSynapse" starts unchecked.
 - **Apps & features** entry: `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\LiteSynapse`.
 - **Finish page**: points to LiteSynapse > Settings > Performance for removing Razer leftovers (the app runs
   the elevated clean-up from there). It also says that the old `Documents\LiteSynapse` folder is no longer
@@ -93,12 +89,12 @@ keeps your data). The uninstaller:
   `<install folder>\data` for a later reinstall.
 - deletes the installed files (the exact published list), `uninstall.exe`, both shortcuts, the uninstall
   entry and the `Run` value. The `Run` value is removed only when it points to this copy.
-- deletes the WebView2 cache `%LOCALAPPDATA%\LiteSynapse\WebView2`,
+- deletes `%LOCALAPPDATA%\LiteSynapse\WebView2`, the browser cache an older LiteSynapse left behind,
 - removes the install folder and `%LOCALAPPDATA%\LiteSynapse`, but only if they are empty.
 
 It deletes nothing else. Files it does not touch:
 
 - the old `Documents\LiteSynapse` folder,
 - Razer software,
-- `%TEMP%\.net\LiteSynapse`, where .NET unpacks the bundled WebView2 loader. Windows cleans `%TEMP%` on
+- `%TEMP%\.net\LiteSynapse`, where .NET unpacks a single-file build. Windows cleans `%TEMP%` on
   its own.

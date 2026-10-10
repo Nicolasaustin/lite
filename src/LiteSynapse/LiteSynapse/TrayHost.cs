@@ -97,7 +97,7 @@ internal sealed class TrayHost
 
 	private const int MenuExit = 4;
 
-	private const int MenuClassic = 5;
+	private const int MenuPerf = 5;
 
 	private static readonly nint SettleTimer = 1;
 
@@ -477,7 +477,7 @@ internal sealed class TrayHost
 		AppendMenu(menu, 0u, MenuOpen, "LiteSynapse");
 		AppendMenu(menu, 2048u, UIntPtr.Zero, null);
 		AppendMenu(menu, 0u, MenuSettings, "Settings");
-		AppendMenu(menu, 0u, MenuClassic, "Classic window");
+		AppendMenu(menu, 0u, MenuPerf, "Performance");
 		AppendMenu(menu, (uint)(0 | (startupOn ? 8 : 0)), MenuStartup, "Start with Windows");
 		AppendMenu(menu, 2048u, UIntPtr.Zero, null);
 		AppendMenu(menu, 0u, MenuExit, "Exit");
@@ -500,8 +500,8 @@ internal sealed class TrayHost
 		case MenuSettings:
 			UiHost.ShowWindow(svc, 5);
 			break;
-		case MenuClassic:
-			UiHost.ShowClassicWindow(svc);
+		case MenuPerf:
+			UiHost.ShowWindow(svc, MainForm.PagePerf);
 			break;
 		case MenuStartup:
 			try

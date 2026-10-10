@@ -1,6 +1,51 @@
-# LiteSynapse 1.1.9 test build 10: the network limit, and undoing other tools' damage
+# Testing LiteSynapse
 
-Two additions, both from looking at what TinyBoost touches.
+Build 11 (1.2.0) is the first build with **no WebView2**. The window is WinForms throughout, which is the
+change to look at first: if frame times in CS2 were worse with the window open before, they should not be now,
+because nothing renders a browser any more.
+
+## What changed in this build
+
+- **WebView2 is gone.** The bridge layer, the HTML window and the WebView2 package are all removed, so the
+  app no longer starts browser processes or keeps a browser cache. The exe is ~1.9 MB and the installer no
+  longer looks for the Edge runtime.
+- **New Performance tab** with five pages, each a list of things to tick:
+  - **Razer** - what Razer's software left behind, plus the three elevated clean-up steps.
+  - **Device** - whether Windows may power the mouse and keyboard down.
+  - **Windows** - 34 settings, each with its own checkbox, its source, and what it costs.
+  - **Services** - Windows services worth turning off, and turning back on.
+  - **Start-up** - what starts with Windows, what holds a connection, and a Defender scan.
+- **Every setting goes both ways.** There is no "apply everything" and no "put it all back": tick what you
+  want and press "Turn ticked on" or "Turn ticked off". Each row shows the state the PC is in now.
+- **Settings come from named sources** - FR33THY's Ultimate guide, Chris Titus's WinUtil, or Microsoft's own
+  documentation - and the row says which. Where a guide and the Windows default disagree, the guide's value is
+  offered as an option rather than called harmful; where it gives up security, the row says exactly what.
+
+## Three bugs from the 1.1.9 logs, fixed
+
+1. `device tuning: 0 device key(s)` - the USB power settings never reached the mouse. The old code walked
+   `HKLM\SYSTEM\CurrentControlSet\Enum\USB`, whose ACL grants read to SYSTEM only, so an administrator got
+   nothing and the loop silently found no devices. It now uses WMI (`MSPower_DeviceEnable` /
+   `MSPower_DeviceWakeEnable`), which is what Device Manager's Power Management tab uses.
+2. `razer check (tasks): Security_RegistryPermission` on every check - the scheduled-task walk called
+   `GetSubKeyNames()` outside its try, so one branch of the task cache that only SYSTEM may list aborted the
+   whole walk. Unreadable branches are skipped now, and the readable ones are reported.
+3. `system scan: start-up "" turned off` - a Run key's own unnamed default value was being listed as a
+   start-up entry. It is skipped.
+
+## Checks to run on the hardware
+
+1. Open the window, switch through every tab, and watch frame times in CS2 with the window open. This is the
+   whole point of the build.
+2. Performance > Device: both devices should be listed by name. Tick them, press "Keep ticked awake", and
+   confirm in Device Manager that "Allow the computer to turn off this device to save power" is now clear.
+3. Performance > Windows: tick "Pointer acceleration off" and press "Turn ticked on" - this one needs no UAC
+   prompt. Then tick it again and press "Turn ticked off" and check the Windows mouse dialog follows both ways.
+4. Performance > Services: turn one safe service off (DiagTrack), confirm it in services.msc, then turn it
+   back on and confirm it returns to Automatic and running.
+5. Performance > Start-up: the list should match Task Manager's Startup apps, and turning one off should show
+   as Disabled there.
+6. Anything in the Security trade-offs group should ask you to confirm by name before it applies.
 
 ## Windows limits your network while a game runs
 

@@ -2,258 +2,149 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 
 namespace LiteSynapse;
 
-// Windows settings that add delay between the mouse and the PC, and the one step that turns them off.
+// "Allow the computer to turn off this device to save power" for the Naga and the BlackWidow Lite, plus the
+// active power plan's USB selective suspend. These are the two settings that decide whether Windows is
+// allowed to let the mouse idle down between reports.
 //
-// Two of them matter for a wired mouse:
-//  - USB power saving on the device itself ("Allow the computer to turn off this device to save power" in Device
-//    Manager). With it on, Windows may suspend the device between reports; the first move after an idle moment
-//    then waits for it to wake. Device Manager writes EnhancedPowerManagementEnabled / SelectiveSuspendEnabled /
-//    AllowIdleIrpInD3 under the device's "Device Parameters" key.
-//  - USB selective suspend in the power plan, which does the same thing plan-wide.
+// Why this does not read the registry:
 //
-// And three Windows mouse settings, all per-user and none needing administrator rights:
-//  - RawMouseThrottleEnabled: Windows caps raw mouse input at 125 Hz for a window that is not in front. A game
-//    that loses focus for a moment (an overlay, a second monitor) then gets a quarter of the mouse's reports.
-//  - "Enhance pointer precision": Windows' mouse acceleration, so the same hand movement gives a different
-//    distance depending on speed.
-//  - Pointer speed: anything but the middle notch (6 of 11) makes Windows scale the movement, which throws
-//    counts away or doubles them.
+//   The per-device values (EnhancedPowerManagementEnabled, SelectiveSuspendEnabled, AllowIdleIrpInD3) live
+//   under HKLM\SYSTEM\CurrentControlSet\Enum\USB\..., and the ACL on CurrentControlSet\Enum grants read to
+//   SYSTEM only - an administrator is refused. An earlier version of this file walked that key, found
+//   nothing, and logged "0 device key(s)" on a PC with both devices plugged in.
+//
+//   The supported way in is WMI: MSPower_DeviceEnable and MSPower_DeviceWakeEnable in root\WMI are the
+//   classes behind those two checkboxes on the Power Management tab in Device Manager. They are readable and
+//   writable by an administrator, and they apply immediately with no reboot.
+//
+// Everything else that used to live here - pointer acceleration, pointer speed, the background raw-input cap,
+// the MMCSS network throttle and SystemResponsiveness - is now in the Tweaks catalog, where each one has its
+// own checkbox and its own opposite. There is no second copy of those here.
 //
 // Nothing here touches a device that is not Razer's (VID_1532), and nothing is changed without the user asking.
 internal static class DeviceTuning
 {
-	// The value names Windows uses for USB power saving on a device, all "1 = may be suspended".
-	internal static readonly string[] PowerValues = new string[3]
-	{
-		"EnhancedPowerManagementEnabled", "SelectiveSuspendEnabled", "AllowIdleIrpInD3"
-	};
-
 	public const string UsbSuspendSubGroup = "2a737441-1930-4402-8d77-b2bebba308a3";
 
 	public const string UsbSuspendSetting = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226";
 
-	private const string EnumUsb = "SYSTEM\\CurrentControlSet\\Enum\\USB";
-
 	private const string PowerSchemes = "SYSTEM\\CurrentControlSet\\Control\\Power\\User\\PowerSchemes";
-
-	private const string MouseKey = "Control Panel\\Mouse";
-
-	// MMCSS, the scheduler Windows uses while a multimedia app runs. Both values are documented by Microsoft.
-	//  SystemResponsiveness: the share of CPU kept for background work, 20 by default on a desktop. 10 is the
-	//  usual gaming value; 0 is not used here because it can starve audio.
-	//  NetworkThrottlingIndex: while a multimedia app runs, Windows limits other network traffic to this many
-	//  packets per millisecond (10 by default). 0xFFFFFFFF turns the limit off, which is what a game wants.
-	private const string SystemProfile = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile";
-
-	public const int ThrottlingOff = unchecked((int)0xFFFFFFFFu);
-
-	public const int ResponsivenessGaming = 10;
-
-	public const string ThrottleValue = "RawMouseThrottleEnabled";
-
-	// SPI_GETMOUSE / SPI_SETMOUSE take int[3] { threshold1, threshold2, acceleration }; all zero = no
-	// acceleration. SPI_GET/SETMOUSESPEED take 1..20, and 10 is the middle notch (6 of 11 in the old dialog).
-	private const uint SPI_GETMOUSE = 0x0003u;
-
-	private const uint SPI_SETMOUSE = 0x0004u;
-
-	private const uint SPI_GETMOUSESPEED = 0x0070u;
-
-	private const uint SPI_SETMOUSESPEED = 0x0071u;
-
-	private const uint SPIF_UPDATEINIFILE = 0x0001u;
-
-	private const uint SPIF_SENDCHANGE = 0x0002u;
-
-	public const int DefaultPointerSpeed = 10;
-
-	[DllImport("user32", SetLastError = true, EntryPoint = "SystemParametersInfoW")]
-	private static extern bool SystemParametersInfoArray(uint action, uint param, int[] value, uint update);
-
-	[DllImport("user32", SetLastError = true, EntryPoint = "SystemParametersInfoW")]
-	private static extern bool SystemParametersInfoRef(uint action, uint param, ref int value, uint update);
-
-	[DllImport("user32", SetLastError = true, EntryPoint = "SystemParametersInfoW")]
-	private static extern bool SystemParametersInfoPtr(uint action, uint param, nint value, uint update);
 
 	// ---- Pure helpers (tested) -------------------------------------------------------------------------
 
-	// A USB key name belongs to one of the two devices LiteSynapse drives.
-	internal static bool IsOurDevice(string vidPid)
+	// A WMI InstanceName (or a USB key name) that belongs to one of the two devices LiteSynapse drives.
+	// Example: USB\VID_1532&PID_008D\6&1ad0a2c8&0&3_0
+	internal static bool IsOurDevice(string instance)
 	{
-		if (string.IsNullOrWhiteSpace(vidPid) || vidPid.IndexOf("VID_1532", StringComparison.OrdinalIgnoreCase) < 0)
+		if (string.IsNullOrWhiteSpace(instance) || instance.IndexOf("VID_1532", StringComparison.OrdinalIgnoreCase) < 0)
 		{
 			return false;
 		}
-		return vidPid.IndexOf("PID_008D", StringComparison.OrdinalIgnoreCase) >= 0
-			|| vidPid.IndexOf("PID_0235", StringComparison.OrdinalIgnoreCase) >= 0;
+		return instance.IndexOf("PID_008D", StringComparison.OrdinalIgnoreCase) >= 0
+			|| instance.IndexOf("PID_0235", StringComparison.OrdinalIgnoreCase) >= 0;
 	}
 
-	// Power saving is on for a device when any of the three values says it may be suspended. A value that is not
-	// there is Windows' default, which for a USB input device means it may be suspended.
-	internal static bool PowerSavingOn(IReadOnlyDictionary<string, int?> values)
+	// One line of the query's output: "True|USB\VID_1532&PID_008D\6&x&0&3_0|Razer Naga". Returns null for a
+	// line that is not one of our devices or is malformed, so a stray line of PowerShell noise is ignored
+	// rather than shown as a device.
+	internal static TunedDevice ParseDevice(string line)
 	{
-		if (values == null)
+		if (string.IsNullOrWhiteSpace(line))
 		{
-			return false;
+			return null;
 		}
-		return PowerValues.Any((string n) => !values.TryGetValue(n, out int? v) || !v.HasValue || v.Value != 0);
+		string[] parts = line.Split('|');
+		if (parts.Length < 2)
+		{
+			return null;
+		}
+		string enable = parts[0].Trim();
+		string instance = parts[1].Trim();
+		if (!IsOurDevice(instance))
+		{
+			return null;
+		}
+		bool? on = enable.Equals("True", StringComparison.OrdinalIgnoreCase) ? true
+			: (enable.Equals("False", StringComparison.OrdinalIgnoreCase) ? false : (bool?)null);
+		if (!on.HasValue)
+		{
+			return null;
+		}
+		string name = (parts.Length > 2) ? parts[2].Trim() : "";
+		return new TunedDevice
+		{
+			Instance = instance,
+			Name = (name.Length > 0) ? name : Describe(instance),
+			// MSPower_DeviceEnable.Enable true = Windows is allowed to turn the device off to save power.
+			PowerSaving = on.Value
+		};
 	}
 
-	// Windows caps raw mouse input for background windows unless RawMouseThrottleEnabled is 0. No value means
-	// the cap is on (the Windows default).
-	internal static bool ThrottleOn(int? value)
+	// A name for a device whose FriendlyName could not be read.
+	internal static string Describe(string instance)
 	{
-		return !value.HasValue || value.Value != 0;
-	}
-
-	// Mouse acceleration is on when any of the three SPI_GETMOUSE numbers is not zero.
-	internal static bool AccelerationOn(int[] mouse)
-	{
-		return mouse != null && mouse.Length >= 3 && (mouse[0] != 0 || mouse[1] != 0 || mouse[2] != 0);
-	}
-
-	// Windows limits other network traffic while a game runs unless this is turned off. Not set means the
-	// Windows default, 10 packets per millisecond.
-	internal static bool NetworkThrottled(int? index)
-	{
-		return (index ?? 10) != ThrottlingOff;
-	}
-
-	// 20 by default: a fifth of the CPU kept for background work while a game runs.
-	internal static bool ResponsivenessHigh(int? value)
-	{
-		return (value ?? 20) > ResponsivenessGaming;
+		if (instance != null && instance.IndexOf("PID_008D", StringComparison.OrdinalIgnoreCase) >= 0)
+		{
+			return "Razer Naga Left-Handed Edition";
+		}
+		if (instance != null && instance.IndexOf("PID_0235", StringComparison.OrdinalIgnoreCase) >= 0)
+		{
+			return "Razer BlackWidow Lite";
+		}
+		return "Razer device";
 	}
 
 	// What the window shows for the power plan's USB selective suspend: on | off | unknown.
-	internal static string SuspendState(int? acSetting)
+	internal static string SuspendState(int? value)
 	{
-		if (!acSetting.HasValue)
+		if (!value.HasValue)
 		{
 			return "unknown";
 		}
-		return (acSetting.Value == 0) ? "off" : "on";
+		return (value.Value == 0) ? "off" : "on";
 	}
 
-	// The elevated script: zero the three values on each device key, then turn USB selective suspend off in the
-	// power plan. Exit code = the number of steps that failed.
-	internal static string Script(IEnumerable<string> deviceKeys, bool powerPlan, bool multimedia = false)
-	{
-		StringBuilder sb = new StringBuilder();
-		sb.Append("$failed = 0\n");
-		if (multimedia)
-		{
-			string path = "HKLM:\\" + SystemProfile;
-			sb.Append("try {\n");
-			sb.Append("  New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name 'NetworkThrottlingIndex' -PropertyType DWord -Value 0xFFFFFFFF -Force -ErrorAction Stop | Out-Null\n");
-			sb.Append("  New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name 'SystemResponsiveness' -PropertyType DWord -Value " + ResponsivenessGaming + " -Force -ErrorAction Stop | Out-Null\n");
-			sb.Append("} catch { $failed++ }\n");
-		}
-		foreach (string key in deviceKeys ?? Enumerable.Empty<string>())
-		{
-			string path = "HKLM:\\" + key + "\\Device Parameters";
-			sb.Append("try {\n");
-			sb.Append("  New-Item -Path " + RazerLeftovers.Ps(path) + " -Force -ErrorAction Stop | Out-Null\n");
-			foreach (string name in PowerValues)
-			{
-				sb.Append("  New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name " + RazerLeftovers.Ps(name) +
-					" -PropertyType DWord -Value 0 -Force -ErrorAction Stop | Out-Null\n");
-			}
-			sb.Append("} catch { $failed++ }\n");
-		}
-		if (powerPlan)
-		{
-			sb.Append("powercfg.exe /setacvalueindex SCHEME_CURRENT " + UsbSuspendSubGroup + " " + UsbSuspendSetting + " 0 | Out-Null\n");
-			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
-			sb.Append("powercfg.exe /setdcvalueindex SCHEME_CURRENT " + UsbSuspendSubGroup + " " + UsbSuspendSetting + " 0 | Out-Null\n");
-			sb.Append("powercfg.exe /setactive SCHEME_CURRENT | Out-Null\n");
-		}
-		sb.Append("exit $failed\n");
-		return sb.ToString();
-	}
+	// ---- Reading -----------------------------------------------------------------------------------------
 
-	// What to tell the user once it ran, from a check made afterwards.
-	internal static string Outcome(DeviceTuningState before, DeviceTuningState after, bool adminRan)
-	{
-		if (before == null || !before.NeedsWork)
-		{
-			return "The mouse and keyboard already talk to Windows without any power saving in the way. Nothing to do.";
-		}
-		List<string> done = new List<string>();
-		List<string> left = new List<string>();
-		if (before.BackgroundCap)
-		{
-			((after?.BackgroundCap ?? true) ? left : done).Add("the 125 Hz cap on background windows (after the next sign-in)");
-		}
-		if (before.Acceleration)
-		{
-			((after?.Acceleration ?? true) ? left : done).Add("mouse acceleration");
-		}
-		if (before.PointerSpeedOff)
-		{
-			((after?.PointerSpeedOff ?? true) ? left : done).Add("pointer speed scaling");
-		}
-		if (before.NeedsAdminFix && !adminRan)
-		{
-			left.Add("USB power saving (Windows did not get administrator permission)");
-		}
-		int fixedDevices = adminRan
-			? before.Devices.Count((TunedDevice d) => d.PowerSaving) - (after?.Devices.Count((TunedDevice d) => d.PowerSaving) ?? 0)
-			: 0;
-		if (fixedDevices > 0)
-		{
-			done.Add(fixedDevices + " device" + ((fixedDevices == 1) ? "" : "s") + " kept awake");
-		}
-		int stillOn = adminRan ? (after?.Devices.Count((TunedDevice d) => d.PowerSaving) ?? 0) : 0;
-		if (stillOn > 0)
-		{
-			left.Add(stillOn + " device" + ((stillOn == 1) ? "" : "s") + " still allowed to sleep");
-		}
-		if (before.UsbSuspend == "on" && adminRan)
-		{
-			((after?.UsbSuspend == "on") ? left : done).Add("USB selective suspend in the power plan");
-		}
-		if (before.NetworkThrottling && adminRan)
-		{
-			((after?.NetworkThrottling ?? true) ? left : done).Add("the limit Windows puts on network traffic while a game runs");
-		}
-		if (before.ResponsivenessHigh && adminRan)
-		{
-			((after?.ResponsivenessHigh ?? true) ? left : done).Add("the CPU Windows keeps back for background work");
-		}
-		List<string> parts = new List<string>();
-		if (done.Count > 0)
-		{
-			parts.Add("Turned off: " + string.Join(", ", done) + ".");
-		}
-		if (left.Count > 0)
-		{
-			parts.Add("Still on: " + string.Join(", ", left) + ".");
-		}
-		if (parts.Count == 0)
-		{
-			return "Nothing was changed.";
-		}
-		parts.Add("Sign out and back in (or restart) so every part of Windows picks this up.");
-		return string.Join(" ", parts);
-	}
+	// Lists the power-management checkbox for every Razer device, one line each, so one PowerShell start
+	// covers the lot. -ErrorAction SilentlyContinue throughout: on a PC without the device, or without rights
+	// to root\WMI, this prints nothing instead of failing, and the caller reports that it could not read
+	// rather than claiming the devices are fine.
+	internal const string QueryScript =
+		"$d = Get-CimInstance -Namespace root/WMI -ClassName MSPower_DeviceEnable -ErrorAction SilentlyContinue\n" +
+		"foreach ($x in $d) {\n" +
+		"  if ($x.InstanceName -notlike '*VID_1532*') { continue }\n" +
+		"  $id = $x.InstanceName -replace '_0$', ''\n" +
+		"  $n = ''\n" +
+		"  try { $n = (Get-PnpDevice -InstanceId $id -ErrorAction SilentlyContinue).FriendlyName } catch { }\n" +
+		"  \"$($x.Enable)|$($x.InstanceName)|$n\"\n" +
+		"}\n";
 
-	// ---- Checking and changing the PC (Windows) ---------------------------------------------------------
-
-	// Registry reads only; a few milliseconds. Never throws.
 	public static DeviceTuningState Check()
 	{
 		DeviceTuningState s = new DeviceTuningState();
 		try
 		{
-			s.Devices = Devices();
+			string output = RazerLeftovers.RunPowerShell(QueryScript, 20000, out int code);
+			s.Readable = code == 0;
+			foreach (string line in (output ?? "").Split('\n'))
+			{
+				TunedDevice d = ParseDevice(line);
+				if (d != null && !s.Devices.Any((TunedDevice x) => x.Instance == d.Instance))
+				{
+					s.Devices.Add(d);
+				}
+			}
+			if (s.Devices.Count == 0)
+			{
+				Cfg.Log("device tuning: no Razer device answered the power-management query" +
+					(s.Readable ? " (is it plugged in?)" : " (root\\WMI could not be read)"));
+			}
 		}
 		catch (Exception ex)
 		{
@@ -267,188 +158,135 @@ internal static class DeviceTuning
 		{
 			Cfg.Log("device tuning (power plan): " + ex2.Message);
 		}
-		try
-		{
-			using RegistryKey mm = Registry.LocalMachine.OpenSubKey(SystemProfile);
-			s.NetworkThrottling = NetworkThrottled((mm?.GetValue("NetworkThrottlingIndex") is int ni) ? ni : null);
-			s.Responsiveness = (mm?.GetValue("SystemResponsiveness") is int sr) ? sr : 20;
-		}
-		catch (Exception exMm)
-		{
-			Cfg.Log("device tuning (multimedia): " + exMm.Message);
-		}
-		try
-		{
-			using RegistryKey mouse = Registry.CurrentUser.OpenSubKey(MouseKey);
-			object raw = mouse?.GetValue(ThrottleValue);
-			s.BackgroundCap = ThrottleOn((raw is int i) ? i : ((raw is string t && int.TryParse(t, out int n)) ? n : null));
-			int[] accel = new int[3];
-			if (SystemParametersInfoArray(SPI_GETMOUSE, 0u, accel, 0u))
-			{
-				s.Acceleration = AccelerationOn(accel);
-			}
-			int speed = DefaultPointerSpeed;
-			if (SystemParametersInfoRef(SPI_GETMOUSESPEED, 0u, ref speed, 0u))
-			{
-				s.PointerSpeed = speed;
-			}
-		}
-		catch (Exception ex3)
-		{
-			Cfg.Log("device tuning (mouse settings): " + ex3.Message);
-		}
 		s.Checked = true;
 		return s;
-	}
-
-	private static List<TunedDevice> Devices()
-	{
-		List<TunedDevice> list = new List<TunedDevice>();
-		using RegistryKey usb = Registry.LocalMachine.OpenSubKey(EnumUsb);
-		if (usb == null)
-		{
-			return list;
-		}
-		foreach (string vidPid in usb.GetSubKeyNames())
-		{
-			if (!IsOurDevice(vidPid))
-			{
-				continue;
-			}
-			using RegistryKey dev = usb.OpenSubKey(vidPid);
-			if (dev == null)
-			{
-				continue;
-			}
-			foreach (string instance in dev.GetSubKeyNames())
-			{
-				try
-				{
-					using RegistryKey inst = dev.OpenSubKey(instance);
-					if (inst == null)
-					{
-						continue;
-					}
-					Dictionary<string, int?> values = new Dictionary<string, int?>(StringComparer.OrdinalIgnoreCase);
-					using (RegistryKey parms = inst.OpenSubKey("Device Parameters"))
-					{
-						foreach (string name in PowerValues)
-						{
-							values[name] = (parms?.GetValue(name) is int v) ? v : null;
-						}
-					}
-					list.Add(new TunedDevice
-					{
-						Key = EnumUsb + "\\" + vidPid + "\\" + instance,
-						Name = (inst.GetValue("FriendlyName") as string) ?? (inst.GetValue("DeviceDesc") as string) ?? vidPid,
-						PowerSaving = PowerSavingOn(values)
-					});
-				}
-				catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException)
-				{
-				}
-			}
-		}
-		return list;
 	}
 
 	// The active power plan's "USB selective suspend setting" for mains power, or null when it cannot be read.
 	private static int? ActiveSchemeUsbSuspend()
 	{
+		string active = ActiveScheme();
+		if (active == null)
+		{
+			return null;
+		}
 		using RegistryKey schemes = Registry.LocalMachine.OpenSubKey(PowerSchemes);
-		string active = schemes?.GetValue("ActivePowerScheme") as string;
-		if (string.IsNullOrEmpty(active))
+		if (schemes == null)
 		{
 			return null;
 		}
 		using RegistryKey setting = schemes.OpenSubKey(active + "\\" + UsbSuspendSubGroup + "\\" + UsbSuspendSetting);
-		// No value stored means the plan uses the Windows default, which is "on" for every shipped plan.
-		if (setting == null)
-		{
-			return 1;
-		}
-		return (setting.GetValue("ACSettingIndex") is int v) ? v : 1;
+		return (setting?.GetValue("ACSettingIndex") is int v) ? v : null;
 	}
 
-	// Turns the power saving off (one UAC prompt) and reports what changed. Blocks until it finished.
-	public static string Apply()
+	private static string ActiveScheme()
 	{
-		DeviceTuningState before = Check();
-		if (!before.NeedsWork)
+		using RegistryKey k = Registry.LocalMachine.OpenSubKey(PowerSchemes);
+		return k?.GetValue("ActivePowerScheme") as string;
+	}
+
+	// ---- Changing ----------------------------------------------------------------------------------------
+
+	// The elevated script. instances: the WMI InstanceNames to change. allowPowerSaving true puts Windows'
+	// own behaviour back; false keeps the device awake. powerPlan also sets the active plan's USB selective
+	// suspend to match.
+	//
+	// Instance names are matched with -eq against the value WMI itself returned, and are quoted, so nothing
+	// here depends on text the user typed.
+	internal static string Script(IEnumerable<string> instances, bool powerPlan, bool allowPowerSaving)
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.Append("$failed = 0\n");
+		string want = allowPowerSaving ? "$true" : "$false";
+		foreach (string instance in instances ?? Enumerable.Empty<string>())
 		{
-			return Outcome(before, before, adminRan: false);
-		}
-		// The three mouse settings belong to this Windows account: no administrator rights, and the pointer ones
-		// take effect at once (SPIF_SENDCHANGE tells every program).
-		if (before.BackgroundCap)
-		{
-			try
+			if (!IsOurDevice(instance))
 			{
-				using RegistryKey mouse = Registry.CurrentUser.CreateSubKey(MouseKey);
-				mouse.SetValue(ThrottleValue, 0, RegistryValueKind.DWord);
-				Cfg.Log("device tuning: background polling cap off (takes effect after the next sign-in)");
+				continue;
 			}
-			catch (Exception ex)
+			string q = RazerLeftovers.Ps(instance);
+			// Both checkboxes on the Power Management tab: may Windows turn the device off, and may the device
+			// wake the PC. A device that cannot be turned off cannot wake anything either, so they move together.
+			foreach (string cls in new[] { "MSPower_DeviceEnable", "MSPower_DeviceWakeEnable" })
 			{
-				Cfg.Log("device tuning (throttle): " + ex.Message);
-			}
-		}
-		if (before.Acceleration)
-		{
-			try
-			{
-				SystemParametersInfoArray(SPI_SETMOUSE, 0u, new int[3], SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-				Cfg.Log("device tuning: mouse acceleration off");
-			}
-			catch (Exception ex2)
-			{
-				Cfg.Log("device tuning (acceleration): " + ex2.Message);
-			}
-		}
-		if (before.PointerSpeedOff)
-		{
-			try
-			{
-				SystemParametersInfoPtr(SPI_SETMOUSESPEED, 0u, new IntPtr(DefaultPointerSpeed), SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-				Cfg.Log("device tuning: pointer speed back to the middle notch");
-			}
-			catch (Exception ex3)
-			{
-				Cfg.Log("device tuning (pointer speed): " + ex3.Message);
+				sb.Append("try {\n");
+				sb.Append($"  $i = Get-CimInstance -Namespace root/WMI -ClassName {cls} -ErrorAction Stop | " +
+					$"Where-Object {{ $_.InstanceName -eq {q} }}\n");
+				sb.Append($"  if ($i) {{ $i | Set-CimInstance -Property @{{ Enable = {want} }} -ErrorAction Stop }}\n");
+				sb.Append("} catch { $failed++ }\n");
 			}
 		}
-		bool adminRan = false;
-		if (before.NeedsAdminFix)
+		if (powerPlan)
 		{
-			List<string> keys = before.Devices.Where((TunedDevice d) => d.PowerSaving).Select((TunedDevice d) => d.Key).ToList();
-			bool mm = before.NetworkThrottling || before.ResponsivenessHigh;
-			try
-			{
-				int code = RazerLeftovers.RunElevated(Script(keys, before.UsbSuspend == "on", mm), 60000);
-				adminRan = true;
-				Cfg.Log($"device tuning: {keys.Count} device key(s), power plan {before.UsbSuspend} -> exit code {code}");
-			}
-			catch (Win32Exception ex4) when (ex4.NativeErrorCode == 1223)
-			{
-				Cfg.Log("device tuning: USB power saving not changed (UAC prompt declined)");
-			}
-			catch (Exception ex5)
-			{
-				Cfg.Log("device tuning: " + ex5.Message);
-			}
+			string index = allowPowerSaving ? "1" : "0";
+			sb.Append("powercfg.exe /setacvalueindex SCHEME_CURRENT " + UsbSuspendSubGroup + " " + UsbSuspendSetting + " " + index + " | Out-Null\n");
+			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
+			sb.Append("powercfg.exe /setdcvalueindex SCHEME_CURRENT " + UsbSuspendSubGroup + " " + UsbSuspendSetting + " " + index + " | Out-Null\n");
+			sb.Append("powercfg.exe /setactive SCHEME_CURRENT | Out-Null\n");
 		}
-		return Outcome(before, Check(), adminRan);
+		sb.Append("exit $failed\n");
+		return sb.ToString();
+	}
+
+	// Applies the user's choice. keepAwake = true means "do not let Windows power these down", which is what
+	// the Performance page's checkbox asks for; false puts Windows' own behaviour back.
+	//
+	// instances and powerPlan are what the user ticked: nothing else is touched.
+	public static string Apply(IReadOnlyList<string> instances, bool powerPlan, bool keepAwake)
+	{
+		if ((instances == null || instances.Count == 0) && !powerPlan)
+		{
+			return "Nothing was selected.";
+		}
+		try
+		{
+			int code = RazerLeftovers.RunElevated(Script(instances, powerPlan, !keepAwake), 60000);
+			Cfg.Log($"device tuning: {instances?.Count ?? 0} device(s), power plan {(powerPlan ? "yes" : "no")}, " +
+				$"keep awake {keepAwake} -> exit code {code}");
+			DeviceTuningState after = Check();
+			if (code > 0)
+			{
+				return $"{code} step(s) did not apply. " + Summary(after);
+			}
+			return Summary(after);
+		}
+		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+		{
+			return "Cancelled: Windows did not get administrator permission, so nothing was changed.";
+		}
+		catch (Exception ex2)
+		{
+			Cfg.Log("device tuning: " + ex2.Message);
+			return "Could not change it: " + ex2.Message;
+		}
+	}
+
+	internal static string Summary(DeviceTuningState s)
+	{
+		if (s == null || s.Devices.Count == 0)
+		{
+			return "No Razer device answered. Plug the mouse in and check again.";
+		}
+		int sleeping = s.Devices.Count((TunedDevice d) => d.PowerSaving);
+		if (sleeping == 0)
+		{
+			return (s.Devices.Count == 1)
+				? "Windows may no longer power the device down."
+				: $"Windows may no longer power any of the {s.Devices.Count} devices down.";
+		}
+		return $"{sleeping} of {s.Devices.Count} device(s) may still be powered down by Windows.";
 	}
 }
 
 // One USB device of ours and whether Windows may put it to sleep.
 public sealed class TunedDevice
 {
-	// Its registry key under SYSTEM\CurrentControlSet\Enum (not shown to the user).
-	public string Key { get; set; }
+	// Its WMI InstanceName, e.g. USB\VID_1532&PID_008D\6&1ad0a2c8&0&3_0 (not shown to the user).
+	public string Instance { get; set; }
 
 	public string Name { get; set; }
 
+	// Windows is allowed to turn this device off to save power.
 	public bool PowerSaving { get; set; }
 }
 
@@ -456,34 +294,15 @@ public sealed class DeviceTuningState
 {
 	public bool Checked { get; set; }
 
+	// The power-management query ran. False means root\WMI could not be read, and an empty device list below
+	// then says nothing about how the devices are set.
+	public bool Readable { get; set; }
+
 	public List<TunedDevice> Devices { get; set; } = new List<TunedDevice>();
 
-	// on | off | unknown
+	// The active power plan's USB selective suspend: on | off | unknown.
 	public string UsbSuspend { get; set; } = "unknown";
 
-	// Windows limits other network traffic while a game runs (NetworkThrottlingIndex).
-	public bool NetworkThrottling { get; set; }
-
-	// How much CPU Windows keeps for background work while a game runs (SystemResponsiveness, 20 by default).
-	public int Responsiveness { get; set; } = 20;
-
-	public bool ResponsivenessHigh => DeviceTuning.ResponsivenessHigh(Responsiveness);
-
-	// Windows caps raw mouse input at 125 Hz while the window is not in front.
-	public bool BackgroundCap { get; set; }
-
-	// "Enhance pointer precision" (mouse acceleration) is on.
-	public bool Acceleration { get; set; }
-
-	// The pointer speed slider, 1..20; 10 is the middle notch, where Windows scales nothing.
-	public int PointerSpeed { get; set; } = DeviceTuning.DefaultPointerSpeed;
-
-	public bool PointerSpeedOff => PointerSpeed != DeviceTuning.DefaultPointerSpeed;
-
-	// The settings that need no administrator rights.
-	public bool NeedsUserFix => BackgroundCap || Acceleration || PointerSpeedOff;
-
-	public bool NeedsAdminFix => Devices.Any((TunedDevice d) => d.PowerSaving) || UsbSuspend == "on" || NetworkThrottling || ResponsivenessHigh;
-
-	public bool NeedsWork => NeedsUserFix || NeedsAdminFix;
+	// Something here would keep the mouse awake if it were changed.
+	public bool NeedsWork => Devices.Any((TunedDevice d) => d.PowerSaving) || UsbSuspend == "on";
 }

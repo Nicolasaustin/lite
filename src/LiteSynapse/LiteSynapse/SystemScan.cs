@@ -29,36 +29,6 @@ internal static class ScanRules
 		"\\appdata\\roaming\\microsoft\\windows\\start menu\\programs\\startup\\", "\\programdata\\temp\\"
 	};
 
-	// Services that are safe to turn off on a gaming PC, with what each costs and what the user gives up. The
-	// scanner offers nothing outside this list.
-	internal static readonly (string Service, string Title, string Costs, string Lose)[] Optional = new (string, string, string, string)[]
-	{
-		("DiagTrack", "Connected User Experiences and Telemetry",
-			"Collects usage data and uploads it to Microsoft in the background, which uses your connection.",
-			"Nothing you use. Some feedback and diagnostics features stop reporting."),
-		("dmwappushservice", "Device Management WAP Push",
-			"Part of the same telemetry path.",
-			"Nothing on a home PC."),
-		("SysMain", "SysMain (Superfetch)",
-			"Reads programs into memory ahead of time; on an SSD it mostly means background disk work.",
-			"Nothing noticeable on an SSD. On a hard disk, programs may open a little slower."),
-		("WSearch", "Windows Search",
-			"Indexes your files in the background: disk and CPU while you play.",
-			"Searching in the Start menu and File Explorer gets slower and less complete."),
-		("XblAuthManager", "Xbox Live Auth Manager",
-			"Runs for the Xbox app and Game Pass.",
-			"Xbox app, Game Pass and Xbox sign-in stop working. Leave it on if you use them."),
-		("XblGameSave", "Xbox Live Game Save",
-			"Syncs Xbox game saves to the cloud.",
-			"Xbox cloud saves. Leave it on if you use Game Pass."),
-		("XboxNetApiSvc", "Xbox Live Networking",
-			"Networking for the Xbox app.",
-			"Xbox app networking. Leave it on if you use it."),
-		("Spooler", "Print Spooler",
-			"Runs all the time even with no printer, and is a known target for attacks.",
-			"Printing. Only turn it off if you do not print from this PC.")
-	};
-
 	// Programs that keep uploading or downloading in the background. Matched on the process or service name.
 	internal static readonly (string Match, string Title, string What)[] NetworkHogs = new (string, string, string)[]
 	{
@@ -143,23 +113,6 @@ internal static class ScanRules
 		}
 	}
 
-	// A service LiteSynapse may offer to turn off, or null.
-	internal static (string Service, string Title, string Costs, string Lose)? OptionalService(string name)
-	{
-		if (string.IsNullOrWhiteSpace(name))
-		{
-			return null;
-		}
-		foreach (var row in Optional)
-		{
-			if (string.Equals(row.Service, name.Trim(), StringComparison.OrdinalIgnoreCase))
-			{
-				return row;
-			}
-		}
-		return null;
-	}
-
 	// A known background uploader/downloader, or null.
 	internal static (string Match, string Title, string What)? NetworkHog(string name)
 	{
@@ -210,22 +163,34 @@ internal static class ScanRules
 	}
 }
 
-// One harmful setting found on the PC, and what putting it back costs.
-public sealed class BadTweak
+// One Windows setting from the catalog, with the state it is in on this PC right now.
+public sealed class TweakRow
 {
-	// boot | mitigations | uac | priority | queues | timer | dwm | csrss | autotuning
 	public string Id { get; set; } = "";
 
-	public string Name { get; set; } = "";
+	// input | sched | gpu | net | bg | sec
+	public string Group { get; set; } = "";
 
-	// What it does to the PC now.
-	public string Harm { get; set; } = "";
+	public string Title { get; set; } = "";
 
-	// What LiteSynapse would set it back to.
-	public string Fix { get; set; } = "";
+	// What it changes, and why someone would want it.
+	public string What { get; set; } = "";
 
-	// security | performance
-	public string Kind { get; set; } = "performance";
+	// What it gives up. Empty when it gives up nothing.
+	public string Cost { get; set; } = "";
+
+	// safe | caution | risky
+	public string Risk { get; set; } = Tweaks.Safe;
+
+	// Where the setting comes from (see Tweaks.SourceText).
+	public string Source { get; set; } = "lite";
+
+	public bool NeedsReboot { get; set; }
+
+	public bool NeedsAdmin { get; set; }
+
+	// on | off | part | unknown. "part" is a setting another tool applied only halfway.
+	public string State { get; set; } = "unknown";
 }
 
 // One thing the scan found.
@@ -255,8 +220,14 @@ public sealed class ScanItem
 	// on | off | running | stopped | auto | manual | disabled
 	public string State { get; set; } = "on";
 
-	// LiteSynapse may turn this one off (a Run value, or a service on the allowlist).
+	// LiteSynapse may turn this one off (a Run value, or a service from the catalog).
 	public bool CanDisable { get; set; }
+
+	// It is off now and LiteSynapse can put it back.
+	public bool CanEnable { get; set; }
+
+	// safe | caution | risky, for services from the catalog.
+	public string Risk { get; set; } = Tweaks.Safe;
 
 	// The Run value's name, or the service name: what the turn-off step works on.
 	public string Id { get; set; } = "";
@@ -284,8 +255,8 @@ public sealed class ScanResult
 
 	public string DeliveryText { get; set; } = "";
 
-	// Harmful settings another optimizer left behind.
-	public List<BadTweak> Bad { get; set; } = new List<BadTweak>();
+	// Every Windows setting the Performance page offers, with the state it is in now.
+	public List<TweakRow> Tweaks { get; set; } = new List<TweakRow>();
 
 	public int Flagged => Items.Count(i => i.Flag.Length > 0);
 }
@@ -364,14 +335,16 @@ internal static class SystemScanner
 		});
 		try
 		{
-			r.Bad = FindBadTweaks();
+			r.Tweaks = TweakRows();
 		}
 		catch (Exception ex6)
 		{
-			Cfg.Log("scan (bad tweaks): " + ex6.Message);
+			Cfg.Log("scan (windows settings): " + ex6.Message);
 		}
 		r.Checked = true;
-		Cfg.Log($"system scan: {r.Items.Count} item(s), {r.Flagged} worth a look, {r.Bad.Count} harmful tweak(s), Defender {r.Defender}");
+		int applied = r.Tweaks.Count((TweakRow t) => t.State == "on");
+		Cfg.Log($"system scan: {r.Items.Count} item(s), {r.Flagged} worth a look, " +
+			$"{applied}/{r.Tweaks.Count} windows setting(s) on, Defender {r.Defender}");
 		return r;
 	}
 
@@ -422,6 +395,11 @@ internal static class SystemScanner
 				}
 				foreach (string name in run.GetValueNames())
 				{
+					// The key's own unnamed default value is not a start-up entry.
+					if (string.IsNullOrWhiteSpace(name))
+					{
+						continue;
+					}
 					if (list.Any((ScanItem i) => i.Id == name && i.Scope == scope))
 					{
 						continue;
@@ -495,7 +473,8 @@ internal static class SystemScanner
 			Lose = "It no longer starts by itself. You can still open it yourself.",
 			State = (state == "disabled") ? "off" : "on",
 			// Turning a Run value off is what Task Manager's Startup apps does, and only for this account.
-			CanDisable = scope == "HKCU" && state != "disabled"
+			CanDisable = scope == "HKCU" && state != "disabled",
+			CanEnable = scope == "HKCU" && state == "disabled"
 		};
 	}
 
@@ -523,7 +502,8 @@ internal static class SystemScanner
 		}
 	}
 
-	// The services on the allowlist, plus any background uploader we know by name.
+	// The services in the catalog, plus any background uploader we know by name. Each row says which start
+	// type Windows ships, so a service that is off can be put back from the same list.
 	private static List<ScanItem> ServiceItems(HashSet<string> online)
 	{
 		List<ScanItem> list = new List<ScanItem>();
@@ -534,9 +514,10 @@ internal static class SystemScanner
 		}
 		foreach (string name in services.GetSubKeyNames())
 		{
-			var optional = ScanRules.OptionalService(name);
+			ServiceCatalog.Row row = ServiceCatalog.Find(name);
 			var hog = ScanRules.NetworkHog(name);
-			if (!optional.HasValue && !hog.HasValue)
+			// A background uploader that is also one Windows must keep is reported, never offered.
+			if (row == null && (!hog.HasValue || ServiceCatalog.IsProtected(name)))
 			{
 				continue;
 			}
@@ -553,14 +534,16 @@ internal static class SystemScanner
 				list.Add(new ScanItem
 				{
 					Kind = "service",
-					Name = optional?.Title ?? (hog?.Title + " (service)"),
+					Name = row?.Title ?? (hog?.Title + " (service)"),
 					Id = name,
 					Scope = "service",
 					Path = RazerLeftovers.BinaryPath(image),
-					Costs = optional?.Costs ?? hog?.What ?? "",
-					Lose = optional?.Lose ?? "It stops running in the background.",
+					Costs = row?.Costs ?? hog?.What ?? "",
+					Lose = row?.Lose ?? "It stops running in the background.",
+					Risk = row?.Risk ?? Tweaks.Caution,
 					State = state,
-					CanDisable = optional.HasValue && start != 4,
+					CanDisable = row != null && start != 4,
+					CanEnable = row != null && start == 4,
 					Network = hog.HasValue || online.Contains(name)
 				});
 			}
@@ -571,223 +554,210 @@ internal static class SystemScanner
 		return list;
 	}
 
-	// Settings another optimizer left behind that are worth undoing. Registry only: the boot ones need
-	// administrator rights to read, so they are cleared by the repair step whether or not they are there.
-	private static List<BadTweak> FindBadTweaks()
+	// The whole catalog, each entry with the state this PC is in. Reading is registry-only and takes a few
+	// milliseconds; entries that have no registry values of their own (bcdedit, the power plan) come back as
+	// "unknown", and the window shows them without a state rather than guessing.
+	private static List<TweakRow> TweakRows()
 	{
-		List<BadTweak> bad = new List<BadTweak>();
-		int? Value(string key, string name)
+		List<TweakRow> rows = new List<TweakRow>();
+		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{
-			using RegistryKey k = Registry.LocalMachine.OpenSubKey(key);
-			return (k?.GetValue(name) is int v) ? v : null;
-		}
-		if (BadTweaks.MitigationsOff(Value(BadTweaks.MemoryManagement, "FeatureSettingsOverride"), Value(BadTweaks.MemoryManagement, "FeatureSettingsOverrideMask")))
-		{
-			bad.Add(new BadTweak
+			rows.Add(new TweakRow
 			{
-				Id = "mitigations",
-				Kind = "security",
-				Name = "CPU security fixes turned off",
-				Harm = "Windows' protection against Spectre and Meltdown has been switched off to gain a few frames. Any program on the PC can read memory it should not, including passwords.",
-				Fix = "Turn the protection back on (the Windows default)."
+				Id = t.Id,
+				Group = t.Group,
+				Title = t.Title,
+				What = t.What,
+				Cost = t.Cost,
+				Risk = t.Risk,
+				Source = t.Source,
+				NeedsReboot = t.NeedsReboot,
+				NeedsAdmin = t.NeedsAdmin,
+				State = Tweaks.StateOf(t, ReadValue)
 			});
 		}
-		if (BadTweaks.UacOff(Value(BadTweaks.PoliciesSystem, "EnableLUA")))
-		{
-			bad.Add(new BadTweak
-			{
-				Id = "uac",
-				Kind = "security",
-				Name = "User Account Control turned off",
-				Harm = "Nothing asks permission before changing the PC any more, and every program you run has full rights. It does not gain performance.",
-				Fix = "Turn User Account Control back on (needs a restart)."
-			});
-		}
-		int? sep = Value(BadTweaks.PriorityControl, "Win32PrioritySeparation");
-		if (BadTweaks.PrioritySeparationOdd(sep))
-		{
-			bad.Add(new BadTweak
-			{
-				Id = "priority",
-				Name = $"Thread priority changed (Win32PrioritySeparation = {sep})",
-				Harm = "A guide changed how Windows shares the CPU between the window in front and everything else. The values these guides use often make frame pacing worse, not better.",
-				Fix = "Put it back to 2, the Windows desktop default."
-			});
-		}
-		if (BadTweaks.QueueSizeOdd(Value(BadTweaks.MouseClass, "MouseDataQueueSize")) || BadTweaks.QueueSizeOdd(Value(BadTweaks.KeyboardClass, "KeyboardDataQueueSize")))
-		{
-			bad.Add(new BadTweak
-			{
-				Id = "queues",
-				Name = "Mouse or keyboard queue size changed",
-				Harm = "A guide made the buffer Windows uses for mouse and keyboard reports smaller. It does not lower latency, and a buffer that is too small drops input when the PC is busy.",
-				Fix = "Put both back to 100, the Windows default."
-			});
-		}
-		using (RegistryKey k = Registry.LocalMachine.OpenSubKey(BadTweaks.KernelKey))
-		{
-			if (k?.GetValue("GlobalTimerResolutionRequests") != null)
-			{
-				bad.Add(new BadTweak
-				{
-					Id = "timer",
-					Name = "Global timer resolution forced",
-					Harm = "Every program on the PC is given the 1 ms timer, which raises the timer interrupt rate and power use for everything, not just your game.",
-					Fix = "Remove the override and let each program ask for what it needs."
-				});
-			}
-		}
-		using (RegistryKey k = Registry.LocalMachine.OpenSubKey(BadTweaks.Dwm))
-		{
-			if (k?.GetValue("OverlayTestMode") != null)
-			{
-				bad.Add(new BadTweak
-				{
-					Id = "dwm",
-					Name = "Desktop compositor test mode",
-					Harm = "A debugging switch inside Windows' window compositor was left on. It is not a supported setting and can break how frames are presented.",
-					Fix = "Remove it."
-				});
-			}
-		}
-		using (RegistryKey k = Registry.LocalMachine.OpenSubKey(BadTweaks.Csrss + "\\PerfOptions"))
-		{
-			if (k != null)
-			{
-				bad.Add(new BadTweak
-				{
-					Id = "csrss",
-					Name = "csrss.exe priority changed",
-					Harm = "A guide raised the priority of a core Windows process. Starving the rest of Windows of CPU is a known cause of stutter and hangs.",
-					Fix = "Remove the override."
-				});
-			}
-		}
-		return bad;
+		return rows;
 	}
 
-	// ---- Turning things off ----------------------------------------------------------------------------
-
-	// ids: Run value names (this account) and service names from the allowlist. delivery: stop Windows
-	// uploading updates to other PCs. Returns a message for the window.
-	public static string Apply(IReadOnlyList<string> ids, bool delivery)
+	// One registry value for Tweaks.StateOf; null when the key or the value is not there, or cannot be read.
+	private static object ReadValue(Tweaks.Reg r)
 	{
-		ScanResult before = Check();
-		List<ScanItem> wanted = before.Items
-			.Where((ScanItem i) => i.CanDisable && ids != null && ids.Contains(i.Id, StringComparer.OrdinalIgnoreCase))
-			.ToList();
-		if (wanted.Count == 0 && !delivery)
+		try
+		{
+			RegistryKey root = (r.Hive == "HKCU") ? Registry.CurrentUser : Registry.LocalMachine;
+			using RegistryKey k = root.OpenSubKey(r.Key);
+			return k?.GetValue(r.Name, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+		}
+		catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+		{
+			return null;
+		}
+	}
+
+	// ---- Turning things on and off --------------------------------------------------------------------
+
+	// One call for everything the Performance page can change: start-up entries, services and Windows
+	// settings, each with its own on/off. Only what the user ticked is touched - there is no "apply all".
+	//
+	// Start-up entries are this account's own (Task Manager's switch, no elevation). Services and settings go
+	// into one elevated script, so the whole selection costs at most one consent prompt.
+	public static string Apply(IReadOnlyList<(string Id, bool On)> choices)
+	{
+		if (choices == null || choices.Count == 0)
 		{
 			return "Nothing was selected.";
 		}
+		ScanResult before = Check();
 		List<string> done = new List<string>();
-		// Start-up entries belong to this account: Task Manager's own switch, no administrator rights.
-		foreach (ScanItem item in wanted.Where((ScanItem i) => i.Kind == "startup"))
+		List<string> refused = new List<string>();
+		bool reboot = false;
+
+		// Start-up entries: this account only, no administrator rights needed.
+		foreach ((string id, bool on) in choices)
 		{
+			ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
+				i.Kind == "startup" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+			if (item == null || string.IsNullOrWhiteSpace(item.Id) || (on ? !item.CanEnable : !item.CanDisable))
+			{
+				continue;
+			}
 			try
 			{
-				StartupApproved.Disable(item.Id);
-				done.Add(item.Name);
-				Cfg.Log("system scan: start-up \"" + item.Id + "\" turned off");
+				if (on)
+				{
+					StartupApproved.Enable(item.Id);
+				}
+				else
+				{
+					StartupApproved.Disable(item.Id);
+				}
+				done.Add(item.Name + (on ? " (on)" : " (off)"));
+				Cfg.Log($"system scan: start-up \"{item.Id}\" turned {(on ? "on" : "off")}");
 			}
 			catch (Exception ex)
 			{
 				Cfg.Log("system scan (startup " + item.Id + "): " + ex.Message);
+				refused.Add(item.Name);
 			}
 		}
-		List<string> svc = wanted.Where((ScanItem i) => i.Kind == "service").Select((ScanItem i) => i.Id).ToList();
-		if (svc.Count > 0 || delivery)
+
+		// Services and Windows settings: one elevated script for the lot.
+		List<(string Service, bool On)> svc = new List<(string, bool)>();
+		List<(string Id, bool On)> tweaks = new List<(string, bool)>();
+		foreach ((string id, bool on) in choices)
+		{
+			ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
+				i.Kind == "service" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+			if (item != null && (on ? item.CanEnable : item.CanDisable))
+			{
+				svc.Add((item.Id, on));
+				done.Add(item.Name + (on ? " (on)" : " (off)"));
+				continue;
+			}
+			Tweaks.Tweak t = Tweaks.Find(id);
+			if (t != null)
+			{
+				tweaks.Add((t.Id, on));
+				done.Add(t.Title + (on ? " (on)" : " (off)"));
+				reboot |= t.NeedsReboot;
+			}
+		}
+		// Settings that live in this account's own registry need no administrator rights, and the mouse ones
+		// are the ones the user will flip most often: those run without a consent prompt.
+		List<(string Id, bool On)> local = tweaks
+			.Where(((string Id, bool On) c) => Tweaks.Find(c.Id)?.NeedsAdmin == false)
+			.ToList();
+		List<(string Id, bool On)> elevated = tweaks
+			.Where(((string Id, bool On) c) => Tweaks.Find(c.Id)?.NeedsAdmin != false)
+			.ToList();
+		if (local.Count > 0)
 		{
 			try
 			{
-				int code = RazerLeftovers.RunElevated(Script(svc, delivery), 60000);
-				Cfg.Log($"system scan: {svc.Count} service(s){(delivery ? " + delivery optimization" : "")} -> exit code {code}");
-				done.AddRange(wanted.Where((ScanItem i) => i.Kind == "service").Select((ScanItem i) => i.Name));
-				if (delivery)
+				RazerLeftovers.RunPowerShell(Tweaks.Script(local), 60000, out int lcode);
+				Cfg.Log($"system scan: {local.Count} setting(s) for this account -> exit code {lcode}");
+				if (lcode > 0)
 				{
-					done.Add("Windows Update uploading to other PCs");
+					refused.Add($"{lcode} step(s) Windows would not apply");
 				}
 			}
-			catch (Win32Exception ex2) when (ex2.NativeErrorCode == 1223)
+			catch (Exception ex0)
 			{
-				return Report(done, "The services were not changed: Windows did not get administrator permission.");
-			}
-			catch (Exception ex3)
-			{
-				Cfg.Log("system scan: " + ex3.Message);
-				return Report(done, "Could not finish: " + ex3.Message);
+				Cfg.Log("system scan (this account): " + ex0.Message);
+				refused.Add("the settings for this account");
 			}
 		}
-		return Report(done, null);
+		if (svc.Count > 0 || elevated.Count > 0)
+		{
+			string script = Combine(ServiceCatalog.Script(svc), Tweaks.Script(elevated));
+			try
+			{
+				int code = RazerLeftovers.RunElevated(script, 180000);
+				Cfg.Log($"system scan: {svc.Count} service(s), {elevated.Count} windows setting(s) -> exit code {code}");
+				if (code > 0)
+				{
+					refused.Add($"{code} step(s) Windows would not apply");
+				}
+			}
+			catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+			{
+				return "Cancelled: Windows did not get administrator permission, so " +
+					(done.Count > 0 ? "only the changes that do not need it were made." : "nothing was changed.");
+			}
+			catch (Exception ex2)
+			{
+				Cfg.Log("system scan: " + ex2.Message);
+				return "Could not finish: " + ex2.Message;
+			}
+		}
+		return Report(done, refused, reboot);
 	}
 
-	private static string Report(List<string> done, string problem)
+	// Two scripts into one, so the whole selection costs a single consent prompt. Each half counts its own
+	// failures into $failed and the exit code carries the total.
+	private static string Combine(string first, string second)
+	{
+		string a = Strip(first);
+		string b = Strip(second);
+		return "$failed = 0\n" + a + b + "exit $failed\n";
+	}
+
+	private static string Strip(string script)
+	{
+		string body = script ?? "";
+		const string head = "$failed = 0\n";
+		if (body.StartsWith(head, StringComparison.Ordinal))
+		{
+			body = body.Substring(head.Length);
+		}
+		const string tail = "exit $failed\n";
+		if (body.EndsWith(tail, StringComparison.Ordinal))
+		{
+			body = body.Substring(0, body.Length - tail.Length);
+		}
+		return body;
+	}
+
+	private static string Report(List<string> done, List<string> refused, bool reboot)
 	{
 		List<string> parts = new List<string>();
 		if (done.Count > 0)
 		{
-			parts.Add("Turned off: " + string.Join(", ", done) + ".");
+			parts.Add("Changed: " + string.Join(", ", done) + ".");
 		}
-		if (problem != null)
+		if (refused.Count > 0)
 		{
-			parts.Add(problem);
+			parts.Add("Not changed: " + string.Join(", ", refused) + ".");
 		}
 		if (parts.Count == 0)
 		{
 			return "Nothing was changed.";
 		}
-		parts.Add("Sign out and back in for the start-up changes to take effect.");
+		if (reboot)
+		{
+			parts.Add("Restart the PC for all of it to take effect.");
+		}
 		return string.Join(" ", parts);
-	}
-
-	// Disabled, then stopped, so nothing starts them again in between.
-	internal static string Script(IReadOnlyList<string> services, bool delivery)
-	{
-		StringBuilder sb = new StringBuilder();
-		sb.Append("$failed = 0\n");
-		if (services != null && services.Count > 0)
-		{
-			sb.Append("$names = @(" + string.Join(", ", services.Select(RazerLeftovers.Ps)) + ")\n");
-			sb.Append("foreach ($n in $names) { sc.exe config $n start= disabled | Out-Null; if ($LASTEXITCODE -ne 0) { $failed++ }; sc.exe stop $n | Out-Null }\n");
-		}
-		if (delivery)
-		{
-			// 0 = download from Microsoft only, so Windows never uploads updates to other PCs.
-			sb.Append("New-Item -Path 'HKLM:\\" + DeliveryPolicy.Replace("\\", "\\\\") + "' -Force -ErrorAction SilentlyContinue | Out-Null\n");
-			sb.Append("New-ItemProperty -Path 'HKLM:\\" + DeliveryPolicy.Replace("\\", "\\\\") + "' -Name 'DODownloadMode' -PropertyType DWord -Value 0 -Force -ErrorAction SilentlyContinue | Out-Null\n");
-		}
-		sb.Append("exit $failed\n");
-		return sb.ToString();
-	}
-
-	// Puts the chosen harmful settings back to their Windows default (one UAC prompt). The boot overrides are
-	// always cleared when "boot" is asked for, because reading them needs administrator rights anyway.
-	public static string Repair(IReadOnlyList<string> ids)
-	{
-		if (ids == null || ids.Count == 0)
-		{
-			return "Nothing was selected.";
-		}
-		try
-		{
-			int code = RazerLeftovers.RunElevated(BadTweaks.Script(ids), 60000);
-			Cfg.Log($"bad tweaks repair: {string.Join(", ", ids)} -> exit code {code}");
-			ScanResult after = Check();
-			List<string> left = after.Bad.Where((BadTweak b) => ids.Contains(b.Id, StringComparer.OrdinalIgnoreCase)).Select((BadTweak b) => b.Name).ToList();
-			string msg = (left.Count == 0)
-				? "Put back to the Windows default. "
-				: "Still set: " + string.Join(", ", left) + ". ";
-			return msg + "Restart the PC so Windows picks all of it up.";
-		}
-		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
-		{
-			return "Cancelled: Windows did not get administrator permission, so nothing was changed.";
-		}
-		catch (Exception ex2)
-		{
-			Cfg.Log("bad tweaks repair: " + ex2.Message);
-			return "Could not run the repair: " + ex2.Message;
-		}
 	}
 
 	// Asks Microsoft Defender to scan one file or folder. LiteSynapse never judges a file itself.
@@ -894,147 +864,5 @@ internal static class SystemScanner
 			}
 			return map;
 		}
-	}
-}
-
-// Settings that popular "optimizer" guides apply and that make a PC slower, less stable or less safe. Putting
-// them back to the Windows default is the fix; every one here is a documented Windows setting.
-//
-// LiteSynapse never sets any of these: it only finds them and offers to undo them.
-internal static class BadTweaks
-{
-	internal const string MemoryManagement = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management";
-
-	internal const string PriorityControl = "SYSTEM\\CurrentControlSet\\Control\\PriorityControl";
-
-	internal const string KernelKey = "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel";
-
-	internal const string PoliciesSystem = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System";
-
-	internal const string MouseClass = "SYSTEM\\CurrentControlSet\\Services\\mouclass\\Parameters";
-
-	internal const string KeyboardClass = "SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters";
-
-	internal const string Dwm = "SOFTWARE\\Microsoft\\Windows\\Dwm";
-
-	internal const string Csrss = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\csrss.exe";
-
-	// The boot settings a guide may have forced. Modern CPUs keep better time on their own; forcing these makes
-	// timing worse and can cost frames.
-	internal static readonly string[] BootOverrides = new string[4]
-	{
-		"useplatformclock", "useplatformtick", "disabledynamictick", "tscsyncpolicy"
-	};
-
-	// ---- Pure helpers (tested) -------------------------------------------------------------------------
-
-	// Win32PrioritySeparation: 2 is the Windows desktop default ("Programs"). Guides set 26, 38 and the like.
-	internal static bool PrioritySeparationOdd(int? value)
-	{
-		return value.HasValue && value.Value != 2;
-	}
-
-	// mouclass / kbdclass queue size: 100 is the Windows default. Guides lower it claiming less latency, with
-	// no evidence, and a too-small queue drops input under load.
-	internal static bool QueueSizeOdd(int? value)
-	{
-		return value.HasValue && value.Value != 100;
-	}
-
-	// FeatureSettingsOverride turns the CPU vulnerability mitigations (Spectre, Meltdown) off.
-	internal static bool MitigationsOff(int? over, int? mask)
-	{
-		return over.HasValue || mask.HasValue;
-	}
-
-	// EnableLUA 0 turns User Account Control off: no more "do you want to allow" prompts, and every program
-	// the user runs gets full rights.
-	internal static bool UacOff(int? enableLua)
-	{
-		return enableLua.HasValue && enableLua.Value == 0;
-	}
-
-	// netsh output for "Receive Window Auto-Tuning Level". Anything but normal slows real downloads down.
-	internal static bool AutoTuningBroken(string netshOutput)
-	{
-		if (string.IsNullOrWhiteSpace(netshOutput))
-		{
-			return false;
-		}
-		foreach (string line in netshOutput.Split('\n'))
-		{
-			if (line.IndexOf("Auto-Tuning Level", StringComparison.OrdinalIgnoreCase) >= 0)
-			{
-				return line.IndexOf("normal", StringComparison.OrdinalIgnoreCase) < 0;
-			}
-		}
-		return false;
-	}
-
-	// The elevated repair. Every step puts a Windows default back; nothing new is turned on.
-	internal static string Script(IReadOnlyList<string> ids)
-	{
-		StringBuilder sb = new StringBuilder();
-		sb.Append("$failed = 0\n");
-		bool Has(string id) => ids != null && ids.Contains(id, StringComparer.OrdinalIgnoreCase);
-		if (Has("boot"))
-		{
-			// A value that is not set makes bcdedit complain; that is fine and must not count as a failure.
-			foreach (string v in BootOverrides)
-			{
-				sb.Append("bcdedit.exe /deletevalue " + v + " 2>$null | Out-Null\n");
-			}
-		}
-		if (Has("mitigations"))
-		{
-			sb.Append(Remove(MemoryManagement, "FeatureSettingsOverride"));
-			sb.Append(Remove(MemoryManagement, "FeatureSettingsOverrideMask"));
-		}
-		if (Has("uac"))
-		{
-			sb.Append(Set(PoliciesSystem, "EnableLUA", 1));
-		}
-		if (Has("priority"))
-		{
-			sb.Append(Set(PriorityControl, "Win32PrioritySeparation", 2));
-		}
-		if (Has("queues"))
-		{
-			sb.Append(Set(MouseClass, "MouseDataQueueSize", 100));
-			sb.Append(Set(KeyboardClass, "KeyboardDataQueueSize", 100));
-		}
-		if (Has("timer"))
-		{
-			sb.Append(Remove(KernelKey, "GlobalTimerResolutionRequests"));
-		}
-		if (Has("dwm"))
-		{
-			sb.Append(Remove(Dwm, "OverlayTestMode"));
-		}
-		if (Has("csrss"))
-		{
-			sb.Append("Remove-Item -Path 'HKLM:\\" + Csrss + "\\PerfOptions' -Recurse -Force -ErrorAction SilentlyContinue | Out-Null\n");
-		}
-		if (Has("autotuning"))
-		{
-			sb.Append("netsh.exe interface tcp set global autotuninglevel=normal | Out-Null\n");
-			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
-		}
-		sb.Append("exit $failed\n");
-		return sb.ToString();
-	}
-
-	private static string Set(string key, string name, int value)
-	{
-		string path = "HKLM:\\" + key;
-		return "try { New-Item -Path " + RazerLeftovers.Ps(path) + " -Force -ErrorAction Stop | Out-Null; " +
-			"New-ItemProperty -Path " + RazerLeftovers.Ps(path) + " -Name " + RazerLeftovers.Ps(name) +
-			" -PropertyType DWord -Value " + value + " -Force -ErrorAction Stop | Out-Null } catch { $failed++ }\n";
-	}
-
-	private static string Remove(string key, string name)
-	{
-		return "Remove-ItemProperty -Path " + RazerLeftovers.Ps("HKLM:\\" + key) + " -Name " + RazerLeftovers.Ps(name) +
-			" -Force -ErrorAction SilentlyContinue | Out-Null\n";
 	}
 }

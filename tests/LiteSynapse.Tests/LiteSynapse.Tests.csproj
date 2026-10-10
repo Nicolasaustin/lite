@@ -41,14 +41,16 @@
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\StartupApproved.cs" Link="App\StartupApproved.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\DeviceTuning.cs" Link="App\DeviceTuning.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\SystemScan.cs" Link="App\SystemScan.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\ServiceCatalog.cs" Link="App\ServiceCatalog.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\LiveProfile.cs" Link="App\LiveProfile.cs" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Window bridge: message parsing, State JSON shape and the profile edits behind the commands. -->
-    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\WebProtocol.cs" Link="App\WebProtocol.cs" />
-    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\WebState.cs" Link="App\WebState.cs" />
-    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\WebOps.cs" Link="App\WebOps.cs" />
+    <!-- The edits the window makes to the stored model, the window's own preferences, and the catalog of
+         Windows settings the Performance page offers. -->
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\OpError.cs" Link="App\OpError.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\ProfileOps.cs" Link="App\ProfileOps.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\UiPrefs.cs" Link="App\UiPrefs.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Tweaks.cs" Link="App\Tweaks.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

@@ -70,7 +70,7 @@ internal static class Program
 		if (args.Length >= 1 && args[0] == "testall")
 		{
 			AttachConsole(-1);
-			// While this is held, a running LiteSynapse leaves the devices alone (Bridge.RunSelfTest).
+			// While this is held, a running LiteSynapse leaves the devices alone (Service.BeginSelfTest).
 			using Mutex selfTest = new Mutex(initiallyOwned: true, SelfTestMutex, out bool owned);
 			try
 			{

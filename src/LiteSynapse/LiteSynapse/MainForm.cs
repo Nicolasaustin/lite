@@ -356,6 +356,12 @@ internal class MainForm : Form
 		}
 	}
 
+	// The Performance tab's index in the top bar (the tray's "Performance" opens it).
+	public const int PagePerf = 6;
+
+	// Built on demand: its five pages read the PC, so nothing happens until the tab is opened.
+	private PerfPage perf;
+
 	private static Panel Page()
 	{
 		//IL_0000: Unknown result type (might be due to invalid IL or missing references)
@@ -769,14 +775,15 @@ internal class MainForm : Form
 		base.ForeColor = Theme.Text;
 		base.Font = Theme.F(10f, (FontStyle)0);
 		base.DoubleBuffered = true;
-		top.Items = new (string, string)[6]
+		top.Items = new (string, string)[7]
 		{
 			("Synapse", "S"),
 			("Macro", "M"),
 			("Linked Games", "G"),
 			("Naga Left-Handed Edition", "N"),
 			("BlackWidow Lite", "B"),
-			("Settings", "⚙")
+			("Settings", "⚙"),
+			("Performance", "P")
 		};
 		string tabsFile = Path.Combine(Cfg.Dir, "tabs.json");
 		top.Order = Cfg.Load<List<int>>(tabsFile);
@@ -908,11 +915,15 @@ internal class MainForm : Form
 		{
 			3 => new string[4] { "CUSTOMIZE", "PERFORMANCE", "LIGHTING", "CALIBRATION" }, 
 			4 => new string[3] { "CUSTOMIZE", "PERFORMANCE", "LIGHTING" }, 
+			PagePerf => PerfPage.Pills, 
 			_ => Array.Empty<string>(), 
 		};
 		pills.Selected = 0;
 		((Control)pills).Invalidate();
-		((Control)bar).Visible = IsDevice;
+		((Control)bar).Visible = IsDevice || top.Selected == PagePerf;
+		// The profile picker and the on-board memory button belong to a device page only.
+		((Control)cbProfile).Visible = IsDevice;
+		((Control)btnMore).Visible = IsDevice;
 		((Control)bar).Width = ((Control)bar).Width;
 		((Control)pills).SetBounds((((Control)bar).Width - pills.TotalWidth()) / 2, 8, pills.TotalWidth() + 2, 34);
 		Label val = lblTitle;
@@ -923,18 +934,25 @@ internal class MainForm : Form
 			2 => "LINKED GAMES", 
 			3 => "RAZER NAGA LEFT-HANDED EDITION", 
 			4 => "RAZER BLACKWIDOW LITE", 
+			PagePerf => "PERFORMANCE", 
 			_ => "SETTINGS", 
 		};
 	}
 
 	private void ShowPage()
 	{
+		if (top.Selected == PagePerf)
+		{
+			// First time in: build the five pages. Nothing is read from the PC until one of them is shown.
+			perf ??= new PerfPage(app, (Form)(object)this);
+		}
 		Panel page = top.Selected switch
 		{
 			0 => pHome, 
 			1 => pMacro, 
 			2 => pGames, 
 			5 => pSettings, 
+			PagePerf => perf.Page(pills.Selected), 
 			3 => pills.Selected switch
 			{
 				0 => pNagaCustom, 
@@ -957,6 +975,11 @@ internal class MainForm : Form
 		((Control)memPanel).Hide();
 		((Control)assign).Location = new Point(24, 12);
 		((Control)memBtn).Visible = IsMouse;
+		if (top.Selected == PagePerf)
+		{
+			perf.Show(pills.Selected);
+			return;
+		}
 		LoadAll();
 	}
 
