@@ -69,19 +69,23 @@ internal static class DeviceTuning
 		{
 			return null;
 		}
+		bool unknown = enable == "?";
 		bool? on = enable.Equals("True", StringComparison.OrdinalIgnoreCase) ? true
 			: (enable.Equals("False", StringComparison.OrdinalIgnoreCase) ? false : (bool?)null);
-		if (!on.HasValue)
+		if (!on.HasValue && !unknown)
 		{
 			return null;
 		}
 		string name = (parts.Length > 2) ? parts[2].Trim() : "";
+		// "USB Input Device" three times over says nothing about which device it is; lead with ours.
+		string known = Describe(instance);
 		return new TunedDevice
 		{
 			Instance = instance,
-			Name = (name.Length > 0) ? name : Describe(instance),
+			Name = (name.Length == 0 || name == known) ? known : (known + " - " + name),
 			// MSPower_DeviceEnable.Enable true = Windows is allowed to turn the device off to save power.
-			PowerSaving = on.Value
+			PowerSaving = on ?? false,
+			Known = !unknown
 		};
 	}
 
@@ -135,7 +139,49 @@ internal static class DeviceTuning
 		"  $n = ''\n" +
 		"  try { $n = (Get-PnpDevice -InstanceId $id -ErrorAction SilentlyContinue).FriendlyName } catch { }\n" +
 		"  \"$($x.Enable)|$($x.InstanceName)|$n\"\n" +
+		"}\n" +
+		// Without administrator rights root\WMI says nothing, but Plug and Play will still list the devices.
+		// They are shown with their state unknown ("?") instead of not at all, so the page can still offer
+		// the change - which runs elevated anyway, and reads the real state back as it does.
+		"if ($ok -eq 0) {\n" +
+		"  try {\n" +
+		"    foreach ($p in @(Get-PnpDevice -PresentOnly -ErrorAction Stop | Where-Object { $_.InstanceId -like 'USB\\VID_1532*' })) {\n" +
+		"      \"?|$($p.InstanceId)|$($p.FriendlyName)\"\n" +
+		"    }\n" +
+		"  } catch { }\n" +
 		"}\n";
+
+	// Where the elevated steps leave what they read with administrator rights, so the page can show it
+	// afterwards: the unelevated query cannot read root\WMI, and before this the Device page never showed a
+	// device at all on an ordinary account - so there was never anything to tick.
+	public static string SnapshotFile => System.IO.Path.Combine(Cfg.Dir, "device-power.txt");
+
+	// The query, run inside an elevated script, with its output written to a file instead of the console
+	// (an elevated process started through UAC has no console the app can read).
+	internal static string QueryToFile(string file)
+	{
+		return "& {\n" + QueryScript + "} | Set-Content -LiteralPath " + RazerLeftovers.Ps(file) +
+			" -Encoding UTF8 -ErrorAction SilentlyContinue\n";
+	}
+
+	// The change and the read-back in one elevated run, so the result is known without a second prompt.
+	internal static string ApplyScript(IEnumerable<string> instances, bool powerPlan, bool allowPowerSaving, string file)
+	{
+		const string tail = "exit $failed\n";
+		string body = Script(instances, powerPlan, allowPowerSaving);
+		if (body.EndsWith(tail, StringComparison.Ordinal))
+		{
+			body = body.Substring(0, body.Length - tail.Length);
+		}
+		return body + QueryToFile(file) + tail;
+	}
+
+	// A WMI InstanceName without its power-management suffix, so it compares equal to the Plug and Play
+	// instance id the unelevated listing returns.
+	internal static string Normalize(string instance)
+	{
+		return System.Text.RegularExpressions.Regex.Replace(instance ?? "", "_\\d+$", "");
+	}
 
 	// The READABLE line: true when the WMI query itself ran, false when it was refused. null for any other
 	// line, so the caller can tell "not this line" from "it said no".
@@ -148,6 +194,60 @@ internal static class DeviceTuning
 		return line.Trim().EndsWith("|1", StringComparison.Ordinal);
 	}
 
+	// The query's output as devices. Not readable unless the READABLE line said so.
+	internal static DeviceTuningState Parse(string output)
+	{
+		DeviceTuningState s = new DeviceTuningState();
+		foreach (string line in (output ?? "").Split('\n'))
+		{
+			bool? readable = ParseReadable(line.TrimStart('\uFEFF'));
+			if (readable.HasValue)
+			{
+				s.Readable = readable.Value;
+				continue;
+			}
+			TunedDevice d = ParseDevice(line);
+			if (d != null && !s.Devices.Any((TunedDevice x) => string.Equals(Normalize(x.Instance), Normalize(d.Instance), StringComparison.OrdinalIgnoreCase)))
+			{
+				s.Devices.Add(d);
+			}
+		}
+		return s;
+	}
+
+	// Fills in what an unelevated read could not see from the last read made with administrator rights.
+	// Devices are matched on their instance id, so a device plugged in since then stays unknown rather than
+	// borrowing another one's state.
+	internal static void Merge(DeviceTuningState s, DeviceTuningState admin, DateTime adminAtUtc)
+	{
+		if (s == null || admin == null || !admin.Readable)
+		{
+			return;
+		}
+		if (s.Devices.Count == 0)
+		{
+			s.Devices.AddRange(admin.Devices);
+		}
+		else
+		{
+			foreach (TunedDevice d in s.Devices.Where((TunedDevice x) => !x.Known))
+			{
+				TunedDevice a = admin.Devices.FirstOrDefault((TunedDevice x) =>
+					string.Equals(Normalize(x.Instance), Normalize(d.Instance), StringComparison.OrdinalIgnoreCase));
+				if (a != null)
+				{
+					d.PowerSaving = a.PowerSaving;
+					d.Known = true;
+					// Keep the WMI name: it is the one the elevated step matches on.
+					d.Instance = a.Instance;
+				}
+			}
+			// What Plug and Play lists but WMI has no power switch for (a HID child, say) has nothing to change.
+			s.Devices.RemoveAll((TunedDevice x) => !x.Known && admin.Devices.Count > 0);
+		}
+		s.AdminAtUtc = adminAtUtc;
+	}
+
 	public static DeviceTuningState Check()
 	{
 		DeviceTuningState s = new DeviceTuningState();
@@ -155,19 +255,20 @@ internal static class DeviceTuning
 		{
 			string output = RazerLeftovers.RunPowerShell(QueryScript, 20000, out int code);
 			// The script could not even be started (or timed out): nothing is known either way.
-			s.Readable = false;
-			foreach (string line in (output ?? "").Split('\n'))
+			s = Parse(output);
+			if (!s.Readable)
 			{
-				bool? readable = ParseReadable(line);
-				if (readable.HasValue)
+				try
 				{
-					s.Readable = readable.Value;
-					continue;
+					string file = SnapshotFile;
+					if (System.IO.File.Exists(file))
+					{
+						Merge(s, Parse(System.IO.File.ReadAllText(file)), System.IO.File.GetLastWriteTimeUtc(file));
+					}
 				}
-				TunedDevice d = ParseDevice(line);
-				if (d != null && !s.Devices.Any((TunedDevice x) => x.Instance == d.Instance))
+				catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
 				{
-					s.Devices.Add(d);
+					Cfg.Log("device tuning (last admin read): " + ex.Message);
 				}
 			}
 			if (code != 0)
@@ -238,14 +339,16 @@ internal static class DeviceTuning
 			{
 				continue;
 			}
-			string q = RazerLeftovers.Ps(instance);
+			// Compared without the power-management suffix, so an id from the unelevated Plug and Play listing
+			// finds its WMI instance too.
+			string q = RazerLeftovers.Ps(Normalize(instance));
 			// Both checkboxes on the Power Management tab: may Windows turn the device off, and may the device
 			// wake the PC. A device that cannot be turned off cannot wake anything either, so they move together.
 			foreach (string cls in new[] { "MSPower_DeviceEnable", "MSPower_DeviceWakeEnable" })
 			{
 				sb.Append("try {\n");
 				sb.Append($"  $i = Get-CimInstance -Namespace root/WMI -ClassName {cls} -ErrorAction Stop | " +
-					$"Where-Object {{ $_.InstanceName -eq {q} }}\n");
+					$"Where-Object {{ ($_.InstanceName -replace '_\\d+$', '') -eq {q} }}\n");
 				sb.Append($"  if ($i) {{ $i | Set-CimInstance -Property @{{ Enable = {want} }} -ErrorAction Stop }}\n");
 				sb.Append("} catch { $failed++ }\n");
 			}
@@ -274,7 +377,7 @@ internal static class DeviceTuning
 		}
 		try
 		{
-			int code = RazerLeftovers.RunElevated(Script(instances, powerPlan, !keepAwake), 60000);
+			int code = RazerLeftovers.RunElevated(ApplyScript(instances, powerPlan, !keepAwake, SnapshotFile), 60000);
 			Cfg.Log($"device tuning: {instances?.Count ?? 0} device(s), power plan {(powerPlan ? "yes" : "no")}, " +
 				$"keep awake {keepAwake} -> exit code {code}");
 			DeviceTuningState after = Check();
@@ -295,6 +398,27 @@ internal static class DeviceTuning
 		}
 	}
 
+	// Reads the devices with administrator rights (one UAC prompt), for an account the unelevated query
+	// cannot answer for.
+	public static string CheckElevated()
+	{
+		try
+		{
+			int code = RazerLeftovers.RunElevated("$failed = 0\n" + QueryToFile(SnapshotFile) + "exit $failed\n", 60000);
+			Cfg.Log($"device tuning: read as administrator -> exit code {code}");
+			return Summary(Check());
+		}
+		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+		{
+			return "Cancelled: Windows did not get administrator permission, so nothing was read.";
+		}
+		catch (Exception ex2)
+		{
+			Cfg.Log("device tuning: " + ex2.Message);
+			return "Could not read it: " + ex2.Message;
+		}
+	}
+
 	internal static string Summary(DeviceTuningState s)
 	{
 		if (s == null || s.Devices.Count == 0)
@@ -305,7 +429,12 @@ internal static class DeviceTuning
 				? "Windows would not let LiteSynapse read the devices' power settings. Start LiteSynapse as administrator and try again."
 				: "No Razer device answered. Plug the mouse in and check again.";
 		}
-		int sleeping = s.Devices.Count((TunedDevice d) => d.PowerSaving);
+		if (s.Devices.All((TunedDevice d) => !d.Known))
+		{
+			return "Windows lists the devices but will not say how they are set without administrator rights. " +
+				"Press Check as admin, or just switch them: the change reads them back when it runs.";
+		}
+		int sleeping = s.Devices.Count((TunedDevice d) => d.Known && d.PowerSaving);
 		if (sleeping == 0)
 		{
 			return (s.Devices.Count == 1)
@@ -324,8 +453,11 @@ public sealed class TunedDevice
 
 	public string Name { get; set; }
 
-	// Windows is allowed to turn this device off to save power.
+	// Windows is allowed to turn this device off to save power. Meaningless when Known is false.
 	public bool PowerSaving { get; set; }
+
+	// False when only Plug and Play listed it and nothing with administrator rights has read it yet.
+	public bool Known { get; set; } = true;
 }
 
 public sealed class DeviceTuningState
@@ -341,6 +473,10 @@ public sealed class DeviceTuningState
 	// The active power plan's USB selective suspend: on | off | unknown.
 	public string UsbSuspend { get; set; } = "unknown";
 
+	// When the device states came from the last read made with administrator rights (UTC), or null when
+	// they were read just now.
+	public DateTime? AdminAtUtc { get; set; }
+
 	// Something here would keep the mouse awake if it were changed.
-	public bool NeedsWork => Devices.Any((TunedDevice d) => d.PowerSaving) || UsbSuspend == "on";
+	public bool NeedsWork => Devices.Any((TunedDevice d) => d.Known && d.PowerSaving) || UsbSuspend == "on";
 }

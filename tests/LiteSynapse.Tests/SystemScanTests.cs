@@ -683,7 +683,9 @@ public class DeviceTuningTests
 		TunedDevice d = DeviceTuning.ParseDevice("True|USB\\VID_1532&PID_008D\\6&x&0&3_0|Razer Naga");
 		Assert.NotNull(d);
 		Assert.True(d.PowerSaving);
-		Assert.Equal("Razer Naga", d.Name);
+		Assert.True(d.Known);
+		// Led by which of our devices it is, then what Windows calls it.
+		Assert.Equal("Razer Naga Left-Handed Edition - Razer Naga", d.Name);
 		Assert.Equal("USB\\VID_1532&PID_008D\\6&x&0&3_0", d.Instance);
 		// No friendly name: one is made from the product id rather than shown blank.
 		TunedDevice e = DeviceTuning.ParseDevice("False|USB\\VID_1532&PID_0235\\x_0|");
@@ -748,8 +750,63 @@ public class DeviceTuningTests
 		Assert.Contains("MSPower_DeviceWakeEnable", script);
 		Assert.Contains("Enable = $false", script);
 		Assert.DoesNotContain("Enable = $true", script);
-		// The instance name is quoted and matched exactly, not used as a pattern.
-		Assert.Contains("-eq 'USB\\VID_1532&PID_008D\\x_0'", script);
+		// The instance name is quoted and matched exactly, not used as a pattern - without the power-management
+		// suffix on either side, so a Plug and Play id finds its WMI instance.
+		Assert.Contains("-replace '_\\d+$', '') -eq 'USB\\VID_1532&PID_008D\\x'", script);
+	}
+
+	[Fact]
+	public void WithoutAdminRightsTheDevicesAreStillListedAsUnknown()
+	{
+		// The unelevated query cannot read root\WMI; Plug and Play still lists the devices, with "?" for the state.
+		Assert.Contains("Get-PnpDevice", DeviceTuning.QueryScript);
+		TunedDevice d = DeviceTuning.ParseDevice("?|USB\\VID_1532&PID_008D\\6&x&0&3|USB Composite Device");
+		Assert.NotNull(d);
+		Assert.False(d.Known);
+		Assert.Equal("Razer Naga Left-Handed Edition - USB Composite Device", d.Name);
+		DeviceTuningState s = DeviceTuning.Parse("READABLE|0\n?|USB\\VID_1532&PID_008D\\6&x&0&3|USB Composite Device\n");
+		Assert.False(s.Readable);
+		Assert.Single(s.Devices);
+		Assert.False(s.NeedsWork);
+		Assert.Contains("administrator", DeviceTuning.Summary(s));
+	}
+
+	[Fact]
+	public void TheLastAdminReadFillsInWhatTheUnelevatedReadCouldNot()
+	{
+		DeviceTuningState now = DeviceTuning.Parse("READABLE|0\n?|USB\\VID_1532&PID_008D\\6&x&0&3|\n?|USB\\VID_1532&PID_0235\\5&y|\n");
+		// The admin read names its WMI instances with the suffix, and in another case.
+		DeviceTuningState admin = DeviceTuning.Parse("\uFEFFREADABLE|1\nTrue|usb\\vid_1532&pid_008d\\6&X&0&3_0|Naga\nFalse|USB\\VID_1532&PID_0235\\5&y_0|\n");
+		Assert.True(admin.Readable);
+		DateTime at = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc);
+		DeviceTuning.Merge(now, admin, at);
+		Assert.Equal(2, now.Devices.Count);
+		Assert.All(now.Devices, (TunedDevice x) => Assert.True(x.Known));
+		Assert.True(now.Devices[0].PowerSaving);
+		Assert.False(now.Devices[1].PowerSaving);
+		// The elevated step matches on the WMI name, so that is the one kept.
+		Assert.EndsWith("_0", now.Devices[0].Instance);
+		Assert.Equal(at, now.AdminAtUtc);
+		Assert.True(now.NeedsWork);
+		// An admin read that itself failed adds nothing.
+		DeviceTuningState again = DeviceTuning.Parse("READABLE|0\n?|USB\\VID_1532&PID_008D\\6&x&0&3|\n");
+		DeviceTuning.Merge(again, DeviceTuning.Parse("READABLE|0\n"), at);
+		Assert.False(again.Devices[0].Known);
+		Assert.Null(again.AdminAtUtc);
+	}
+
+	[Fact]
+	public void TheChangeReadsTheDevicesBackInTheSameElevatedRun()
+	{
+		string script = DeviceTuning.ApplyScript(new[] { "USB\\VID_1532&PID_008D\\x_0" }, powerPlan: true,
+			allowPowerSaving: false, "C:\\Users\\me\\AppData\\Roaming\\LiteSynapse\\device-power.txt");
+		Assert.StartsWith("$failed = 0\n", script);
+		Assert.EndsWith("exit $failed\n", script);
+		Assert.Contains("Set-CimInstance", script);
+		// The read-back comes after the change, and goes to the file.
+		Assert.True(script.IndexOf("Set-CimInstance", StringComparison.Ordinal) < script.IndexOf("READABLE|$ok", StringComparison.Ordinal));
+		Assert.Contains("Set-Content -LiteralPath 'C:\\Users\\me\\AppData\\Roaming\\LiteSynapse\\device-power.txt'", script);
+		Assert.Equal(1, script.Split("exit $failed").Length - 1);
 	}
 
 	[Fact]

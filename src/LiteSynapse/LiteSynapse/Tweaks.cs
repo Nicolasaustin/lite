@@ -105,6 +105,15 @@ internal static class Tweaks
 
 		public string Title = "";
 
+		// The thing this setting switches, named so that "ON" and "OFF" mean what they say: "Pointer
+		// acceleration", not "Pointer acceleration off". The Performance tab shows whether the thing is on or
+		// off and whether that is helping or hurting, so the name must never carry a direction of its own.
+		public string Thing = "";
+
+		// Which side of the thing helps performance. Applying this setting puts the thing on this side:
+		// "Pointer acceleration" helps when OFF, "Game Mode" helps when ON.
+		public bool PerfOn;
+
 		// What it changes and why someone would want it.
 		public string What = "";
 
@@ -200,6 +209,8 @@ internal static class Tweaks
 			Id = "accel",
 			Group = "input",
 			Title = "Pointer acceleration off",
+			Thing = "Pointer acceleration",
+			PerfOn = false,
 			What = "Turns off \"Enhance pointer precision\", so the same hand movement always moves the cursor the " +
 				"same distance. Every aim guide starts here.",
 			Source = "fr33thy",
@@ -217,6 +228,8 @@ internal static class Tweaks
 			Id = "pointerspeed",
 			Group = "input",
 			Title = "Pointer speed at the middle notch (6/11)",
+			Thing = "Pointer speed locked at 6/11 (1:1 aim)",
+			PerfOn = true,
 			What = "Puts the Windows pointer-speed slider in the middle, the only setting that does not scale or " +
 				"drop counts the mouse sends. Any other notch multiplies them.",
 			Source = "fr33thy",
@@ -229,6 +242,8 @@ internal static class Tweaks
 			Id = "rawthrottle",
 			Group = "input",
 			Title = "Background raw-input cap off",
+			Thing = "Background raw-input cap",
+			PerfOn = false,
 			What = "Windows 11 caps raw mouse input at 125 Hz for a window that is not in front. A 1000 Hz mouse " +
 				"drops to 125 Hz whenever the game loses focus - alt-tabbed, a borderless overlay, a second monitor. " +
 				"This removes the cap.",
@@ -242,6 +257,8 @@ internal static class Tweaks
 			Id = "mousequeue",
 			Group = "input",
 			Title = "Mouse buffer at 16 reports",
+			Thing = "Smaller mouse buffer (16 reports)",
+			PerfOn = true,
 			What = "How many mouse reports the driver holds in non-paged memory before the system reads them. " +
 				"Windows uses 100; the guides use 16 so a backlog cannot build up.",
 			Cost = "Below 16 Windows starts dropping input. If the System log ever reports a ring-buffer overflow, " +
@@ -257,6 +274,8 @@ internal static class Tweaks
 			Id = "kbdqueue",
 			Group = "input",
 			Title = "Keyboard buffer at 16 reports",
+			Thing = "Smaller keyboard buffer (16 reports)",
+			PerfOn = true,
 			What = "The same buffer for the keyboard.",
 			Cost = "Takes effect after a restart.",
 			Risk = Caution,
@@ -270,6 +289,8 @@ internal static class Tweaks
 			Id = "keydelay",
 			Group = "input",
 			Title = "Keyboard repeat delay at the shortest setting",
+			Thing = "Shortest key-repeat delay",
+			PerfOn = true,
 			What = "Shortens the pause before a held key starts repeating.",
 			Source = "winutil",
 			// REG_SZ, not a DWord: everything under Control Panel\Keyboard and Control Panel\Mouse is a
@@ -284,6 +305,8 @@ internal static class Tweaks
 			Id = "priority",
 			Group = "sched",
 			Title = "Foreground boost (Win32PrioritySeparation = 26 hex)",
+			Thing = "Foreground boost (Win32PrioritySeparation 26 hex)",
+			PerfOn = true,
 			What = "Short, variable time slices with a 3:1 boost for the window in front. Windows ships 2 " +
 				"(long, fixed slices, even sharing), which is tuned for a desktop rather than a game. 26 hex / 38 " +
 				"decimal is the value the guides use.",
@@ -298,6 +321,8 @@ internal static class Tweaks
 			Id = "responsiveness",
 			Group = "sched",
 			Title = "No CPU reserved for background work",
+			Thing = "CPU reserved for background work",
+			PerfOn = false,
 			What = "SystemResponsiveness is the share of the processor Windows keeps back for background tasks. " +
 				"It ships at 20%; 10 gives most of it to the game. Audio keeps its own reservation either way.",
 			Source = "ms",
@@ -309,6 +334,8 @@ internal static class Tweaks
 			Id = "timerres",
 			Group = "sched",
 			Title = "System-wide 0.5 ms timer (GlobalTimerResolutionRequests)",
+			Thing = "System-wide 0.5 ms timer requests",
+			PerfOn = true,
 			What = "Windows 11 made timer-resolution requests per-process, so one program asking for a 0.5 ms timer " +
 				"no longer speeds up the clock for everything. This restores the old system-wide behaviour, which " +
 				"games and their anti-cheat both benefit from.",
@@ -323,6 +350,8 @@ internal static class Tweaks
 			Id = "dynamictick",
 			Group = "sched",
 			Title = "Dynamic tick off",
+			Thing = "Dynamic tick",
+			PerfOn = false,
 			What = "Stops Windows from skipping timer interrupts while idle. Some machines get steadier frame " +
 				"pacing from this; others see no change.",
 			Cost = "A boot setting, so it needs a restart, and it is genuinely machine-dependent. Test it with " +
@@ -339,6 +368,8 @@ internal static class Tweaks
 			Id = "platformclock",
 			Group = "sched",
 			Title = "HPET not forced as the system clock",
+			Thing = "HPET forced as the system clock",
+			PerfOn = false,
 			What = "Leaves the platform clock alone so Windows picks the fastest timer the CPU offers (the " +
 				"invariant TSC on anything modern) instead of being pinned to HPET, which is slower to read. " +
 				"Turning this ON removes any useplatformclock / useplatformtick / tscsyncpolicy value another " +
@@ -360,6 +391,8 @@ internal static class Tweaks
 			Id = "gamemode",
 			Group = "sched",
 			Title = "Game Mode on",
+			Thing = "Game Mode",
+			PerfOn = true,
 			What = "Windows holds back driver installs and background work while a game is in front. Keep this on: " +
 				"it is the one piece of Windows gaming support that does what it says.",
 			Source = "winutil",
@@ -374,6 +407,8 @@ internal static class Tweaks
 			Id = "powerplan",
 			Group = "sched",
 			Title = "Low-latency power plan",
+			Thing = "Low-latency power plan",
+			PerfOn = true,
 			What = "Builds a power plan from Ultimate Performance and sets it active: processor never below 100%, " +
 				"core parking off, USB selective suspend off, PCIe link-state power management off, no disk or " +
 				"monitor sleep. Clocks that drop while you play are a common cause of stutter.",
@@ -392,6 +427,8 @@ internal static class Tweaks
 			Id = "prefetch",
 			Group = "sched",
 			Title = "Prefetcher and memory compression off",
+			Thing = "Prefetcher and memory compression",
+			PerfOn = false,
 			What = "Stops Windows reading programs into memory ahead of time, pre-launching Store apps, combining " +
 				"identical pages and compressing memory. All of it is CPU and disk work while you play, and on an " +
 				"SSD with enough RAM it buys nothing.",
@@ -433,6 +470,8 @@ internal static class Tweaks
 			Id = "fse",
 			Group = "gpu",
 			Title = "Real exclusive fullscreen",
+			Thing = "Real exclusive fullscreen",
+			PerfOn = true,
 			What = "Stops Windows quietly turning a game's exclusive fullscreen into a borderless window. " +
 				"Exclusive fullscreen hands the display to the game and takes the desktop compositor out of the " +
 				"path, which is a frame of latency on its own.",
@@ -450,6 +489,8 @@ internal static class Tweaks
 			Id = "gamedvr",
 			Group = "gpu",
 			Title = "Game DVR and background recording off",
+			Thing = "Game DVR and background recording",
+			PerfOn = false,
 			What = "The Xbox Game Bar's always-on capture. It hooks every game's present path to be ready to " +
 				"record the last 30 seconds, whether or not you ever use it.",
 			Cost = "No Game Bar recording or screenshots. Game Mode is a separate setting and stays on.",
@@ -467,6 +508,8 @@ internal static class Tweaks
 			Id = "hags",
 			Group = "gpu",
 			Title = "Hardware-accelerated GPU scheduling on",
+			Thing = "Hardware-accelerated GPU scheduling",
+			PerfOn = true,
 			What = "Lets the GPU manage its own work queue instead of the CPU driver doing it. Needed for NVIDIA " +
 				"Reflex to work properly, and it takes scheduling work off the CPU.",
 			Cost = "Needs a restart, a recent driver and a GPU that supports it. A few older games dislike it.",
@@ -480,6 +523,8 @@ internal static class Tweaks
 			Id = "mpo",
 			Group = "gpu",
 			Title = "Multiplane overlay off",
+			Thing = "Multiplane overlay (MPO)",
+			PerfOn = false,
 			What = "MPO lets the display engine compose several layers at once. It is a well-known cause of " +
 				"flickering, black screens and stutter on multi-monitor and mixed-refresh setups.",
 			Cost = "A little more GPU work composing the desktop. Only worth it if you actually see flicker or " +
@@ -494,6 +539,8 @@ internal static class Tweaks
 			Id = "flip",
 			Group = "gpu",
 			Title = "Optimizations for windowed games off",
+			Thing = "Optimizations for windowed games",
+			PerfOn = false,
 			What = "Windows 11 upgrades a windowed game's swap chain to the flip model and adds its own frame " +
 				"pacing. For a game that already uses exclusive fullscreen it is one more thing between the frame " +
 				"and the panel. This turns off that upgrade and the variable-refresh-rate optimization with it, " +
@@ -518,6 +565,8 @@ internal static class Tweaks
 			Id = "visualfx",
 			Group = "gpu",
 			Title = "Window animations off",
+			Thing = "Window animations",
+			PerfOn = false,
 			What = "Menus, window minimise and the taskbar stop animating, so a click acts immediately instead of " +
 				"after a 200 ms slide. Nothing to do with frame rate; everything to do with how the PC feels.",
 			Cost = "Windows looks plainer.",
@@ -539,6 +588,8 @@ internal static class Tweaks
 			Id = "netthrottle",
 			Group = "net",
 			Title = "Network throttling off",
+			Thing = "Network throttling",
+			PerfOn = false,
 			What = "While a multimedia program runs, Windows limits every other socket on the PC to about ten " +
 				"packets per millisecond. A game counts as multimedia, so Windows is throttling its own traffic.",
 			Source = "ms",
@@ -550,6 +601,8 @@ internal static class Tweaks
 			Id = "nagle",
 			Group = "net",
 			Title = "Nagle's algorithm off",
+			Thing = "Nagle's algorithm",
+			PerfOn = false,
 			What = "Stops Windows holding small packets back to bundle them with the next one. A shot in CS2 is a " +
 				"small packet, and waiting to batch it adds delay for no gain.",
 			Cost = "Slightly more overhead on connections that send many tiny packets. Applied to every network " +
@@ -564,6 +617,8 @@ internal static class Tweaks
 			Id = "autotuning",
 			Group = "net",
 			Title = "TCP receive-window auto-tuning on",
+			Thing = "TCP receive-window auto-tuning",
+			PerfOn = true,
 			What = "Lets Windows size the TCP receive window for the connection it actually has. Tools that set " +
 				"this to disabled or restricted cap download speed badly on anything fast.",
 			Source = "ms",
@@ -576,6 +631,8 @@ internal static class Tweaks
 			Id = "nicpower",
 			Group = "net",
 			Title = "Network adapter power saving off",
+			Thing = "Network adapter power saving",
+			PerfOn = false,
 			What = "Stops the network card from idling down, sleeping between packets or green-ethernet " +
 				"negotiating. Each of those shows up as an occasional ping spike.",
 			Cost = "A watt or two. Wake-on-LAN stops working.",
@@ -589,6 +646,8 @@ internal static class Tweaks
 			Id = "delivery",
 			Group = "net",
 			Title = "Windows Update uploads off",
+			Thing = "Windows Update uploads to other PCs",
+			PerfOn = false,
 			What = "Delivery Optimization uses your upload to send Windows updates to other PCs - on your network, " +
 				"and on mode 3 to strangers on the internet. Your upload is also what carries your game traffic.",
 			Cost = "Updates download from Microsoft only, which can be a little slower.",
@@ -606,6 +665,8 @@ internal static class Tweaks
 			Id = "telemetry",
 			Group = "bg",
 			Title = "Telemetry and advertising ID off",
+			Thing = "Telemetry and advertising ID",
+			PerfOn = false,
 			What = "Stops the usage reporting that runs in the background and uploads while you play.",
 			Source = "winutil",
 			NeedsAdmin = true,
@@ -623,6 +684,8 @@ internal static class Tweaks
 			Id = "bgapps",
 			Group = "bg",
 			Title = "Store apps in the background off",
+			Thing = "Store apps running in the background",
+			PerfOn = false,
 			What = "Stops every installed Store app from running while you are not using it.",
 			Cost = "Store apps stop giving live tiles and notifications.",
 			Source = "winutil",
@@ -636,6 +699,8 @@ internal static class Tweaks
 			Id = "consumer",
 			Group = "bg",
 			Title = "Suggested apps and auto-installs off",
+			Thing = "Suggested apps and auto-installs",
+			PerfOn = false,
 			What = "Stops Windows installing promoted apps on its own and putting suggestions in the Start menu. " +
 				"Those installs happen in the background, whenever Windows feels like it.",
 			Source = "winutil",
@@ -650,6 +715,8 @@ internal static class Tweaks
 			Id = "razerautoinstall",
 			Group = "bg",
 			Title = "Stop Windows reinstalling Razer Synapse",
+			Thing = "Windows auto-installing Razer Synapse",
+			PerfOn = false,
 			What = "Windows Update fetches manufacturer apps and co-installers for devices it finds. That is how " +
 				"Synapse comes back after you remove it. This stops both.",
 			Cost = "Windows stops pulling optional apps and co-installers for any device, so some vendor software " +
@@ -668,6 +735,8 @@ internal static class Tweaks
 			Id = "hibernate",
 			Group = "bg",
 			Title = "Hibernation off",
+			Thing = "Hibernation",
+			PerfOn = false,
 			What = "Frees a hiberfil.sys the size of your RAM and stops fast-startup restoring a stale session, " +
 				"which is a common source of \"it only stutters until I reboot properly\".",
 			Cost = "No hibernate and no fast startup, so a cold boot takes a few seconds longer.",
@@ -683,6 +752,8 @@ internal static class Tweaks
 			Id = "vbs",
 			Group = "sec",
 			Title = "Memory integrity (HVCI) off",
+			Thing = "Memory integrity (HVCI)",
+			PerfOn = false,
 			What = "Memory integrity runs driver code inside a hypervisor check. Turning it off is the single " +
 				"biggest measured FPS win on this list for a CPU-bound game: reported gains run from under 2% on a " +
 				"current CPU up to 10-15% on an older one.",
@@ -703,6 +774,8 @@ internal static class Tweaks
 			Id = "mitigations",
 			Group = "sec",
 			Title = "Spectre / Meltdown mitigations off",
+			Thing = "Spectre / Meltdown mitigations",
+			PerfOn = false,
 			What = "Turns off the CPU side-channel mitigations Windows applies in software. On processors from " +
 				"before about 2019 these cost real performance on every system call, which a game makes constantly.",
 			Cost = "The PC becomes vulnerable to the Spectre and Meltdown class of attacks, which read memory " +
@@ -723,6 +796,8 @@ internal static class Tweaks
 			Id = "uac",
 			Group = "sec",
 			Title = "User Account Control off",
+			Thing = "User Account Control",
+			PerfOn = false,
 			What = "No more consent prompt when a program asks for administrator rights. The guides turn this off " +
 				"because the prompt itself steals focus, which can drop you out of a game.",
 			Cost = "Any program you run gets administrator rights without asking. This is the change on this page " +
@@ -741,6 +816,8 @@ internal static class Tweaks
 			Id = "dep",
 			Group = "sec",
 			Title = "Data Execution Prevention off",
+			Thing = "Data Execution Prevention",
+			PerfOn = false,
 			What = "Stops Windows marking data pages as non-executable.",
 			Cost = "Removes one of the oldest and cheapest defences against code-execution exploits, and it costs " +
 				"almost nothing to leave on - the gain here is the smallest on this page and the loss is not. " +
@@ -992,7 +1069,11 @@ internal static class Tweaks
 	// Nothing in here is built from text the user typed or from anything read off the PC: every key, value and
 	// command comes from the catalog above, and strings are still quoted through Ps() so a stray apostrophe
 	// cannot end a literal.
-	internal static string Script(IEnumerable<(string Id, bool On)> choices, string scope = MachineScope)
+	//
+	// resultFile: when given, the script also writes there the ids of the settings whose every step succeeded,
+	// one per line. The exit code only says how many steps failed, not which, and a setting Windows cannot be
+	// asked about afterwards (a bcdedit value, a netsh setting) needs to know it went through.
+	internal static string Script(IEnumerable<(string Id, bool On)> choices, string scope = MachineScope, string resultFile = null)
 	{
 		StringBuilder sb = new StringBuilder();
 		sb.Append("$failed = 0\n");
@@ -1047,9 +1128,18 @@ internal static class Tweaks
 		{
 			sb.Append(NetHelper);
 		}
+		bool report = !string.IsNullOrEmpty(resultFile);
+		if (report)
+		{
+			sb.Append("$okIds = @()\n");
+		}
 		foreach ((Tweak t, bool on) in list)
 		{
 			sb.Append("# ").Append(t.Id).Append(on ? ": on\n" : ": off\n");
+			if (report)
+			{
+				sb.Append("$step = $failed\n");
+			}
 			foreach (Reg r in t.Values)
 			{
 				if (!InScope(r, scope))
@@ -1059,17 +1149,41 @@ internal static class Tweaks
 				string want = on ? r.On : r.Off;
 				sb.Append(want == Delete ? RemoveValue(r) : SetValue(r, want));
 			}
-			if (!CommandsInScope(t, scope))
+			if (CommandsInScope(t, scope))
 			{
-				continue;
+				foreach (string cmd in on ? t.OnCommands : t.OffCommands)
+				{
+					sb.Append(Run(cmd));
+				}
 			}
-			foreach (string cmd in on ? t.OnCommands : t.OffCommands)
+			if (report)
 			{
-				sb.Append(Run(cmd));
+				sb.Append("if ($failed -eq $step) { $okIds += ").Append(RazerLeftovers.Ps(t.Id)).Append(" }\n");
 			}
+		}
+		if (report)
+		{
+			sb.Append("try { Set-Content -LiteralPath ").Append(RazerLeftovers.Ps(resultFile))
+				.Append(" -Value $okIds -Encoding UTF8 -ErrorAction Stop } catch { }\n");
 		}
 		sb.Append("exit $failed\n");
 		return sb.ToString();
+	}
+
+	// The ids a script's result file lists (see Script). Blank lines and anything that is not a catalog id are
+	// dropped, so a stray line cannot mark a setting as applied.
+	internal static HashSet<string> ReadResult(string text)
+	{
+		HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (string line in (text ?? "").Split('\n'))
+		{
+			string id = line.Trim().TrimStart('\uFEFF');
+			if (id.Length > 0 && Find(id) != null)
+			{
+				ids.Add(Find(id).Id);
+			}
+		}
+		return ids;
 	}
 
 	private static string Path(Reg r)

@@ -832,7 +832,8 @@ public class RazerLeftovers
 	public static string RunPowerShell(string script, int waitMs, out int exitCode)
 	{
 		exitCode = -1;
-		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script ?? ""));
+		(string encoded, string file) = Command(script);
+		using FileCleanup cleanup = new FileCleanup(file);
 		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath,
 			"-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encoded)
 		{
@@ -873,23 +874,103 @@ public class RazerLeftovers
 	// Exit code of the script; -2 when it did not finish within waitMs.
 	private static int RunElevatedPowerShell(string script, bool hidden, int waitMs)
 	{
-		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-		ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath, "-NoProfile -NonInteractive -ExecutionPolicy Bypass " + (hidden ? "-WindowStyle Hidden " : "") + "-EncodedCommand " + encoded)
+		(string command, string file) = Command(script);
+		try
 		{
-			UseShellExecute = true,
-			Verb = "runas",
-			WindowStyle = hidden ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal
-		};
-		using Process p = Process.Start(psi);
-		if (p == null)
-		{
-			return -1;
+			ProcessStartInfo psi = new ProcessStartInfo(PowerShellPath, "-NoProfile -NonInteractive -ExecutionPolicy Bypass " + (hidden ? "-WindowStyle Hidden " : "") + "-EncodedCommand " + command)
+			{
+				UseShellExecute = true,
+				Verb = "runas",
+				WindowStyle = hidden ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal
+			};
+			using Process p = Process.Start(psi);
+			if (p == null)
+			{
+				return -1;
+			}
+			if (!p.WaitForExit(waitMs))
+			{
+				return -2;
+			}
+			return p.ExitCode;
 		}
-		if (!p.WaitForExit(waitMs))
+		finally
 		{
-			return -2;
+			DeleteQuietly(file);
 		}
-		return p.ExitCode;
+	}
+
+	// Windows caps a command line at 32,767 characters, and -EncodedCommand carries the script as base64 of
+	// UTF-16 - four characters per character of script. A selection of every service and every setting came
+	// to 87,000, so Process.Start failed and nothing was applied at all.
+	//
+	// A script that fits goes on the command line as before. One that does not is written to a file in the
+	// app's own folder, and what goes on the command line is a short loader that reads it, checks its SHA-256
+	// against the hash this process computed, and runs the text it checked - never the file again - so a file
+	// swapped between the write and the elevated read is refused rather than run with administrator rights.
+	internal const int MaxEncoded = 30000;
+
+	// Exit code of the loader when the file is not the one this process wrote.
+	internal const int Tampered = 97;
+
+	internal static (string Encoded, string File) Command(string script)
+	{
+		string text = script ?? "";
+		string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(text));
+		if (encoded.Length <= MaxEncoded)
+		{
+			return (encoded, null);
+		}
+		string file = Path.Combine(Cfg.Dir, "run-" + Guid.NewGuid().ToString("N") + ".ps1");
+		File.WriteAllText(file, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+		return (Convert.ToBase64String(Encoding.Unicode.GetBytes(Loader(file, Sha256(text)))), file);
+	}
+
+	internal static string Loader(string file, string sha256)
+	{
+		return "$p = " + Ps(file) + "\n" +
+			"$s = [IO.File]::ReadAllText($p, (New-Object Text.UTF8Encoding $false))\n" +
+			"Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue\n" +
+			"$h = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($s))).Replace('-', '')\n" +
+			"if ($h -ne " + Ps(sha256) + ") { exit " + Tampered + " }\n" +
+			// Dot-sourced so the script's own "exit $failed" ends this process with its count.
+			". ([scriptblock]::Create($s))\n";
+	}
+
+	internal static string Sha256(string text)
+	{
+		using System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create();
+		return Convert.ToHexString(sha.ComputeHash(new UTF8Encoding(false).GetBytes(text ?? "")));
+	}
+
+	private static void DeleteQuietly(string file)
+	{
+		if (file == null)
+		{
+			return;
+		}
+		try
+		{
+			File.Delete(file);
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+		}
+	}
+
+	private sealed class FileCleanup : IDisposable
+	{
+		private readonly string file;
+
+		public FileCleanup(string file)
+		{
+			this.file = file;
+		}
+
+		public void Dispose()
+		{
+			DeleteQuietly(file);
+		}
 	}
 
 	// Windows-only probing.

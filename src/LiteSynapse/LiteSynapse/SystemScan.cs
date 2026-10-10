@@ -173,6 +173,11 @@ public sealed class TweakRow
 
 	public string Title { get; set; } = "";
 
+	// The thing the setting switches, and which side of it helps performance (see Tweaks.Tweak.Thing).
+	public string Thing { get; set; } = "";
+
+	public bool PerfOn { get; set; }
+
 	// What it changes, and why someone would want it.
 	public string What { get; set; } = "";
 
@@ -189,8 +194,14 @@ public sealed class TweakRow
 
 	public bool NeedsAdmin { get; set; }
 
-	// on | off | part | unknown. "part" is a setting another tool applied only halfway.
+	// on | off | part | other | unknown. "part" is a setting another tool applied only halfway.
 	public string State { get; set; } = "unknown";
+
+	// Windows would not say, so State is what LiteSynapse last set (see PerfLedger).
+	public bool Remembered { get; set; }
+
+	// LiteSynapse changed it since this boot and it takes effect after a restart.
+	public bool Restart { get; set; }
 }
 
 // One thing the scan found.
@@ -577,28 +588,147 @@ internal static class SystemScanner
 	}
 
 	// The whole catalog, each entry with the state this PC is in. Reading is registry-only and takes a few
-	// milliseconds; entries that have no registry values of their own (bcdedit, the power plan) come back as
-	// "unknown", and the window shows them without a state rather than guessing.
+	// milliseconds. Entries that have no registry values of their own (bcdedit, the power plan, netsh, the
+	// network walks) are read the way Windows itself reports them where it will (see Probe), and otherwise
+	// show what LiteSynapse last set, flagged as such - never a blank.
 	private static List<TweakRow> TweakRows()
 	{
 		List<TweakRow> rows = new List<TweakRow>();
+		PerfLedger ledger = PerfLedger.Load();
+		DateTime boot = PerfLedger.BootUtc;
 		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{
+			string read = Tweaks.StateOf(t, ReadValue);
+			bool running = false;
+			if (read == "unknown")
+			{
+				(string probed, bool isRunning) = Probe(t);
+				read = probed ?? "unknown";
+				running = isRunning;
+			}
+			(string state, bool remembered, bool restart) = PerfLedger.Resolve(read, ledger.Get(t.Id), t.NeedsReboot, running, boot);
 			rows.Add(new TweakRow
 			{
 				Id = t.Id,
 				Group = t.Group,
 				Title = t.Title,
+				Thing = t.Thing,
+				PerfOn = t.PerfOn,
 				What = t.What,
 				Cost = t.Cost,
 				Risk = t.Risk,
 				Source = t.Source,
 				NeedsReboot = t.NeedsReboot,
 				NeedsAdmin = t.NeedsAdmin,
-				State = Tweaks.StateOf(t, ReadValue)
+				State = state,
+				Remembered = remembered,
+				Restart = restart
 			});
 		}
 		return rows;
+	}
+
+	private const string TcpInterfaces = "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces";
+
+	private const string NetClass = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}";
+
+	private const string PowerKey = "SYSTEM\\CurrentControlSet\\Control\\Power";
+
+	private const string PowerSchemesKey = "SYSTEM\\CurrentControlSet\\Control\\Power\\User\\PowerSchemes";
+
+	// The HPET's frequency. When useplatformclock forces it as the system clock, QueryPerformanceFrequency
+	// reports exactly this; the invariant TSC Windows uses otherwise reports 10 MHz.
+	private const long HpetFrequency = 14318180;
+
+	[DllImport("kernel32.dll")]
+	private static extern int GetSystemDEPPolicy();
+
+	[DllImport("kernel32.dll")]
+	private static extern bool QueryPerformanceFrequency(out long frequency);
+
+	// Reads a command-only setting the way Windows reports it, without administrator rights. Returns the
+	// state (on = the setting is applied), or null when Windows will not say; running is true when the answer
+	// describes the running boot rather than the stored configuration (see PerfLedger.Resolve).
+	private static (string State, bool Running) Probe(Tweaks.Tweak t)
+	{
+		try
+		{
+			switch (t.Id)
+			{
+			case "powerplan":
+			{
+				using RegistryKey k = Registry.LocalMachine.OpenSubKey(PowerSchemesKey);
+				return (k?.GetValue("ActivePowerScheme") is string active)
+					? (string.Equals(active, Tweaks.PlanGuid, StringComparison.OrdinalIgnoreCase) ? "on" : "off", false)
+					: (null, false);
+			}
+			case "hibernate":
+			{
+				using RegistryKey k = Registry.LocalMachine.OpenSubKey(PowerKey);
+				return (k?.GetValue("HibernateEnabled") is int h) ? ((h == 0) ? "on" : "off", false) : (null, false);
+			}
+			case "nagle":
+				// The helper writes both values on every interface, so "on" is every interface having both.
+				return (Count(TcpInterfaces, (RegistryKey k) => true,
+					(RegistryKey k) => k.GetValue("TcpAckFrequency") is int a && a == 1 && k.GetValue("TCPNoDelay") is int d && d == 1), false);
+			case "nicpower":
+				// The helper writes PnPCapabilities = 24 on every adapter that has a driver description.
+				return (Count(NetClass, (RegistryKey k) => k.GetValue("DriverDesc") != null,
+					(RegistryKey k) => k.GetValue("PnPCapabilities") is int p && p == 24), false);
+			case "dep":
+				// 0 AlwaysOff (applied), 2 OptIn (Windows' default), 1 AlwaysOn / 3 OptOut set by something else.
+				return (GetSystemDEPPolicy() switch
+				{
+					0 => "on",
+					2 => "off",
+					_ => "other"
+				}, true);
+			case "platformclock":
+				return QueryPerformanceFrequency(out long f) ? ((f == HpetFrequency) ? "off" : "on", true) : (null, false);
+			}
+		}
+		catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException
+			|| ex is EntryPointNotFoundException || ex is DllNotFoundException)
+		{
+		}
+		return (null, false);
+	}
+
+	// on when every key the filter picks matches, off when none does, part for a mix, null when no key could
+	// be read at all.
+	private static string Count(string parent, Func<RegistryKey, bool> pick, Func<RegistryKey, bool> match)
+	{
+		using RegistryKey root = Registry.LocalMachine.OpenSubKey(parent);
+		if (root == null)
+		{
+			return null;
+		}
+		int all = 0;
+		int hit = 0;
+		foreach (string name in root.GetSubKeyNames())
+		{
+			try
+			{
+				using RegistryKey k = root.OpenSubKey(name);
+				if (k == null || !pick(k))
+				{
+					continue;
+				}
+				all++;
+				if (match(k))
+				{
+					hit++;
+				}
+			}
+			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+			{
+			}
+		}
+		if (all == 0)
+		{
+			return null;
+		}
+		return (hit == all) ? "on" : ((hit == 0) ? "off" : "part");
 	}
 
 	// One registry value for Tweaks.StateOf; null when the key or the value is not there, or cannot be read.
@@ -675,7 +805,7 @@ internal static class SystemScanner
 					{
 						StartupApproved.Disable(item.Id);
 					}
-					done.Add(item.Name + (on ? " (on)" : " (off)"));
+					done.Add(item.Name + (on ? " ON" : " OFF"));
 					Cfg.Log($"system scan: start-up \"{item.Id}\" turned {(on ? "on" : "off")}");
 				}
 				catch (Exception ex)
@@ -696,7 +826,7 @@ internal static class SystemScanner
 				if (on ? item.CanEnable : item.CanDisable)
 				{
 					svc.Add((item.Id, on));
-					done.Add(item.Name + (on ? " (on)" : " (off)"));
+					done.Add(item.Name + (on ? " ON" : " OFF"));
 				}
 				else
 				{
@@ -712,7 +842,6 @@ internal static class SystemScanner
 					continue;
 				}
 				tweaks.Add((t.Id, on));
-				done.Add(t.Title + (on ? " (on)" : " (off)"));
 				reboot |= t.NeedsReboot;
 				continue;
 			}
@@ -723,13 +852,22 @@ internal static class SystemScanner
 		// elevated process either, because on a standard-user account the UAC prompt collects a different
 		// account's credentials and HKCU: would then resolve to that administrator's profile. So the split is
 		// by hive, not by entry: an entry owning both hives has each half run in the right place.
+		// Each half reports which settings it applied in full (see Tweaks.Script), so the tab can show a setting
+		// Windows will not describe afterwards as set, and a refused one is named rather than counted.
+		HashSet<string> okUser = null;
+		HashSet<string> okMachine = null;
 		if (Tweaks.HasWork(tweaks, Tweaks.UserScope))
 		{
+			string result = ResultFile();
 			try
 			{
-				RazerLeftovers.RunPowerShell(Tweaks.Script(tweaks, Tweaks.UserScope), 60000, out int lcode);
+				RazerLeftovers.RunPowerShell(Tweaks.Script(tweaks, Tweaks.UserScope, result), 60000, out int lcode);
 				Cfg.Log($"system scan: settings for this account -> exit code {lcode}");
-				Problem(lcode, refused, "the settings for this account");
+				okUser = TakeResult(result);
+				if (okUser.Count == 0)
+				{
+					Problem(lcode, refused, "the settings for this account");
+				}
 			}
 			catch (Exception ex0)
 			{
@@ -739,25 +877,111 @@ internal static class SystemScanner
 		}
 		if (svc.Count > 0 || Tweaks.HasWork(tweaks, Tweaks.MachineScope))
 		{
-			string script = Combine(ServiceCatalog.Script(svc), Tweaks.Script(tweaks, Tweaks.MachineScope));
+			string result = ResultFile();
+			string script = Combine(ServiceCatalog.Script(svc), Tweaks.Script(tweaks, Tweaks.MachineScope, result));
 			try
 			{
 				int code = RazerLeftovers.RunElevated(script, 180000);
 				Cfg.Log($"system scan: {svc.Count} service(s), {tweaks.Count} windows setting(s) -> exit code {code}");
-				Problem(code, refused, "the settings that need administrator rights");
+				okMachine = TakeResult(result);
+				// Settings name themselves below; this line is for what they cannot account for (a service, a
+				// timeout, a script that never started).
+				bool namedAll = code > 0 && tweaks.Any(((string Id, bool On) x) =>
+					Tweaks.HasWork(new[] { x }, Tweaks.MachineScope) && !okMachine.Contains(x.Id)) && svc.Count == 0;
+				if (!namedAll)
+				{
+					Problem(code, refused, "the settings that need administrator rights");
+				}
 			}
 			catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
 			{
+				Record(tweaks, okUser, null);
+				bool any = done.Count > 0 || (okUser?.Count ?? 0) > 0;
 				return "Cancelled: Windows did not get administrator permission, so " +
-					(done.Count > 0 ? "only the changes that do not need it were made." : "nothing was changed.");
+					(any ? "only the changes that do not need it were made." : "nothing was changed.");
 			}
 			catch (Exception ex2)
 			{
 				Cfg.Log("system scan: " + ex2.Message);
+				Record(tweaks, okUser, null);
 				return "Could not finish: " + ex2.Message;
 			}
 		}
+		foreach ((string id, bool on) in tweaks)
+		{
+			Tweaks.Tweak t = Tweaks.Find(id);
+			if (Applied(id, on, okUser, okMachine))
+			{
+				// Named by the thing and the side it is now on: "Pointer acceleration OFF".
+				bool thingOn = on ? t.PerfOn : !t.PerfOn;
+				done.Add(t.Thing + (thingOn ? " ON" : " OFF"));
+			}
+			else
+			{
+				refused.Add(t.Thing);
+			}
+		}
+		Record(tweaks, okUser, okMachine);
 		return Report(done, refused, already, reboot);
+	}
+
+	// A setting counts as applied when every half it has work in reported it in full. A half that never ran
+	// (cancelled consent) reports nothing, so its settings stay unapplied.
+	private static bool Applied(string id, bool on, HashSet<string> okUser, HashSet<string> okMachine)
+	{
+		(string, bool)[] one = new[] { (id, on) };
+		bool user = !Tweaks.HasWork(one, Tweaks.UserScope) || (okUser != null && okUser.Contains(id));
+		bool machine = !Tweaks.HasWork(one, Tweaks.MachineScope) || (okMachine != null && okMachine.Contains(id));
+		return user && machine;
+	}
+
+	// What LiteSynapse set goes into the ledger, so a setting Windows will not describe still shows its state.
+	private static void Record(List<(string Id, bool On)> tweaks, HashSet<string> okUser, HashSet<string> okMachine)
+	{
+		if (tweaks.Count == 0)
+		{
+			return;
+		}
+		PerfLedger ledger = PerfLedger.Load();
+		DateTime now = DateTime.UtcNow;
+		bool any = false;
+		foreach ((string id, bool on) in tweaks)
+		{
+			if (Applied(id, on, okUser, okMachine))
+			{
+				ledger.Set(id, on, now);
+				any = true;
+			}
+		}
+		if (any)
+		{
+			ledger.Save();
+		}
+	}
+
+	private static string ResultFile()
+	{
+		return Path.Combine(Cfg.Dir, "perf-result-" + Guid.NewGuid().ToString("N") + ".txt");
+	}
+
+	// Reads and deletes a script's result file. Missing (the script never got that far) is an empty set.
+	private static HashSet<string> TakeResult(string file)
+	{
+		try
+		{
+			if (!File.Exists(file))
+			{
+				return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			}
+			HashSet<string> ids = Tweaks.ReadResult(File.ReadAllText(file));
+			File.Delete(file);
+			return ids;
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			Cfg.Log("system scan: result file: " + ex.Message);
+			return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		}
 	}
 
 	// What a script's exit code means. It is the number of steps that failed, but the runner also uses -2 for
@@ -772,6 +996,11 @@ internal static class SystemScanner
 		if (code == -2)
 		{
 			refused.Add(what + " (it did not finish in time and may still be running - check again in a moment)");
+			return;
+		}
+		if (code == RazerLeftovers.Tampered)
+		{
+			refused.Add(what + " (the script file was changed before it ran, so it was not run)");
 			return;
 		}
 		if (code < 0)

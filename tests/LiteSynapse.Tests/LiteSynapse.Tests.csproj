@@ -51,6 +51,7 @@
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\ProfileOps.cs" Link="App\ProfileOps.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\UiPrefs.cs" Link="App\UiPrefs.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Tweaks.cs" Link="App\Tweaks.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\PerfLedger.cs" Link="App\PerfLedger.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

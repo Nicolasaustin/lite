@@ -32,6 +32,24 @@ public class ScriptShapeTests
 		yield return ("devices kept awake",
 			DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0", "USB\\VID_1532&PID_0235\\5&b&0&1_0" },
 				powerPlan: true, allowPowerSaving: false));
+		yield return ("devices changed and read back",
+			DeviceTuning.ApplyScript(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" }, powerPlan: true, allowPowerSaving: false,
+				"C:\\Users\\o'brien\\AppData\\Roaming\\LiteSynapse\\device-power.txt"));
+		yield return ("devices read as admin",
+			"$failed = 0\n" + DeviceTuning.QueryToFile("C:\\x\\device-power.txt") + "exit $failed\n");
+		// The settings scripts as Apply really runs them: with a result file, whose path can carry an
+		// apostrophe (a user name like O'Brien).
+		const string result = "C:\\Users\\o'brien\\AppData\\Roaming\\LiteSynapse\\perf-result-1.txt";
+		foreach (string scope in new[] { Tweaks.UserScope, Tweaks.MachineScope })
+		{
+			yield return ($"every setting on with a result file ({scope})",
+				Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList(), scope, result));
+			yield return ($"every setting off with a result file ({scope})",
+				Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, false)).ToList(), scope, result));
+		}
+		yield return ("services and every setting merged, with a result file", SystemScanner.Combine(
+			ServiceCatalog.Script(ServiceCatalog.All.Select((ServiceCatalog.Row r) => (r.Service, false)).ToList()),
+			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList(), Tweaks.MachineScope, result)));
 		yield return ("devices handed back",
 			DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" },
 				powerPlan: true, allowPowerSaving: true));
