@@ -1,3 +1,69 @@
+# LiteSynapse 1.1.5 test build 6: what to try
+
+Build 6 is the bug-test build: two full review rounds over the whole app (CS2 and anti-cheat, latency,
+Windows, the mouse protocol, threading, the window), each finding checked a second time before it was fixed.
+Nothing here changes how you use LiteSynapse; it fixes things that could have bitten you.
+
+## What changed
+
+**CS2 and anti-cheat**
+- Competitive-safe now recognizes a game by its program (`cs2.exe`, VALORANT, Apex, ...), not only by the
+  profile name. Renaming "CS2", linking `cs2.exe` to another profile, or not linking it at all no longer
+  turns the protection off.
+- Deadlock, League of Legends and GTA count as anti-cheat games now (VAC, Vanguard, BattlEye).
+- A macro that is still running stops the moment you switch profiles, alt-tab into a protected game or exit
+  LiteSynapse, and it releases the keys it was holding, so nothing is left pressed.
+- A mouse button set to middle click no longer stays stuck down when the profile changes while you hold it.
+
+**Windows**
+- Double-clicking the LiteSynapse shortcut while it runs in the tray opens the window. It used to do nothing.
+- Starting LiteSynapse while an administrator copy is running no longer crashes silently.
+- Windows updates, Setup and sign-out now close LiteSynapse properly: no leftover process, no ghost tray icon.
+- Run as administrator keeps its tray icon after Explorer restarts.
+- The clean-up steps start Windows PowerShell by its full path.
+
+**Mouse**
+- Slots 1 and 2 are LiteSynapse's in both modes; your own profiles go to slots 3, 4 and 5. Before, the window
+  let you write slot 2 and then moved the mouse off it.
+- Alt-tabbing in and out of a game no longer rewrites the lighting each time.
+- Writing a slot the mouse is running now updates DPI and lighting right away.
+- If Razer Synapse is running and answers on the same mouse, LiteSynapse no longer mistakes its answer for its own.
+- DPI and polling changed in the classic window now take the same path as the new window.
+- The self-test pauses LiteSynapse's own mouse writes while it runs and puts your profile back afterwards.
+- The classic window no longer reads the mouse and keyboard, or the whole log, on every profile switch.
+
+## Install
+
+1. Run `LiteSynapse-Setup-1.1.5.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
+   profiles, games and macros. No uninstall needed.
+   - SmartScreen says "Windows protected your PC" because the app isn't code-signed: **More info → Run anyway**.
+2. Quit Razer Synapse fully (tray icon → **Quit**) so it can't fight over the mouse and keyboard.
+3. Click **Finish** with "Launch" ticked.
+
+## Checklist
+
+| # | Try this | Expected |
+|---|---|---|
+| 1 | Open LiteSynapse, then double-click the desktop shortcut | The window comes to the front (before: nothing happened) |
+| 2 | **Mouse → Onboard memory** | Slots 1 and 2 show as LiteSynapse's; only 3, 4 and 5 can be written |
+| 3 | **Mouse → Customize**: remap a side button, try it in Notepad | The button sends the new key about a second later |
+| 4 | **Mouse → Lighting**: pick a zone and a color | Only that zone changes |
+| 5 | **Settings → Gaming**: turn Competitive-safe on, start CS2 | The log says "competitive-safe: cs2.exe is anti-cheat protected" and no Snap Tap or macros run |
+| 6 | Rename your CS2 profile, start CS2 again | Still protected (this is the main fix) |
+| 7 | Start a game, alt-tab out and back a few times | The mouse switches once each way; the log shows no repeated lighting writes |
+| 8 | **Settings → Performance**: Check now, then **Turn off Razer services** | Lists what it will turn off, asks for administrator permission once, and reports what is off |
+| 9 | **Settings → Maintenance → Run self-test** | It runs, and afterwards the mouse is back on your profile |
+| 10 | Sidebar → **Exit** | Window and tray icon go away; the mouse is back on slot 3 (green) |
+
+**Don't test Snap Tap or macros in Valve matchmaking or FACEIT.** Valve kicks for Snap Tap-style input and one-key
+multi-action binds on its official servers. Use a practice or offline server.
+
+## If something goes wrong
+
+**Settings → Open config folder** opens `%LOCALAPPDATA%\Programs\LiteSynapse\data`. Send me `log.txt` from there.
+
+---
+
 # LiteSynapse 1.1.4 test build 5: what to try
 
 New in build 5: **lighting per zone**. **Mouse → Lighting** has a **Zone** row: All, Scroll wheel, Logo, Side panel.
