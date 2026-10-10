@@ -327,6 +327,8 @@ internal sealed class CheckList : Control
 			return "OFF";
 		case "part":
 			return "HALF SET";
+		case "other":
+			return "SET BY SOMETHING ELSE";
 		case "auto":
 			return "AUTOMATIC";
 		case "manual":
@@ -349,6 +351,7 @@ internal sealed class CheckList : Control
 		case "running":
 			return Theme.Green;
 		case "part":
+		case "other":
 			return Color.FromArgb(235, 180, 60);
 		default:
 			return Color.FromArgb(140, 140, 140);

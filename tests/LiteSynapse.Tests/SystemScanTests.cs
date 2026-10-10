@@ -421,6 +421,10 @@ public class TweaksTests
 		// One of the three left behind by something else: half set, which is worth showing as its own state.
 		Assert.Equal("part", Tweaks.StateOf(accel, (Tweaks.Reg r) =>
 			(r.Name == "MouseSpeed") ? "0" : r.Off));
+		// Set to something that is neither state: reported as its own thing, because for an entry with one
+		// value "half set" would be plainly wrong.
+		Assert.Equal("other", Tweaks.StateOf(accel, (Tweaks.Reg r) => "99"));
+		Assert.Equal("other", Tweaks.StateOf(Tweaks.Find("flip"), (Tweaks.Reg r) => "something else entirely"));
 		// An entry with no registry values of its own cannot be read this way.
 		Assert.Equal("unknown", Tweaks.StateOf(Tweaks.Find("dynamictick"), (Tweaks.Reg r) => null));
 		Assert.Equal("unknown", Tweaks.StateOf(null, (Tweaks.Reg r) => null));

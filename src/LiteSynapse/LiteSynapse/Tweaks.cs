@@ -841,9 +841,11 @@ internal static class Tweaks
 		return false;
 	}
 
-	// on   = every value this entry owns is already at its On setting
-	// off  = every value is at its Off setting
-	// part = somewhere in between, which is what a half-applied tweak from another tool looks like
+	// on    = every value this entry owns is already at its On setting
+	// off   = every value is at its Off setting
+	// part  = a mix of the two, which is what a half-applied tweak from another tool looks like
+	// other = set to something that is neither, so some other tool chose its own value. Kept apart from
+	//         "part" because for an entry with one value "half set" would be plainly wrong.
 	//
 	// An entry with no registry values at all (only commands, e.g. bcdedit or the power plan) cannot be read
 	// this way and comes back as the state the caller found by other means, or "unknown".
@@ -875,6 +877,10 @@ internal static class Tweaks
 		if (off == t.Values.Length)
 		{
 			return "off";
+		}
+		if (on == 0 && off == 0)
+		{
+			return "other";
 		}
 		return "part";
 	}
