@@ -136,14 +136,23 @@ internal static class UiHost
 		}
 	}
 
-	// The window is gone: hand the memory back instead of sitting on it for the rest of the session. Skipped
-	// while the keyboard hook is live, because a compacting collection pauses every thread; the next time the
-	// window closes it runs.
+	// Set by the window just before it closes itself because a linked game came to the front.
+	internal static volatile bool ClosingForGame;
+
+	// The window is gone: hand the memory back instead of sitting on it for the rest of the session.
+	//
+	// Skipped while the keyboard hook is live, because a compacting collection pauses every thread. And
+	// skipped when a game is in front: the window closes itself the moment a linked game comes forward, so
+	// this used to run a full blocking, compacting collection at exactly the instant the game started
+	// rendering - a burst of CPU and page faults during the one second where a hitch is most noticeable. The
+	// memory is not lost by waiting; it goes back the next time the window closes on the desktop.
 	private static void ReleaseMemory()
 	{
+		bool forGame = ClosingForGame;
+		ClosingForGame = false;
 		try
 		{
-			if (svcForMemory?.EngineBusy == true)
+			if (forGame || svcForMemory?.EngineBusy == true || svcForMemory?.InGame == true)
 			{
 				return;
 			}

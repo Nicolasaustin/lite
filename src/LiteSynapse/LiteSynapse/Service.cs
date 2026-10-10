@@ -138,6 +138,17 @@ internal sealed class Service
 
 	public List<GameRule> Games => games;
 
+	// The linked-game rule for a program, read under the same lock the list is edited under. For callers on
+	// other threads - the window's own foreground hook - which must not walk the list while linking a game
+	// adds to it.
+	public GameRule FindGame(string exe, string path)
+	{
+		lock (stateLock)
+		{
+			return GameRule.Find(games, exe, path);
+		}
+	}
+
 	public RazerDevice Mouse => mouse;
 
 	public RazerDevice Kb => keyboard;

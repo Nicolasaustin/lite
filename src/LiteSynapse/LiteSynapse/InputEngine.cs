@@ -80,9 +80,11 @@ internal class InputEngine : IDisposable
 
 	private readonly Dictionary<nint, bool> nagaCache = new Dictionary<nint, bool>();
 
-	private readonly List<Pending> pending = new List<Pending>();
+	// Sized up front: the hook adds to these, and a collection's first Add allocates its backing store. That
+	// would be a GC allocation on the hook thread on the first remapped keystroke of every session.
+	private readonly List<Pending> pending = new List<Pending>(16);
 
-	private readonly List<RawKey> recentRaw = new List<RawKey>();
+	private readonly List<RawKey> recentRaw = new List<RawKey>(32);
 
 	private byte[] rawBuf = new byte[64];
 
@@ -141,11 +143,11 @@ internal class InputEngine : IDisposable
 
 	private bool snapTapActive;
 
-	private readonly HashSet<int> macroKeysDown = new HashSet<int>();
+	private readonly HashSet<int> macroKeysDown = new HashSet<int>(8);
 
 	// Arrow keys already held when the hook was installed: their auto-repeat must not fire a macro and
 	// their release must reach the game.
-	private readonly HashSet<int> heldAtInstall = new HashSet<int>();
+	private readonly HashSet<int> heldAtInstall = new HashSet<int>(8);
 
 	private GCLatencyMode savedGcMode;
 
@@ -161,7 +163,7 @@ internal class InputEngine : IDisposable
 	private bool middleDown;
 
 	// Keys held down by remapped output (not Snap Tap), so ReleaseAll only lifts what we pressed.
-	private readonly HashSet<int> injected = new HashSet<int>();
+	private readonly HashSet<int> injected = new HashSet<int>(16);
 
 	private readonly Thread thread;
 
@@ -457,6 +459,12 @@ internal class InputEngine : IDisposable
 		bool snapOn = (kp?.SnapTap ?? false) && inGame;
 		OnEngine(() =>
 		{
+			// A keyboard layout switched between games is picked up here, not on a keystroke - and the two keys
+			// Snap Tap injects are looked up again right away, on this thread, so the first strafe of the match
+			// does not pay for it.
+			Native.ResetScanCodes();
+			Native.KeyInput(VK_A, ext: false, down: false);
+			Native.KeyInput(VK_D, ext: false, down: false);
 			ReleaseAll();
 			map = m;
 			macros = byName;

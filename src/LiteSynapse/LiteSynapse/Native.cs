@@ -88,7 +88,9 @@ internal static class Native
 	[DllImport("user32")]
 	public static extern uint MapVirtualKey(uint code, uint type);
 
-	[DllImport("user32", SetLastError = true)]
+	// No SetLastError: nothing reads it, and asking for it wraps every injected key in a save/restore of the
+	// thread's last-error value.
+	[DllImport("user32")]
 	public static extern uint SendInput(uint n, INPUT[] i, int size);
 
 	[DllImport("user32")]
@@ -145,6 +147,34 @@ internal static class Native
 	[ThreadStatic]
 	private static INPUT[] one;
 
+	// Scan code per virtual key, filled on first use. MapVirtualKey is a round trip into win32k, and every key
+	// the hook injected - each Snap Tap release and re-press - made one. It answers from the calling thread's
+	// keyboard layout, which for the input thread is fixed when the thread starts, so the answer for a key
+	// never changes while the thread lives; the cache is still cleared on each profile apply, so a layout
+	// switched between games is picked up.
+	private static readonly ushort[] scanCodes = new ushort[256];
+
+	public static void ResetScanCodes()
+	{
+		Array.Clear(scanCodes);
+	}
+
+	private static ushort ScanCode(int vk)
+	{
+		if ((uint)vk > 255u)
+		{
+			return (ushort)MapVirtualKey((uint)vk, 0u);
+		}
+		ushort sc = scanCodes[vk];
+		if (sc == 0)
+		{
+			// A key with no scan code maps to 0 and is asked again next time: rare, and never A, D or an arrow.
+			sc = (ushort)MapVirtualKey((uint)vk, 0u);
+			scanCodes[vk] = sc;
+		}
+		return sc;
+	}
+
 	public static INPUT KeyInput(int vk, bool ext, bool down)
 	{
 		INPUT i = new INPUT
@@ -154,7 +184,7 @@ internal static class Native
 		i.u.ki = new KEYBDINPUT
 		{
 			vk = 0,
-			sc = (ushort)MapVirtualKey((uint)vk, 0u),
+			sc = ScanCode(vk),
 			flags = (uint)(8 | ((!down) ? 2 : 0)) | (ext ? 1u : 0u),
 			extra = MAGIC
 		};

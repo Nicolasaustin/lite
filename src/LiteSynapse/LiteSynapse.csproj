@@ -20,6 +20,12 @@
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
     <TieredPGO>false</TieredPGO>
+    <!-- No tiered re-compilation. With tiering on, a method that has run 30 times is compiled again at full
+         optimisation on a background thread - which for the keyboard hook and the Snap Tap path means a JIT
+         burst a few seconds into the first match, on a thread competing with the game. Off, the precompiled
+         (ReadyToRun) code is used as published and anything not precompiled is compiled once, fully
+         optimised, the first time it runs. Nothing is compiled during play. -->
+    <TieredCompilation>false</TieredCompilation>
     <!-- Nothing here uses EventSource/ETW, hot reload or globalization data: leaving them out saves start-up
          work and a few MB of mapped data in every run. -->
     <EventSourceSupport>false</EventSourceSupport>

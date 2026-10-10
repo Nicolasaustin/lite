@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace LiteSynapse;
 
@@ -7,20 +6,25 @@ namespace LiteSynapse;
 // Pure state machine with no Windows calls: it decides what the game should see and asks the caller to
 // send the minimum number of synthetic events. Real presses and releases are passed through untouched;
 // only the opposite key's release (and its re-press when the newer key is let go) is injected.
+//
+// This runs on the keyboard hook thread for every A and D event, so the state is six flags rather than
+// three sets: there are only ever two keys, and a flag costs a load and a store where a hash set costs a hash,
+// a bucket walk and, on the very first press, an allocation the GC would later have to collect.
 internal sealed class SnapTap
 {
 	private readonly int keyA;
 
 	private readonly int keyB;
 
-	// Keys physically held right now.
-	private readonly HashSet<int> phys = new HashSet<int>();
+	// Index 0 is keyA, index 1 is keyB.
+	// Physically held right now.
+	private readonly bool[] phys = new bool[2];
 
-	// Keys the game currently sees as held.
-	private readonly HashSet<int> seen = new HashSet<int>();
+	// Seen by the game as held. At most one of the pair at a time - that is the whole point.
+	private readonly bool[] seen = new bool[2];
 
-	// Keys whose current "held" state was injected by us (so Reset only lifts what we pressed).
-	private readonly HashSet<int> injected = new HashSet<int>();
+	// That "held" was injected by us, so Reset only lifts what we pressed.
+	private readonly bool[] injected = new bool[2];
 
 	public SnapTap(int keyA = 65, int keyB = 68)
 	{
@@ -37,50 +41,58 @@ internal sealed class SnapTap
 		return true;
 	}
 
-	private int Other(int vk)
+	// Callers check Handles first, so anything that is not keyA is keyB.
+	private int Index(int vk)
 	{
-		if (vk != keyA)
-		{
-			return keyA;
-		}
-		return keyB;
+		return (vk == keyA) ? 0 : 1;
+	}
+
+	private int Key(int index)
+	{
+		return (index == 0) ? keyA : keyB;
 	}
 
 	// A real keyboard event for one of the pair. Returns true when the real event must be swallowed
 	// (auto-repeat of a key we lifted, or the release of a key the game already sees as up).
 	public bool OnReal(int vk, bool up, Action<int, bool> send)
 	{
-		int other = Other(vk);
+		int i = Index(vk);
+		int o = 1 - i;
 		if (!up)
 		{
-			if (phys.Contains(vk))
+			if (phys[i])
 			{
-				return !seen.Contains(vk);
+				// Auto-repeat: let it through only if the game still sees this key as down.
+				return !seen[i];
 			}
-			phys.Add(vk);
-			if (seen.Remove(other))
+			phys[i] = true;
+			if (seen[o])
 			{
-				injected.Remove(other);
-				send(other, arg2: false);
+				seen[o] = false;
+				injected[o] = false;
+				send(Key(o), arg2: false);
 			}
-			seen.Add(vk);
-			injected.Remove(vk);
+			seen[i] = true;
+			injected[i] = false;
 			return false;
 		}
-		if (!phys.Remove(vk))
+		if (!phys[i])
 		{
 			// Released a key we never saw go down (held before Snap Tap turned on, or across a reset):
 			// let the real release through so the game can never be left with it stuck.
-			seen.Remove(vk);
-			injected.Remove(vk);
+			seen[i] = false;
+			injected[i] = false;
 			return false;
 		}
-		bool wasSeen = seen.Remove(vk);
-		injected.Remove(vk);
-		if (phys.Contains(other) && seen.Add(other))
+		phys[i] = false;
+		bool wasSeen = seen[i];
+		seen[i] = false;
+		injected[i] = false;
+		if (phys[o] && !seen[o])
 		{
-			injected.Add(other);
-			send(other, arg2: true);
+			seen[o] = true;
+			injected[o] = true;
+			send(Key(o), arg2: true);
 		}
 		return !wasSeen;
 	}
@@ -89,50 +101,57 @@ internal sealed class SnapTap
 	// everything is injected, with the same last-input-wins rule.
 	public void OnOutput(int vk, bool down, Action<int, bool> send)
 	{
-		int other = Other(vk);
+		int i = Index(vk);
+		int o = 1 - i;
 		if (down)
 		{
-			if (phys.Contains(vk))
+			if (phys[i])
 			{
-				if (seen.Contains(vk))
+				if (seen[i])
 				{
 					send(vk, arg2: true);
 				}
 				return;
 			}
-			phys.Add(vk);
-			if (seen.Remove(other))
+			phys[i] = true;
+			if (seen[o])
 			{
-				injected.Remove(other);
-				send(other, arg2: false);
+				seen[o] = false;
+				injected[o] = false;
+				send(Key(o), arg2: false);
 			}
-			seen.Add(vk);
-			injected.Add(vk);
+			seen[i] = true;
+			injected[i] = true;
 			send(vk, arg2: true);
 			return;
 		}
-		phys.Remove(vk);
-		if (seen.Remove(vk))
+		phys[i] = false;
+		if (seen[i])
 		{
-			injected.Remove(vk);
+			seen[i] = false;
+			injected[i] = false;
 			send(vk, arg2: false);
 		}
-		if (phys.Contains(other) && seen.Add(other))
+		if (phys[o] && !seen[o])
 		{
-			injected.Add(other);
-			send(other, arg2: true);
+			seen[o] = true;
+			injected[o] = true;
+			send(Key(o), arg2: true);
 		}
 	}
 
 	// Forget all state, lifting only keys we injected.
 	public void Reset(Action<int, bool> send)
 	{
-		foreach (int vk in injected)
+		for (int i = 0; i < 2; i++)
 		{
-			send(vk, arg2: false);
+			if (injected[i])
+			{
+				send(Key(i), arg2: false);
+			}
 		}
-		injected.Clear();
-		seen.Clear();
-		phys.Clear();
+		Array.Clear(phys);
+		Array.Clear(seen);
+		Array.Clear(injected);
 	}
 }

@@ -1009,12 +1009,14 @@ internal class MainForm : Form
 				return;
 			}
 			string exe = Path.GetFileName(path);
-			GameRule rule = GameRule.Find(app.Games, exe, path);
+			GameRule rule = app.FindGame(exe, path);
 			if (rule == null)
 			{
 				return;
 			}
 			Cfg.Log($"window closed: {exe} (\"{rule.Profile}\") came to the front");
+			// No memory clean-up as this window goes: the game is starting to render right now.
+			UiHost.ClosingForGame = true;
 			// The hook runs on this thread's message loop, so closing is posted rather than done inline.
 			if (((Control)this).IsHandleCreated)
 			{
