@@ -442,9 +442,32 @@ public class RazerLeftovers
 	}
 
 	// A PowerShell single-quoted string.
+	//
+	// PowerShell's tokenizer ends a single-quoted string on any of five characters, not just the ASCII
+	// apostrophe: U+2018, U+2019, U+201A and U+201B are single quotes to it too, and each is escaped by
+	// doubling, exactly like '. Doubling only the ASCII one let a typographic apostrophe close the literal -
+	// a user name like O’Brien broke every elevated script that carried a path, and a start-up entry's file
+	// name (which any program can choose) carried into the elevated Defender scan could end the string and
+	// run the rest as administrator.
 	public static string Ps(string s)
 	{
-		return "'" + (s ?? "").Replace("'", "''") + "'";
+		StringBuilder sb = new StringBuilder((s?.Length ?? 0) + 8);
+		sb.Append('\'');
+		foreach (char c in s ?? "")
+		{
+			sb.Append(c);
+			if (IsSingleQuote(c))
+			{
+				sb.Append(c);
+			}
+		}
+		sb.Append('\'');
+		return sb.ToString();
+	}
+
+	internal static bool IsSingleQuote(char c)
+	{
+		return c == '\'' || c == '\u2018' || c == '\u2019' || c == '\u201A' || c == '\u201B';
 	}
 
 	// The administrator part of a plan as a PowerShell script. Exit code: the number of steps that failed.

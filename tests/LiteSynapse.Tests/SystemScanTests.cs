@@ -579,10 +579,56 @@ public class TweaksTests
 		// Set to something that is neither state: reported as its own thing, because for an entry with one
 		// value "half set" would be plainly wrong.
 		Assert.Equal("other", Tweaks.StateOf(accel, (Tweaks.Reg r) => "99"));
-		Assert.Equal("other", Tweaks.StateOf(Tweaks.Find("flip"), (Tweaks.Reg r) => "something else entirely"));
+		// A key list is ours or not: anything without our keys at our values is the Windows side, including
+		// Windows' own toggle for the same keys and its Auto HDR key in the same value.
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("flip"), (Tweaks.Reg r) => "something else entirely"));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("flip"), (Tweaks.Reg r) => "SwapEffectUpgradeEnable=1;"));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("flip"), (Tweaks.Reg r) =>
+			"AutoHDREnable=1;VRROptimizeEnable=0;SwapEffectUpgradeEnable=0;"));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("flip"), (Tweaks.Reg r) => null));
 		// An entry with no registry values of its own cannot be read this way.
 		Assert.Equal("unknown", Tweaks.StateOf(Tweaks.Find("dynamictick"), (Tweaks.Reg r) => null));
 		Assert.Equal("unknown", Tweaks.StateOf(null, (Tweaks.Reg r) => null));
+	}
+
+	[Fact]
+	public void AMissingValueIsWindowsDefault()
+	{
+		// Game Mode is on when its values are missing, which is how Windows ships: ON, not "set by something else".
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("gamemode"), (Tweaks.Reg r) => null));
+		// Background apps are allowed when GlobalUserDisabled is missing: the Windows side.
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("bgapps"), (Tweaks.Reg r) => null));
+		// HAGS missing means the driver's own default, which differs per GPU: cannot tell.
+		Assert.Equal("unknown", Tweaks.StateOf(Tweaks.Find("hags"), (Tweaks.Reg r) => null));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("hags"), (Tweaks.Reg r) => 2));
+	}
+
+	[Fact]
+	public void AnotherOptimizersEquallyGoodValueCountsAsApplied()
+	{
+		// Values tweak guides use besides ours: the PC is tuned, and the row says so.
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 0x2A));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 0x28));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("priority"), (Tweaks.Reg r) => 2));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("mousequeue"), (Tweaks.Reg r) => 20));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("mousequeue"), (Tweaks.Reg r) => 100));
+		Assert.Equal("on", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 0));
+		Assert.Equal("off", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 20));
+		Assert.Equal("other", Tweaks.StateOf(Tweaks.Find("responsiveness"), (Tweaks.Reg r) => 14));
+	}
+
+	[Fact]
+	public void PointerSpeedIsOnlyRightAtTheMiddleNotch()
+	{
+		Tweaks.Tweak t = Tweaks.Find("pointerspeed");
+		Assert.True(t.OneWay);
+		Assert.Equal("on", Tweaks.StateOf(t, (Tweaks.Reg r) => "10"));
+		// Any other notch scales the mouse's counts: the hurting side, not "set by something else".
+		Assert.Equal("off", Tweaks.StateOf(t, (Tweaks.Reg r) => "12"));
+		Assert.Equal("off", Tweaks.StateOf(t, (Tweaks.Reg r) => "6"));
+		// There is nothing to put back, so the off side writes nothing.
+		Assert.DoesNotContain("MouseSensitivity", Tweaks.Script(new[] { ("pointerspeed", false) }, Tweaks.UserScope));
+		Assert.Contains("MouseSensitivity", Tweaks.Script(new[] { ("pointerspeed", true) }, Tweaks.UserScope));
 	}
 
 	[Fact]

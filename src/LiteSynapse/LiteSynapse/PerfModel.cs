@@ -53,6 +53,7 @@ internal static class PerfModel
 		case "disabled":
 		case "off":
 		case "absent":
+		case "removing":
 			return "off";
 		case "auto":
 		case "manual":

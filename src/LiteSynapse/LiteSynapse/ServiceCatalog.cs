@@ -50,6 +50,9 @@ internal static class ServiceCatalog
 		// takes effect at the next sign-in. The script skips the pointless stop, and the row says so.
 		public bool PerUser;
 
+		// This one helps performance while it runs (the font cache, SSD trim), so ON is its helping side.
+		public bool KeepOn;
+
 		public Row(string service, string title, string costs, string lose, string risk, int def, bool perUser = false)
 		{
 			Service = service;
@@ -260,7 +263,7 @@ internal static class ServiceCatalog
 			"Offline Files, which a home PC does not use.", Tweaks.Safe, Manual),
 		new Row("defragsvc", "Optimize drives",
 			"Scheduled defragmentation and SSD trim.",
-			"Scheduled drive optimization. On an SSD, trim is worth keeping - prefer leaving this on.", Tweaks.Caution, Manual),
+			"Scheduled drive optimization. On an SSD, trim is worth keeping - prefer leaving this on.", Tweaks.Caution, Manual) { KeepOn = true },
 
 		// ---- Caution: a feature you might actually use ----------------------------------------------
 		new Row("XblAuthManager", "Xbox Live Auth Manager",
@@ -337,7 +340,7 @@ internal static class ServiceCatalog
 			"AutoPlay. Drives still appear in File Explorer.", Tweaks.Caution, Auto),
 		new Row("FontCache", "Windows Font Cache",
 			"Caches glyphs so text draws faster.",
-			"Text rendering gets slower, not faster. Turning this off is a common mistake - leave it on.", Tweaks.Risky, Auto),
+			"Text rendering gets slower, not faster. Turning this off is a common mistake - leave it on.", Tweaks.Risky, Auto) { KeepOn = true },
 		new Row("EventLog", "Windows Event Log",
 			"Writes the system, application and security logs.",
 			"Event Viewer stops recording, so there is no record when something goes wrong - including the ring-buffer warnings that say a mouse buffer is too small. Keep it on.", Tweaks.Risky, Auto),
@@ -390,10 +393,10 @@ internal static class ServiceCatalog
 			"The Windows Security app stops working.", Tweaks.Risky, Manual),
 		new Row("Sense", "Microsoft Defender for Endpoint",
 			"Enterprise endpoint telemetry.",
-			"Nothing on a home PC; it is normally not running there anyway.", Tweaks.Caution, Manual),
+			"Nothing on a home PC; it is normally not running there anyway. It is part of Defender, so it is a security trade-off.", Tweaks.Risky, Manual),
 		new Row("SgrmBroker", "System Guard Runtime Monitor",
 			"Attests to system integrity.",
-			"System Guard attestation.", Tweaks.Caution, Auto),
+			"System Guard attestation, a security feature.", Tweaks.Risky, Auto),
 		new Row("vds", "Virtual Disk",
 			"Disk and volume management.",
 			"Disk Management and diskpart stop working until it is back on.", Tweaks.Caution, Manual),
@@ -405,7 +408,7 @@ internal static class ServiceCatalog
 			"Various parts of Windows break in ways that are hard to connect back to this. Keep it on.", Tweaks.Risky, Auto),
 		new Row("HvHost", "HV Host Service",
 			"Hyper-V host support.",
-			"Hyper-V, WSL 2 and Windows Sandbox. Also part of the virtualisation-based security stack.", Tweaks.Caution, Manual),
+			"Hyper-V, WSL 2 and Windows Sandbox. Also part of the virtualisation-based security stack.", Tweaks.Risky, Manual),
 		new Row("hidserv", "Human Interface Device Service",
 			"Delivers the extra buttons on a keyboard - volume keys, media keys and similar hotkeys.",
 			"Media and volume keys on the keyboard stop working. The mouse, normal typing and LiteSynapse's own remaps are unaffected: those do not go through this service.", Tweaks.Caution, Manual)
@@ -448,7 +451,9 @@ internal static class ServiceCatalog
 	// it; off = disable it and then stop it, in that order, so nothing restarts it in between.
 	//
 	// Service names come from this catalog, never from anything read off the PC, and are quoted anyway.
-	internal static string Script(IEnumerable<(string Service, bool On)> choices)
+	// report: also add "svc:<name>" to $okIds for each service whose every step succeeded, for the result file
+	// the settings half writes (see Tweaks.Script) - so a refused service is named, not reported as changed.
+	internal static string Script(IEnumerable<(string Service, bool On)> choices, bool report = false)
 	{
 		List<(Row Row, bool On)> list = new List<(Row, bool)>();
 		if (choices != null)
@@ -467,6 +472,10 @@ internal static class ServiceCatalog
 		foreach ((Row row, bool on) in list)
 		{
 			string n = RazerLeftovers.Ps(row.Service);
+			if (report)
+			{
+				sb.Append("$step = $failed\n");
+			}
 			if (on)
 			{
 				string start = row.Default == Auto ? "auto" : (row.Default == Manual ? "demand" : "disabled");
@@ -489,6 +498,11 @@ internal static class ServiceCatalog
 				{
 					sb.Append($"sc.exe stop {n} | Out-Null\n");
 				}
+			}
+			if (report)
+			{
+				sb.Append("if ($failed -eq $step) { if ($null -eq $okIds) { $okIds = @() }; $okIds += ")
+					.Append(RazerLeftovers.Ps("svc:" + row.Service)).Append(" }\n");
 			}
 		}
 		sb.Append("exit $failed\n");

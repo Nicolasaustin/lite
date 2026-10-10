@@ -44,6 +44,10 @@ internal sealed class SwitchList : Control
 		// Which side helps performance.
 		public bool HelpsWhenOn;
 
+		// For a Windows setting: the side applying it puts the thing on (Tweaks.Tweak.PerfOn), which is what
+		// Apply needs. Usually HelpsWhenOn too, except where this PC's hardware turns it round.
+		public bool AppliedOn;
+
 		// safe | caution | risky.
 		public string Risk = Tweaks.Safe;
 
@@ -156,10 +160,11 @@ internal sealed class SwitchList : Control
 
 	public int PendingCount => PendingRows.Count();
 
-	// Rows on the hurting side that "fix all" may switch: never a security trade-off (those read "safe
-	// default", not "hurting") and never one that cannot be switched.
+	// Rows on the hurting side that "fix all" may switch: only the ones marked safe. A "use with care" row
+	// turns off a feature someone may use (Bluetooth, controllers, the keyboard's media keys) and a security
+	// trade-off is never a fix, so both are left for the user to switch by hand, after reading the row.
 	public IEnumerable<Row> Fixable => items.Where((Row r) => !r.Header && r.Can && r.Verdict == PerfModel.Hurting
-		&& r.Risk != Tweaks.Risky && !r.Pending);
+		&& r.Risk == Tweaks.Safe && !r.Pending);
 
 	public Row SelectedRow => (selected >= 0 && selected < items.Count) ? items[selected] : null;
 

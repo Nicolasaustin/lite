@@ -26,6 +26,26 @@ internal static class StartupApproved
 		return b;
 	}
 
+	private const string Approved = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\";
+
+	// Task Manager's switch for the entries LiteSynapse only reports: a machine-wide Run value (Run, or Run32
+	// for the 32-bit Run key) and a Startup-folder shortcut (StartupFolder, by file name, under HKCU for the
+	// account's folder and HKLM for the shared one). Without this an entry the user had already turned off in
+	// Task Manager read as on - and as hurting.
+	public static bool IsDisabledElsewhere(RegistryHive hive, string list, string valueName)
+	{
+		try
+		{
+			using RegistryKey root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
+			using RegistryKey k = root.OpenSubKey(Approved + list);
+			return IsDisabled(k?.GetValue(valueName) as byte[]);
+		}
+		catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is System.IO.IOException)
+		{
+			return false;
+		}
+	}
+
 	// absent | enabled | disabled for an HKCU Run value.
 	public static string State(string runValue)
 	{

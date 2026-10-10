@@ -33,6 +33,14 @@ internal static class Tweaks
 	// What a value should be set to, or Delete to remove it so Windows decides for itself again.
 	internal const string Delete = "\u0000delete";
 
+	// An Off that means "anything but On": a setting with one right value and no single wrong one (the
+	// pointer-speed notch). Nothing is written for it, so such a setting is one-way - see Tweak.OneWay.
+	internal const string NotOn = "\u0000noton";
+
+	// Reg.Absent for a value whose absence means different things on different PCs (Windows picks per
+	// driver or per install), so a missing value says nothing either way.
+	internal const string AbsentUnknown = "\u0000absent-unknown";
+
 	// A command prefix: run it, but do not count a non-zero exit code as a failure (see Tweak.OnCommands).
 	internal const string Optional = "?";
 
@@ -86,6 +94,22 @@ internal static class Tweaks
 
 		public string Off;
 
+		// What Windows does when the value is not there at all, which is how most of these ship. null means
+		// "the same as Off" (Off is Windows' default); AbsentUnknown means Windows decides per PC. Without
+		// this a stock PC read as "set to something else" - Game Mode, for one, is on when its values are
+		// missing, and the row said a tweak tool had changed it.
+		public string Absent;
+
+		// Other values that count as On. Another optimizer (FR33THY's script, WinUtil, a tweak pack) often
+		// picks a different but equally good number - a mouse buffer of 20 rather than 16, a foreground boost
+		// of 2A hex rather than 26 - and a PC tuned that way has done the job. It read "set by something else"
+		// before, as if nothing had been done. A numeric value in [OnMin, OnMax], or any of OnAny, is On.
+		public long? OnMin;
+
+		public long? OnMax;
+
+		public string[] OnAny;
+
 		public Reg(string hive, string key, string name, string kind, string on, string off)
 		{
 			Hive = hive;
@@ -109,6 +133,10 @@ internal static class Tweaks
 		// acceleration", not "Pointer acceleration off". The Performance tab shows whether the thing is on or
 		// off and whether that is helping or hurting, so the name must never carry a direction of its own.
 		public string Thing = "";
+
+		// Can only be applied, not undone from here: its Off is NotOn ("any other value"), so there is no
+		// value to put back. The Performance tab offers the switch only while it is not applied.
+		public bool OneWay;
 
 		// Which side of the thing helps performance. Applying this setting puts the thing on this side:
 		// "Pointer acceleration" helps when OFF, "Game Mode" helps when ON.
@@ -233,9 +261,11 @@ internal static class Tweaks
 			What = "Puts the Windows pointer-speed slider in the middle, the only setting that does not scale or " +
 				"drop counts the mouse sends. Any other notch multiplies them.",
 			Source = "fr33thy",
-			Values = new[] { new Reg("HKCU", Mouse, "MouseSensitivity", "string", "10", "10") },
-			OnCommands = new[] { "[LiteSynapse.Pointer]::Speed(10)" },
-			OffCommands = new[] { "[LiteSynapse.Pointer]::Speed(10)" }
+			// Any other notch is the "off" side: there is no single value to put back, so this one only
+			// goes one way, and a notch someone chose reads OFF (and hurting) rather than "set by something else".
+			OneWay = true,
+			Values = new[] { new Reg("HKCU", Mouse, "MouseSensitivity", "string", "10", NotOn) },
+			OnCommands = new[] { "[LiteSynapse.Pointer]::Speed(10)" }
 		},
 		new Tweak
 		{
@@ -267,7 +297,7 @@ internal static class Tweaks
 			Source = "fr33thy",
 			NeedsAdmin = true,
 			NeedsReboot = true,
-			Values = new[] { new Reg("HKLM", MouClass, "MouseDataQueueSize", "dword", "16", "100") }
+			Values = new[] { new Reg("HKLM", MouClass, "MouseDataQueueSize", "dword", "16", "100") { OnMin = 1, OnMax = 99 } }
 		},
 		new Tweak
 		{
@@ -282,7 +312,7 @@ internal static class Tweaks
 			Source = "fr33thy",
 			NeedsAdmin = true,
 			NeedsReboot = true,
-			Values = new[] { new Reg("HKLM", KbdClass, "KeyboardDataQueueSize", "dword", "16", "100") }
+			Values = new[] { new Reg("HKLM", KbdClass, "KeyboardDataQueueSize", "dword", "16", "100") { OnMin = 1, OnMax = 99 } }
 		},
 		new Tweak
 		{
@@ -314,7 +344,11 @@ internal static class Tweaks
 				"it and judge by frame times.",
 			Source = "fr33thy",
 			NeedsAdmin = true,
-			Values = new[] { new Reg("HKLM", PriorityControl, "Win32PrioritySeparation", "dword", "0x26", "2") }
+			// The other short-quantum, foreground-boosted values tweak guides use count as applied too.
+			Values = new[] { new Reg("HKLM", PriorityControl, "Win32PrioritySeparation", "dword", "0x26", "2")
+			{
+				OnAny = new[] { "0x28", "0x2A", "0x16", "0x18" }
+			} }
 		},
 		new Tweak
 		{
@@ -327,7 +361,7 @@ internal static class Tweaks
 				"It ships at 20%; 10 gives most of it to the game. Audio keeps its own reservation either way.",
 			Source = "ms",
 			NeedsAdmin = true,
-			Values = new[] { new Reg("HKLM", SystemProfile, "SystemResponsiveness", "dword", "10", "20") }
+			Values = new[] { new Reg("HKLM", SystemProfile, "SystemResponsiveness", "dword", "10", "20") { OnMin = 0, OnMax = 10 } }
 		},
 		new Tweak
 		{
@@ -398,8 +432,9 @@ internal static class Tweaks
 			Source = "winutil",
 			Values = new[]
 			{
-				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AllowAutoGameMode", "dword", "1", "0"),
-				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AutoGameModeEnabled", "dword", "1", "0")
+				// Game Mode is on when these are missing, which is how Windows ships.
+				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AllowAutoGameMode", "dword", "1", "0") { Absent = "1" },
+				new Reg("HKCU", "Software\\Microsoft\\GameBar", "AutoGameModeEnabled", "dword", "1", "0") { Absent = "1" }
 			}
 		},
 		new Tweak
@@ -516,7 +551,8 @@ internal static class Tweaks
 			Source = "ms",
 			NeedsAdmin = true,
 			NeedsReboot = true,
-			Values = new[] { new Reg("HKLM", GraphicsDrivers, "HwSchMode", "dword", "2", "1") }
+			// Missing means "the driver's default", which is on for some GPUs and off for others.
+			Values = new[] { new Reg("HKLM", GraphicsDrivers, "HwSchMode", "dword", "2", "1") { Absent = AbsentUnknown } }
 		},
 		new Tweak
 		{
@@ -766,7 +802,8 @@ internal static class Tweaks
 			NeedsReboot = true,
 			Values = new[]
 			{
-				new Reg("HKLM", "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity", "Enabled", "dword", "0", "1")
+				// Missing means "as installed": on for clean Windows 11 installs on supported hardware, off otherwise.
+				new Reg("HKLM", "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity", "Enabled", "dword", "0", "1") { Absent = AbsentUnknown }
 			}
 		},
 		new Tweak
@@ -989,24 +1026,64 @@ internal static class Tweaks
 		}
 		int on = 0;
 		int off = 0;
+		int known = 0;
 		foreach (Reg r in t.Values)
 		{
 			object actual = read(r);
-			if (Matches(r.On, actual))
+			// A key list is ours when our keys are in it with our values, and "off" otherwise - whatever
+			// else Windows keeps in the same value (Auto HDR, its own toggle for these keys) is not ours.
+			if (r.Kind == "keylist")
+			{
+				known++;
+				if (Matches(r.On, actual))
+				{
+					on++;
+				}
+				else
+				{
+					off++;
+				}
+				continue;
+			}
+			// A missing value is Windows' default, which is how most of these ship.
+			if (actual == null && r.On != Delete && r.Off != Delete)
+			{
+				string absent = r.Absent ?? ((r.Off == NotOn) ? null : r.Off);
+				if (absent == null || absent == AbsentUnknown)
+				{
+					// Says nothing either way: the rest of the entry's values decide.
+					if (r.Off != NotOn)
+					{
+						continue;
+					}
+				}
+				else
+				{
+					actual = absent;
+				}
+			}
+			known++;
+			bool isOn = Matches(r.On, actual) || AlsoOn(r, actual);
+			if (isOn)
 			{
 				on++;
 			}
-			// The two states can want the same value (pointer speed), so this is not an else.
-			if (Matches(r.Off, actual))
+			// The two states can want the same value, so this is not an else - except for NotOn, which is
+			// by definition everything that is not On (missing included).
+			if ((r.Off == NotOn) ? !isOn : Matches(r.Off, actual))
 			{
 				off++;
 			}
 		}
-		if (on == t.Values.Length)
+		if (known == 0)
+		{
+			return "unknown";
+		}
+		if (on == known)
 		{
 			return "on";
 		}
-		if (off == t.Values.Length)
+		if (off == known)
 		{
 			return "off";
 		}
@@ -1015,6 +1092,83 @@ internal static class Tweaks
 			return "other";
 		}
 		return "part";
+	}
+
+	// ---- What only an administrator can read ----------------------------------------------------------
+
+	// The boot settings (bcdedit) and TCP auto-tuning have no value an ordinary account can read, so on a
+	// PC someone already tuned - with FR33THY's script, WinUtil or by hand - those rows could only say
+	// "can't tell". This reads them with administrator rights into a file the scan picks up: on its own
+	// (CHECK AS ADMIN on the Windows page) and at the end of every elevated apply, so what was just set is
+	// read back rather than assumed.
+	public static string AdminReadFile => System.IO.Path.Combine(Cfg.Dir, "perf-admin.txt");
+
+	internal static string AdminReadScript(string file)
+	{
+		return "& {\n" +
+			"  'BCD'\n" +
+			"  try { bcdedit.exe /enum '{current}' } catch { }\n" +
+			"  try { 'autotuning|' + (Get-NetTCPSetting -SettingName Internet -ErrorAction Stop).AutoTuningLevelLocal } catch { }\n" +
+			"} | Set-Content -LiteralPath " + RazerLeftovers.Ps(file) + " -Encoding UTF8 -ErrorAction SilentlyContinue\n";
+	}
+
+	// "yes" in the languages bcdedit prints its booleans in.
+	private static readonly HashSet<string> YesWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+	{
+		"yes", "ja", "oui", "si", "sí", "sim", "tak", "да", "是", "はい", "예", "evet", "ano", "igen", "kyllä", "ναι", "on", "true"
+	};
+
+	// The file AdminReadScript writes, as tweak states (on = applied): dynamictick, platformclock, dep and
+	// autotuning, each only when it could be read. bcdedit's value names are not translated; its yes/no are.
+	internal static Dictionary<string, string> ParseAdminRead(string text)
+	{
+		Dictionary<string, string> states = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		string t = text ?? "";
+		if (System.Text.RegularExpressions.Regex.IsMatch(t, "\\{current\\}", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+		{
+			string tick = BcdValue(t, "disabledynamictick");
+			states["dynamictick"] = (tick != null && YesWords.Contains(tick)) ? "on" : "off";
+			string clock = BcdValue(t, "useplatformclock");
+			states["platformclock"] = (clock != null && YesWords.Contains(clock)) ? "off" : "on";
+			string nx = BcdValue(t, "nx");
+			states["dep"] = (nx == null || nx.Equals("OptIn", StringComparison.OrdinalIgnoreCase)) ? "off"
+				: (nx.Equals("AlwaysOff", StringComparison.OrdinalIgnoreCase) ? "on" : "other");
+		}
+		System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(t, "^\\s*autotuning\\|(\\S+)",
+			System.Text.RegularExpressions.RegexOptions.Multiline);
+		if (m.Success)
+		{
+			string level = m.Groups[1].Value;
+			states["autotuning"] = level.Equals("Normal", StringComparison.OrdinalIgnoreCase) ? "on"
+				: (level.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ? "off" : "other");
+		}
+		return states;
+	}
+
+	private static string BcdValue(string text, string name)
+	{
+		System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(text,
+			"^\\s*" + name + "\\s+(\\S+)", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		return m.Success ? m.Groups[1].Value : null;
+	}
+
+	// A value another tool chose that is as good as ours (Reg.OnMin/OnMax/OnAny).
+	internal static bool AlsoOn(Reg r, object actual)
+	{
+		if (actual == null || actual is byte[])
+		{
+			return false;
+		}
+		string got = Convert.ToString(actual, CultureInfo.InvariantCulture);
+		if (r.OnAny != null && r.OnAny.Any((string v) => Matches(v, got)))
+		{
+			return true;
+		}
+		if ((r.OnMin.HasValue || r.OnMax.HasValue) && TryNumber(got, out long n))
+		{
+			return n >= (r.OnMin ?? long.MinValue) && n <= (r.OnMax ?? long.MaxValue);
+		}
+		return false;
 	}
 
 	// ---- The script ---------------------------------------------------------------------------------
@@ -1073,12 +1227,20 @@ internal static class Tweaks
 	// resultFile: when given, the script also writes there the ids of the settings whose every step succeeded,
 	// one per line. The exit code only says how many steps failed, not which, and a setting Windows cannot be
 	// asked about afterwards (a bcdedit value, a netsh setting) needs to know it went through.
-	internal static string Script(IEnumerable<(string Id, bool On)> choices, string scope = MachineScope, string resultFile = null)
+	//
+	// force: write the result file even when there is no setting to apply, because a services half merged in
+	// front of this one reports through it too.
+	internal static string Script(IEnumerable<(string Id, bool On)> choices, string scope = MachineScope, string resultFile = null,
+		bool force = false)
 	{
 		StringBuilder sb = new StringBuilder();
 		sb.Append("$failed = 0\n");
+		string writeResult = string.IsNullOrEmpty(resultFile) ? ""
+			: ("if ($null -eq $okIds) { $okIds = @() }\n" +
+				"try { Set-Content -LiteralPath " + RazerLeftovers.Ps(resultFile) + " -Value $okIds -Encoding UTF8 -ErrorAction Stop } catch { }\n");
 		if (choices == null)
 		{
+			sb.Append(force ? writeResult : "");
 			sb.Append("exit $failed\n");
 			return sb.ToString();
 		}
@@ -1117,6 +1279,7 @@ internal static class Tweaks
 		}
 		if (list.Count == 0)
 		{
+			sb.Append(force ? writeResult : "");
 			sb.Append("exit $failed\n");
 			return sb.ToString();
 		}
@@ -1131,7 +1294,8 @@ internal static class Tweaks
 		bool report = !string.IsNullOrEmpty(resultFile);
 		if (report)
 		{
-			sb.Append("$okIds = @()\n");
+			// Not "= @()" outright: in a merged script the services half before this one has already added its own.
+			sb.Append("if ($null -eq $okIds) { $okIds = @() }\n");
 		}
 		foreach ((Tweak t, bool on) in list)
 		{
@@ -1147,6 +1311,11 @@ internal static class Tweaks
 					continue;
 				}
 				string want = on ? r.On : r.Off;
+				if (want == NotOn)
+				{
+					// No single value to put back (see Tweak.OneWay).
+					continue;
+				}
 				sb.Append(want == Delete ? RemoveValue(r) : SetValue(r, want));
 			}
 			if (CommandsInScope(t, scope))
@@ -1161,11 +1330,7 @@ internal static class Tweaks
 				sb.Append("if ($failed -eq $step) { $okIds += ").Append(RazerLeftovers.Ps(t.Id)).Append(" }\n");
 			}
 		}
-		if (report)
-		{
-			sb.Append("try { Set-Content -LiteralPath ").Append(RazerLeftovers.Ps(resultFile))
-				.Append(" -Value $okIds -Encoding UTF8 -ErrorAction Stop } catch { }\n");
-		}
+		sb.Append(writeResult);
 		sb.Append("exit $failed\n");
 		return sb.ToString();
 	}
@@ -1178,7 +1343,20 @@ internal static class Tweaks
 		foreach (string line in (text ?? "").Split('\n'))
 		{
 			string id = line.Trim().TrimStart('\uFEFF');
-			if (id.Length > 0 && Find(id) != null)
+			if (id.Length == 0)
+			{
+				continue;
+			}
+			if (id.StartsWith("svc:", StringComparison.OrdinalIgnoreCase))
+			{
+				ServiceCatalog.Row row = ServiceCatalog.Find(id.Substring(4));
+				if (row != null)
+				{
+					ids.Add("svc:" + row.Service);
+				}
+				continue;
+			}
+			if (Find(id) != null)
 			{
 				ids.Add(Find(id).Id);
 			}

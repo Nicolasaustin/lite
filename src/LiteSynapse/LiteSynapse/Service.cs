@@ -839,6 +839,18 @@ internal sealed class Service
 		});
 	}
 
+	// Reads the settings only an administrator can see (boot settings, TCP auto-tuning), then scans again.
+	public Task<string> CheckSettingsAsAdminAsync()
+	{
+		return Task.Run(() =>
+		{
+			string problem = SystemScanner.ReadAsAdmin();
+			Scan = SystemScanner.Check();
+			Notify();
+			return problem ?? "Read with administrator rights.";
+		});
+	}
+
 	// Reads the devices with administrator rights, for an account whose own read Windows refuses.
 	public Task<string> CheckDevicesAsAdminAsync()
 	{

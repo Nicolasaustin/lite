@@ -173,10 +173,18 @@ public sealed class TweakRow
 
 	public string Title { get; set; } = "";
 
-	// The thing the setting switches, and which side of it helps performance (see Tweaks.Tweak.Thing).
+	// The thing the setting switches, and which side of it helps performance on THIS PC (see
+	// Tweaks.Tweak.Thing). Usually the side applying the setting puts it on; see AppliedOn.
 	public string Thing { get; set; } = "";
 
 	public bool PerfOn { get; set; }
+
+	// The side applying the setting puts the thing on (Tweaks.Tweak.PerfOn). Fixed per setting, unlike
+	// PerfOn: on a dual-chiplet X3D the low-latency power plan is applied ON and helps OFF.
+	public bool AppliedOn { get; set; }
+
+	// Can only be applied from here, not undone (Tweaks.Tweak.OneWay).
+	public bool OneWay { get; set; }
 
 	// What it changes, and why someone would want it.
 	public string What { get; set; } = "";
@@ -202,6 +210,9 @@ public sealed class TweakRow
 
 	// LiteSynapse changed it since this boot and it takes effect after a restart.
 	public bool Restart { get; set; }
+
+	// The state came from the last read made with administrator rights, at this time (UTC).
+	public DateTime? FromAdmin { get; set; }
 }
 
 // One thing the scan found.
@@ -239,6 +250,9 @@ public sealed class ScanItem
 
 	// safe | caution | risky, for services from the catalog.
 	public string Risk { get; set; } = Tweaks.Safe;
+
+	// A service that helps performance while it runs (ServiceCatalog.Row.KeepOn).
+	public bool KeepOn { get; set; }
 
 	// The Run value's name, or the service name: what the turn-off step works on.
 	public string Id { get; set; } = "";
@@ -420,7 +434,7 @@ internal static class SystemScanner
 					try
 					{
 						string command = run.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-						ScanItem item = Describe(name, command, scope);
+						ScanItem item = Describe(name, command, scope, view);
 						// LiteSynapse does not put itself on the list.
 						if (!string.Equals(name, "LiteSynapse", StringComparison.OrdinalIgnoreCase))
 						{
@@ -436,6 +450,7 @@ internal static class SystemScanner
 		}
 		foreach (Environment.SpecialFolder folder in new[] { Environment.SpecialFolder.Startup, Environment.SpecialFolder.CommonStartup })
 		{
+			RegistryHive approvedIn = (folder == Environment.SpecialFolder.Startup) ? RegistryHive.CurrentUser : RegistryHive.LocalMachine;
 			string dir = Environment.GetFolderPath(folder);
 			if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
 			{
@@ -459,6 +474,7 @@ internal static class SystemScanner
 				{
 					continue;
 				}
+				bool off = StartupApproved.IsDisabledElsewhere(approvedIn, "StartupFolder", System.IO.Path.GetFileName(file));
 				list.Add(new ScanItem
 				{
 					Kind = "startup",
@@ -468,7 +484,7 @@ internal static class SystemScanner
 					Path = file,
 					Costs = "Starts with Windows from the Startup folder.",
 					Lose = "It no longer starts by itself. You can still open it yourself.",
-					State = "on",
+					State = off ? "off" : "on",
 					CanDisable = false,
 					Flag = ScanRules.IsLooseLocation(file) ? "location" : ""
 				});
@@ -478,7 +494,7 @@ internal static class SystemScanner
 	}
 
 	// One Run value: where its program is, who signed it, and whether Task Manager has it turned off.
-	private static ScanItem Describe(string name, string command, string scope)
+	private static ScanItem Describe(string name, string command, string scope, RegistryView view)
 	{
 		string path = RazerLeftovers.BinaryPath(Environment.ExpandEnvironmentVariables(command ?? ""));
 		bool exists = false;
@@ -490,7 +506,9 @@ internal static class SystemScanner
 		{
 		}
 		string publisher = exists ? Signer(path) : "";
-		string state = (scope == "HKCU") ? StartupApproved.State(name) : "enabled";
+		string state = (scope == "HKCU") ? StartupApproved.State(name)
+			: (StartupApproved.IsDisabledElsewhere(RegistryHive.LocalMachine, (view == RegistryView.Registry32) ? "Run32" : "Run", name)
+				? "disabled" : "enabled");
 		return new ScanItem
 		{
 			Kind = "startup",
@@ -572,6 +590,7 @@ internal static class SystemScanner
 					Costs = row?.Costs ?? hog?.What ?? "",
 					Lose = row?.Lose ?? "It stops running in the background.",
 					Risk = row?.Risk ?? Tweaks.Caution,
+					KeepOn = row?.KeepOn ?? false,
 					State = state,
 					CanDisable = row != null && start != 4,
 					// Nothing to put back when the start type Windows ships is "disabled" too: offering it
@@ -594,26 +613,50 @@ internal static class SystemScanner
 	private static List<TweakRow> TweakRows()
 	{
 		List<TweakRow> rows = new List<TweakRow>();
+		Tidy();
 		PerfLedger ledger = PerfLedger.Load();
 		DateTime boot = PerfLedger.BootUtc;
+		(Dictionary<string, string> admin, DateTime adminAt) = LoadAdminRead();
 		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{
 			string read = Tweaks.StateOf(t, ReadValue);
 			bool running = false;
+			bool fromAdmin = false;
+			bool waits = false;
 			if (read == "unknown")
 			{
 				(string probed, bool isRunning) = Probe(t);
-				read = probed ?? "unknown";
-				running = isRunning;
+				// What an administrator read of the stored setting said wins over a probe of the running boot
+				// when it is at least as new as the boot, and when there is no probe at all; the two disagreeing
+				// then means the stored setting is waiting for a restart.
+				if (admin.TryGetValue(t.Id, out string stored) && (probed == null || !isRunning || adminAt > boot))
+				{
+					waits = isRunning && probed != null && probed != stored;
+					read = stored;
+					running = false;
+					fromAdmin = true;
+				}
+				else
+				{
+					read = probed ?? "unknown";
+					running = isRunning;
+				}
 			}
 			(string state, bool remembered, bool restart) = PerfLedger.Resolve(read, ledger.Get(t.Id), t.NeedsReboot, running, boot);
-			rows.Add(new TweakRow
+			restart |= waits && state == read;
+			if (fromAdmin && state == read)
+			{
+				remembered = false;
+			}
+			TweakRow row = new TweakRow
 			{
 				Id = t.Id,
 				Group = t.Group,
 				Title = t.Title,
 				Thing = t.Thing,
 				PerfOn = t.PerfOn,
+				AppliedOn = t.PerfOn,
+				OneWay = t.OneWay,
 				What = t.What,
 				Cost = t.Cost,
 				Risk = t.Risk,
@@ -622,10 +665,48 @@ internal static class SystemScanner
 				NeedsAdmin = t.NeedsAdmin,
 				State = state,
 				Remembered = remembered,
-				Restart = restart
-			});
+				Restart = restart,
+				FromAdmin = fromAdmin && state == read ? adminAt : (DateTime?)null
+			};
+			ForThisPc(row, Hardware.DualCcdX3D);
+			rows.Add(row);
 		}
 		return rows;
+	}
+
+	// Where this PC's hardware changes which side helps. Pure, so it is tested.
+	internal static void ForThisPc(TweakRow row, bool dualCcdX3D)
+	{
+		if (!dualCcdX3D)
+		{
+			return;
+		}
+		switch (row.Id)
+		{
+		case "powerplan":
+			// AMD's V-Cache driver parks the chiplet without the cache while a game runs, and it can only do
+			// that in Balanced. This plan, Ultimate and High performance all turn core parking off.
+			row.PerfOn = false;
+			row.What = "On your CPU (a dual-chiplet Ryzen X3D) AMD's V-Cache driver keeps games on the cache cores by " +
+				"parking the other chiplet, and it can only do that in Windows' Balanced plan. A plan with core parking off " +
+				"(this one, Ultimate or High performance) lets CS2 spread onto the cores without the cache, which costs " +
+				"frames. So on this PC the helping side is OFF, which puts Balanced back. USB selective suspend can still " +
+				"be turned off on the Device page.";
+			row.Cost = "";
+			break;
+		case "gamemode":
+			row.What += " On your CPU it is also what tells AMD's V-Cache driver a game is running.";
+			break;
+		case "gamedvr":
+			// Recording off is fine, but the driver needs Game Bar to recognise the game: not a blind fix here.
+			if (row.Risk == Tweaks.Safe)
+			{
+				row.Risk = Tweaks.Caution;
+			}
+			row.Cost = (row.Cost + " On your CPU AMD's V-Cache driver relies on Xbox Game Bar recognising the game, so this " +
+				"is left out of FIX ALL. If CS2 ever seems to run on the wrong cores, turn this back on.").Trim();
+			break;
+		}
 	}
 
 	private const string TcpInterfaces = "SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces";
@@ -639,6 +720,10 @@ internal static class SystemScanner
 	// The HPET's frequency. When useplatformclock forces it as the system clock, QueryPerformanceFrequency
 	// reports exactly this; the invariant TSC Windows uses otherwise reports 10 MHz.
 	private const long HpetFrequency = 14318180;
+
+	private const long HpetFrequency24 = 24000000;
+
+	private const long TscFrequency = 10000000;
 
 	[DllImport("kernel32.dll")]
 	private static extern int GetSystemDEPPolicy();
@@ -658,9 +743,16 @@ internal static class SystemScanner
 			case "powerplan":
 			{
 				using RegistryKey k = Registry.LocalMachine.OpenSubKey(PowerSchemesKey);
-				return (k?.GetValue("ActivePowerScheme") is string active)
-					? (string.Equals(active, Tweaks.PlanGuid, StringComparison.OrdinalIgnoreCase) ? "on" : "off", false)
-					: (null, false);
+				if (!(k?.GetValue("ActivePowerScheme") is string active))
+				{
+					return (null, false);
+				}
+				// What the active plan actually does, so another optimizer's plan (a copy of Ultimate under a
+				// GUID of its own) is recognised instead of reading as "not set".
+				(int? minState, int? minCores) = string.Equals(active, Tweaks.PlanGuid, StringComparison.OrdinalIgnoreCase)
+					? (null, null)
+					: ParseProcessorSettings(RunQuiet("powercfg.exe", "/qh SCHEME_CURRENT " + ProcessorGroup, 5000));
+				return (PlanState(active, Hardware.DualCcdX3D, minState, minCores), false);
 			}
 			case "hibernate":
 			{
@@ -684,7 +776,13 @@ internal static class SystemScanner
 					_ => "other"
 				}, true);
 			case "platformclock":
-				return QueryPerformanceFrequency(out long f) ? ((f == HpetFrequency) ? "off" : "on", true) : (null, false);
+				// 10 MHz is the invariant TSC Windows uses by default; the HPET runs at 14.318 MHz on older
+				// chipsets and 24 MHz on newer Intel ones. Anything else (the ACPI PM timer, a VM) says nothing.
+				if (!QueryPerformanceFrequency(out long f))
+				{
+					return (null, false);
+				}
+				return (f == TscFrequency) ? ("on", true) : ((f == HpetFrequency || f == HpetFrequency24) ? ("off", true) : (null, false));
 			}
 		}
 		catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException
@@ -692,6 +790,157 @@ internal static class SystemScanner
 		{
 		}
 		return (null, false);
+	}
+
+	// The last administrator read of the boot settings and TCP auto-tuning (Tweaks.AdminReadScript).
+	private static (Dictionary<string, string> States, DateTime At) LoadAdminRead()
+	{
+		try
+		{
+			string file = Tweaks.AdminReadFile;
+			if (File.Exists(file))
+			{
+				return (Tweaks.ParseAdminRead(File.ReadAllText(file)), File.GetLastWriteTimeUtc(file));
+			}
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
+			Cfg.Log("system scan: admin read: " + ex.Message);
+		}
+		return (new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), DateTime.MinValue);
+	}
+
+	// Reads the settings only an administrator can see (one UAC prompt). null when it ran, or what went wrong.
+	public static string ReadAsAdmin()
+	{
+		try
+		{
+			int code = RazerLeftovers.RunElevated("$failed = 0\n" + Tweaks.AdminReadScript(Tweaks.AdminReadFile) + "exit $failed\n", 60000);
+			Cfg.Log($"system scan: read as administrator -> exit code {code}");
+			return (code == 0) ? null : ((code == -2) ? "It did not finish in time." : $"It exited with {code}.");
+		}
+		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+		{
+			return "Cancelled: Windows did not get administrator permission, so nothing was read.";
+		}
+		catch (Exception ex2)
+		{
+			Cfg.Log("system scan: " + ex2.Message);
+			return "Could not read it: " + ex2.Message;
+		}
+	}
+
+	private const string ProcessorGroup = "54533251-82be-4824-96c1-47b60b740d00";
+
+	private const string MinProcessorState = "893dee8e-2bef-41e0-89c6-b55d0929964c";
+
+	// Core parking: the share of cores that must stay unparked. 100 means parking is off.
+	private const string MinUnparkedCores = "0cc5b647-c1df-4637-891a-dec35c318583";
+
+	// The low-latency plan's state from the active scheme and what that scheme sets:
+	//   - ours is on;
+	//   - on a dual-chiplet X3D the question is core parking, which the V-Cache driver needs: a plan with it off
+	//     (100% unparked - this one, Ultimate, High performance, most optimizer plans) is on, one with it is off;
+	//   - anywhere else a plan that holds the processor at 100% or keeps every core unparked is on - another
+	//     optimizer's low-latency plan - and one that does neither is off.
+	// When powercfg could not say, the well-known plans are judged by their GUID and anything else is "other".
+	internal static string PlanState(string active, bool dualCcdX3D, int? minState, int? minCores)
+	{
+		if (string.Equals(active, Tweaks.PlanGuid, StringComparison.OrdinalIgnoreCase))
+		{
+			return "on";
+		}
+		if (dualCcdX3D && minCores.HasValue)
+		{
+			return (minCores.Value >= 100) ? "on" : "off";
+		}
+		if (!dualCcdX3D && (minState.HasValue || minCores.HasValue))
+		{
+			return (minState == 100 || minCores >= 100) ? "on" : "off";
+		}
+		if (string.Equals(active, Hardware.UltimatePlan, StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(active, Hardware.HighPerformancePlan, StringComparison.OrdinalIgnoreCase))
+		{
+			return "on";
+		}
+		if (string.Equals(active, Hardware.BalancedPlan, StringComparison.OrdinalIgnoreCase))
+		{
+			return "off";
+		}
+		return "other";
+	}
+
+	// "powercfg /qh SCHEME_CURRENT <processor group>" -> the mains (AC) values of the minimum processor state
+	// and of core parking. The labels are translated on a non-English Windows, so this goes by the setting
+	// GUIDs and the hex values only: in each setting's block the last two are the AC and DC values.
+	internal static (int? MinState, int? MinCores) ParseProcessorSettings(string output)
+	{
+		return (AcValue(output, MinProcessorState), AcValue(output, MinUnparkedCores));
+	}
+
+	private static int? AcValue(string output, string setting)
+	{
+		if (string.IsNullOrEmpty(output))
+		{
+			return null;
+		}
+		int at = output.IndexOf(setting, StringComparison.OrdinalIgnoreCase);
+		if (at < 0)
+		{
+			return null;
+		}
+		int from = at + setting.Length;
+		// The block ends where the next setting's GUID starts.
+		System.Text.RegularExpressions.Match next = System.Text.RegularExpressions.Regex.Match(output.Substring(from),
+			"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+		string block = next.Success ? output.Substring(from, next.Index) : output.Substring(from);
+		System.Text.RegularExpressions.MatchCollection hex = System.Text.RegularExpressions.Regex.Matches(block, "0x([0-9a-fA-F]{8})");
+		if (hex.Count < 2)
+		{
+			return null;
+		}
+		return int.TryParse(hex[hex.Count - 2].Groups[1].Value, System.Globalization.NumberStyles.HexNumber,
+			System.Globalization.CultureInfo.InvariantCulture, out int v) ? v : null;
+	}
+
+	// A console tool's output, hidden, with a time limit; "" when it could not run.
+	private static string RunQuiet(string exe, string args, int waitMs)
+	{
+		try
+		{
+			System.Diagnostics.ProcessStartInfo psi = new System.Diagnostics.ProcessStartInfo(
+				Path.Combine(Environment.SystemDirectory, exe), args)
+			{
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true
+			};
+			using System.Diagnostics.Process p = System.Diagnostics.Process.Start(psi);
+			if (p == null)
+			{
+				return "";
+			}
+			System.Threading.Tasks.Task<string> stdout = p.StandardOutput.ReadToEndAsync();
+			p.StandardError.ReadToEndAsync();
+			if (!p.WaitForExit(waitMs))
+			{
+				try
+				{
+					p.Kill();
+				}
+				catch
+				{
+				}
+				return "";
+			}
+			return stdout.Wait(1000) ? stdout.Result : "";
+		}
+		catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is InvalidOperationException
+			|| ex is IOException || ex is PlatformNotSupportedException)
+		{
+			return "";
+		}
 	}
 
 	// on when every key the filter picks matches, off when none does, part for a mix, null when no key could
@@ -774,6 +1023,7 @@ internal static class SystemScanner
 		List<string> already = new List<string>();
 		bool reboot = false;
 		List<(string Service, bool On)> svc = new List<(string, bool)>();
+		Dictionary<string, string> svcNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		List<(string Id, bool On)> tweaks = new List<(string, bool)>();
 
 		foreach ((string kind, string id, bool on) in choices)
@@ -782,8 +1032,9 @@ internal static class SystemScanner
 			{
 			case "start":
 			{
+				// Only this account's entries have a switch, and an HKLM entry can carry the same name.
 				ScanItem item = before.Items.FirstOrDefault((ScanItem i) =>
-					i.Kind == "startup" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
+					i.Kind == "startup" && i.Scope == "HKCU" && string.Equals(i.Id, id, StringComparison.OrdinalIgnoreCase));
 				if (item == null || string.IsNullOrWhiteSpace(item.Id))
 				{
 					continue;
@@ -825,8 +1076,9 @@ internal static class SystemScanner
 				}
 				if (on ? item.CanEnable : item.CanDisable)
 				{
+					// Named as changed only once the elevated run says it was (see below).
 					svc.Add((item.Id, on));
-					done.Add(item.Name + (on ? " ON" : " OFF"));
+					svcNames[item.Id] = item.Name;
 				}
 				else
 				{
@@ -864,6 +1116,12 @@ internal static class SystemScanner
 				RazerLeftovers.RunPowerShell(Tweaks.Script(tweaks, Tweaks.UserScope, result), 60000, out int lcode);
 				Cfg.Log($"system scan: settings for this account -> exit code {lcode}");
 				okUser = TakeResult(result);
+				// Exit 0 is $failed == 0: every step of every setting went through, whatever the file says.
+				if (lcode == 0)
+				{
+					okUser.UnionWith(tweaks.Where(((string Id, bool On) x) => Tweaks.HasWork(new[] { x }, Tweaks.UserScope))
+						.Select(((string Id, bool On) x) => x.Id));
+				}
 				if (okUser.Count == 0)
 				{
 					Problem(lcode, refused, "the settings for this account");
@@ -878,17 +1136,42 @@ internal static class SystemScanner
 		if (svc.Count > 0 || Tweaks.HasWork(tweaks, Tweaks.MachineScope))
 		{
 			string result = ResultFile();
-			string script = Combine(ServiceCatalog.Script(svc), Tweaks.Script(tweaks, Tweaks.MachineScope, result));
+			// The elevated run also reads back what only an administrator can see, so a boot setting or the
+			// TCP auto-tuning level shows what it is now set to rather than what was asked for.
+			// The settings half writes the result file, so it has to be there even when only services were picked.
+			string script = WithAdminRead(Combine(ServiceCatalog.Script(svc, report: true),
+				Tweaks.Script(tweaks, Tweaks.MachineScope, result, force: true)));
 			try
 			{
 				int code = RazerLeftovers.RunElevated(script, 180000);
 				Cfg.Log($"system scan: {svc.Count} service(s), {tweaks.Count} windows setting(s) -> exit code {code}");
+				if (code == -2)
+				{
+					// Still running: whatever it reports later is picked up by the next scan.
+					Late(result, tweaks);
+				}
 				okMachine = TakeResult(result);
-				// Settings name themselves below; this line is for what they cannot account for (a service, a
-				// timeout, a script that never started).
-				bool namedAll = code > 0 && tweaks.Any(((string Id, bool On) x) =>
-					Tweaks.HasWork(new[] { x }, Tweaks.MachineScope) && !okMachine.Contains(x.Id)) && svc.Count == 0;
-				if (!namedAll)
+				if (code == 0)
+				{
+					okMachine.UnionWith(tweaks.Where(((string Id, bool On) x) => Tweaks.HasWork(new[] { x }, Tweaks.MachineScope))
+						.Select(((string Id, bool On) x) => x.Id));
+					okMachine.UnionWith(svc.Select(((string Service, bool On) x) => "svc:" + x.Service));
+				}
+				foreach ((string name, bool on) in svc)
+				{
+					string shown = svcNames.TryGetValue(name, out string n) ? n : name;
+					if (okMachine.Contains("svc:" + name))
+					{
+						done.Add(shown + (on ? " ON" : " OFF"));
+					}
+					else
+					{
+						refused.Add(shown);
+					}
+				}
+				// Settings and services name themselves; this line is for what they cannot account for (a
+				// timeout, a script that never started or was refused as tampered).
+				if (code < 0 || code == RazerLeftovers.Tampered)
 				{
 					Problem(code, refused, "the settings that need administrator rights");
 				}
@@ -936,7 +1219,9 @@ internal static class SystemScanner
 	}
 
 	// What LiteSynapse set goes into the ledger, so a setting Windows will not describe still shows its state.
-	private static void Record(List<(string Id, bool On)> tweaks, HashSet<string> okUser, HashSet<string> okMachine)
+	// userDone: the account's half is not in question (a late machine result, whose user half was recorded
+	// when it ran).
+	private static void Record(List<(string Id, bool On)> tweaks, HashSet<string> okUser, HashSet<string> okMachine, bool userDone = false)
 	{
 		if (tweaks.Count == 0)
 		{
@@ -947,7 +1232,10 @@ internal static class SystemScanner
 		bool any = false;
 		foreach ((string id, bool on) in tweaks)
 		{
-			if (Applied(id, on, okUser, okMachine))
+			bool ok = userDone
+				? (Tweaks.HasWork(new[] { (id, on) }, Tweaks.MachineScope) && okMachine != null && okMachine.Contains(id))
+				: Applied(id, on, okUser, okMachine);
+			if (ok)
 			{
 				ledger.Set(id, on, now);
 				any = true;
@@ -956,6 +1244,59 @@ internal static class SystemScanner
 		if (any)
 		{
 			ledger.Save();
+		}
+	}
+
+	// Elevated runs that outlived their wait: (result file, what they were applying).
+	private static readonly List<(string File, List<(string Id, bool On)> Tweaks)> late = new List<(string, List<(string, bool)>)>();
+
+	private static void Late(string file, List<(string Id, bool On)> tweaks)
+	{
+		lock (late)
+		{
+			late.Add((file, new List<(string, bool)>(tweaks)));
+		}
+	}
+
+	// Records what a late elevated run reported once its file has appeared, and removes leftovers: result
+	// files and oversized-script files older than ten minutes that nothing is waiting for (an app killed with
+	// a consent prompt open leaves one).
+	private static void Tidy()
+	{
+		lock (late)
+		{
+			for (int i = late.Count - 1; i >= 0; i--)
+			{
+				(string file, List<(string Id, bool On)> tweaks) = late[i];
+				if (File.Exists(file))
+				{
+					HashSet<string> ok = TakeResult(file);
+					Record(tweaks, null, ok, userDone: true);
+					late.RemoveAt(i);
+				}
+			}
+		}
+		try
+		{
+			DateTime cutoff = DateTime.UtcNow.AddMinutes(-10);
+			foreach (string pattern in new[] { "perf-result-*.txt", "run-*.ps1" })
+			{
+				foreach (string f in Directory.GetFiles(Cfg.Dir, pattern))
+				{
+					bool waited;
+					lock (late)
+					{
+						waited = late.Any(((string File, List<(string Id, bool On)> Tweaks) x) => string.Equals(x.File, f, StringComparison.OrdinalIgnoreCase));
+					}
+					if (!waited && File.GetLastWriteTimeUtc(f) < cutoff)
+					{
+						File.Delete(f);
+					}
+				}
+			}
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+		{
 		}
 	}
 
@@ -974,7 +1315,14 @@ internal static class SystemScanner
 				return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			}
 			HashSet<string> ids = Tweaks.ReadResult(File.ReadAllText(file));
-			File.Delete(file);
+			try
+			{
+				File.Delete(file);
+			}
+			catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+			{
+				// Swept at the next scan; the ids already read still count.
+			}
 			return ids;
 		}
 		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
@@ -1018,6 +1366,17 @@ internal static class SystemScanner
 		string a = Strip(first);
 		string b = Strip(second);
 		return "$failed = 0\n" + a + b + "exit $failed\n";
+	}
+
+	internal static string WithAdminRead(string script)
+	{
+		const string tail = "exit $failed\n";
+		string body = script ?? "";
+		if (body.EndsWith(tail, StringComparison.Ordinal))
+		{
+			body = body.Substring(0, body.Length - tail.Length);
+		}
+		return body + Tweaks.AdminReadScript(Tweaks.AdminReadFile) + tail;
 	}
 
 	private static string Strip(string script)

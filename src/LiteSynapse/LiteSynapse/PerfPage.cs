@@ -484,8 +484,8 @@ internal sealed class PerfPage
 			{
 			case "tweak":
 				// A setting is applied or not; the switch is the thing's side, which is the same or the
-				// opposite depending on the setting.
-				choices.Add((kind, what, PerfModel.TweakOn(want, r.HelpsWhenOn)));
+				// opposite depending on the setting - and that never depends on the PC, unlike which side helps.
+				choices.Add((kind, what, PerfModel.TweakOn(want, r.AppliedOn)));
 				break;
 			case "svc":
 			case "start":
@@ -741,6 +741,8 @@ internal sealed class PerfPage
 				app.RunScanAsync().GetAwaiter().GetResult();
 				return "Checked.";
 			})),
+			Plain("CHECK AS ADMIN", false, () => Work(2, "Waiting for Windows to ask permission...",
+				() => app.CheckSettingsAsAdminAsync().GetAwaiter().GetResult())),
 			FixAll(2),
 			ApplyButton(2),
 			Undo(2));
@@ -766,17 +768,23 @@ internal sealed class PerfPage
 			rows.Add(Header(gtitle, gblurb));
 			foreach (TweakRow t in group)
 			{
+				string thing = PerfModel.ThingState(t.State, t.AppliedOn);
+				bool helping = PerfModel.Verdict(thing, t.PerfOn, t.Risk) == PerfModel.Helping;
 				rows.Add(new SwitchList.Row
 				{
 					Id = "tweak:" + t.Id,
 					Title = (t.Thing.Length > 0) ? t.Thing : t.Title,
 					Desc = t.What + " Source: " + Tweaks.SourceText(t.Source) + ".",
 					Cost = Costly(t),
-					Note = HowKnown(t),
-					State = PerfModel.ThingState(t.State, t.PerfOn),
+					Note = (t.OneWay && helping)
+						? "Set. LiteSynapse does not move it away again - use Windows' own mouse settings for that."
+						: HowKnown(t),
+					State = thing,
 					HelpsWhenOn = t.PerfOn,
+					AppliedOn = t.AppliedOn,
 					Risk = t.Risk,
-					Can = true
+					// A one-way setting has nothing to switch back to once it is applied.
+					Can = !(t.OneWay && helping)
 				});
 			}
 		}
@@ -792,7 +800,12 @@ internal sealed class PerfPage
 		}
 		if (t.Remembered)
 		{
-			return "Windows does not report this one without administrator rights, so this is what LiteSynapse last set.";
+			return "Windows does not report this one without administrator rights, so this is what LiteSynapse last set. " +
+				"CHECK AS ADMIN reads it.";
+		}
+		if (t.FromAdmin.HasValue)
+		{
+			return $"Read with administrator rights ({t.FromAdmin.Value.ToLocalTime():g}).";
 		}
 		if (t.State == "other")
 		{
@@ -800,7 +813,12 @@ internal sealed class PerfPage
 		}
 		if (t.State == "unknown")
 		{
-			return "Windows does not report this one, and LiteSynapse has not set it. Switch it to set it either way.";
+			return "Windows only shows this one to an administrator. Press CHECK AS ADMIN to read it, or switch it to set it.";
+		}
+		if (t.State == "part")
+		{
+			return "Partly set: some of what it covers is not (a network adapter added since, or another tool set only part). " +
+				"Switching it ON sets all of it.";
 		}
 		return "";
 	}
@@ -877,8 +895,8 @@ internal sealed class PerfPage
 						? "Windows ships this one disabled too, so there is nothing to turn back on."
 						: "Reported only: LiteSynapse does not switch this one."),
 					State = PerfModel.ServiceState(i.State),
-					HelpsWhenOn = false,
-					Badge = i.Network ? "Uses the network" : "",
+					HelpsWhenOn = i.KeepOn,
+					Badge = i.Network ? "Uses the network" : (i.KeepOn ? "Keep on" : ""),
 					Risk = i.Risk,
 					Can = can
 				});
