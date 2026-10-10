@@ -106,6 +106,9 @@ internal class DarkCombo : Control
 			}
 			else
 			{
+				// Not in the list: show nothing selected rather than keep whatever index the old list had,
+				// which displayed a different profile as the active one. No event: nothing was chosen.
+				sel = -1;
 				base.Invalidate();
 			}
 		}
@@ -207,7 +210,7 @@ internal class DarkCombo : Control
 			ForeColor = Theme.Text,
 			DrawMode = (DrawMode)1,
 			ItemHeight = 25,
-			Font = Theme.F(10f, (FontStyle)0),
+			Font = Theme.P(10f, (FontStyle)0),
 			Width = base.Width,
 			Height = rows * 25 + 2,
 			IntegralHeight = false
@@ -313,13 +316,24 @@ internal class DarkCombo : Control
 			Size = ((Control)list).Size
 		};
 		((ToolStrip)dd).Items.Add((ToolStripItem)(object)host);
-		dd.Closed += (object? s, ToolStripDropDownClosedEventArgs _) =>
+		dd.Closed += (object? s, ToolStripDropDownClosedEventArgs e) =>
 		{
 			open = false;
 			drop = null;
 			popupList = null;
+			// A click on this field closed it: the click's mouse-up must not open it again.
+			if (e.CloseReason == ToolStripDropDownCloseReason.AppClicked && base.ClientRectangle.Contains(base.PointToClient(Cursor.Position)))
+			{
+				closedOnSelf = true;
+				closedAt = Environment.TickCount64;
+			}
 			base.Invalidate();
 			PopupClosed?.Invoke();
+			// The popup window, its host and the list go with it, once the click that closed it is handled.
+			if (base.IsHandleCreated)
+			{
+				base.BeginInvoke((Action)dd.Dispose);
+			}
 		};
 		drop = dd;
 		popupList = list;

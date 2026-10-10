@@ -29,19 +29,21 @@ internal class PillTabs : Control
 		return (int)Widths().Sum();
 	}
 
+	// Measured once per set of captions, not on every mouse move: a 1000 Hz mouse over the bar sent a
+	// thousand hit tests a second, each measuring every caption again.
+	private string[] measuredFor;
+
+	private float[] widths = Array.Empty<float>();
+
 	private float[] Widths()
 	{
-		Font f = Theme.P(9.5f, (FontStyle)0);
-		try
+		if (!ReferenceEquals(measuredFor, Items))
 		{
-			return Items.Select((string i) => Tx.Measure(i, f).Width + 38f).ToArray();
+			Font f = Theme.P(9.5f, (FontStyle)0);
+			widths = Items.Select((string i) => Tx.Measure(i, f).Width + 38f).ToArray();
+			measuredFor = Items;
 		}
-		finally
-		{
-			if (f != null)
-			{
-			}
-		}
+		return widths;
 	}
 
 	protected override void OnPaint(PaintEventArgs e)

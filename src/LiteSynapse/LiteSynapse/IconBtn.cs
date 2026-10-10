@@ -14,13 +14,28 @@ internal class IconBtn : Control
 
 	private bool hover;
 
+	// One tooltip per button, disposed with it. A new ToolTip per set left a tooltip window (and the row it
+	// pointed at) alive until the main window closed, and the games list rebuilds its rows on every keystroke
+	// in the search box.
+	private ToolTip tip;
+
 	public string Tip
 	{
 		set
 		{
-			//IL_0000: Unknown result type (might be due to invalid IL or missing references)
-			new ToolTip().SetToolTip((Control)(object)this, value);
+			tip ??= new ToolTip();
+			tip.SetToolTip(this, value);
 		}
+	}
+
+	protected override void Dispose(bool disposing)
+	{
+		if (disposing)
+		{
+			tip?.Dispose();
+			tip = null;
+		}
+		base.Dispose(disposing);
 	}
 
 	public IconBtn()

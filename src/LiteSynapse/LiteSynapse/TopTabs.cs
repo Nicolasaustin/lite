@@ -34,9 +34,16 @@ internal class TopTabs : Control
 		base.BackColor = Theme.Top;
 	}
 
+	// The order list last checked, so a hit test or a paint does not rebuild it with LINQ every time.
+	private List<int> normalized;
+
 	private void Normalize()
 	{
-		List<int> o = Order.Where((int num) => num >= 0 && num < Items.Length).Distinct().ToList();
+		if (ReferenceEquals(normalized, Order) && Order.Count == Items.Length)
+		{
+			return;
+		}
+		List<int> o = (Order ?? new List<int>()).Where((int num) => num >= 0 && num < Items.Length).Distinct().ToList();
 		for (int i = 0; i < Items.Length; i++)
 		{
 			if (!o.Contains(i))
@@ -45,19 +52,54 @@ internal class TopTabs : Control
 			}
 		}
 		Order = o;
+		normalized = o;
 	}
 
 	// Each tab is its glyph, its caption and some padding. With seven tabs that can be wider than the window
 	// at the minimum size, or at a display scale above 100% where the text grows and the window does not -
 	// and this row has no wrap and no scroll, so an overflowing tab was simply clipped off the right edge.
 	// When the total does not fit, the padding is squeezed down to a floor before anything is cut.
+	// Caption widths are measured once per set of tabs and the layout once per width, not on every mouse move
+	// (a 1000 Hz mouse over the bar meant thousands of text measurements a second).
+	private (string text, string glyph)[] measuredFor;
+
+	private float[] textWidths = Array.Empty<float>();
+
+	private float[] layout;
+
+	private float layoutWidth = -1f;
+
+	protected override void OnResize(EventArgs e)
+	{
+		base.OnResize(e);
+		layout = null;
+		base.Invalidate();
+	}
+
 	private float[] Widths()
+	{
+		if (!ReferenceEquals(measuredFor, Items))
+		{
+			Font tf = Theme.P(9.5f, (FontStyle)0);
+			textWidths = Items.Select(((string text, string glyph) i) => Tx.Measure(i.text.ToUpperInvariant(), tf).Width).ToArray();
+			measuredFor = Items;
+			layout = null;
+		}
+		if (layout != null && layoutWidth == base.Width)
+		{
+			return layout;
+		}
+		layout = Compute();
+		layoutWidth = base.Width;
+		return layout;
+	}
+
+	private float[] Compute()
 	{
 		Font f = Theme.P(9.5f, (FontStyle)0);
 		try
 		{
-			float[] text = Items.Select(((string text, string glyph) i) =>
-				Tx.Measure(i.text.ToUpperInvariant(), f).Width).ToArray();
+			float[] text = textWidths;
 			const float glyph = 46f;
 			const float padding = 18f;
 			const float minPadding = 4f;
@@ -235,8 +277,8 @@ internal class TopTabs : Control
 				{
 					Order.RemoveAt(cur);
 					Order.Insert(target, downIdx);
+					base.Invalidate();
 				}
-				base.Invalidate();
 				return;
 			}
 		}

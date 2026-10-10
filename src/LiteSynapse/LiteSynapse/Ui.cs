@@ -97,7 +97,7 @@ internal static class Ui
 			Renderer = (ToolStripRenderer)(object)new DarkRenderer(),
 			BackColor = Color.Black,
 			ForeColor = Color.White,
-			Font = Theme.F(10f, (FontStyle)0),
+			Font = Theme.P(10f, (FontStyle)0),
 			ShowImageMargin = false
 		};
 	}

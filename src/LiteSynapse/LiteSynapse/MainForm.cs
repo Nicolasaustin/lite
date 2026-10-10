@@ -1611,6 +1611,7 @@ internal class MainForm : Form
 				Enabled = false
 			});
 		}
+		menu.Closed += (object? _, ToolStripDropDownClosedEventArgs _) => BeginInvoke((Action)menu.Dispose);
 		((ToolStripDropDown)menu).Show(anchor, new Point(0, anchor.Height));
 	}
 
@@ -2625,12 +2626,14 @@ internal class MainForm : Form
 		//IL_01ef: Expected Obj, but got Unknown
 		//IL_0250: Unknown result type (might be due to invalid IL or missing references)
 		//IL_025a: Expected Obj, but got Unknown
-		ContextMenuStrip menu = Ui.Menu();
 		string cur = (string)cbProfile.SelectedItem;
 		if (cur == null)
 		{
 			return;
 		}
+		ContextMenuStrip menu = Ui.Menu();
+		// Disposed once closed (after its item's click has run): a new menu per click used to stay behind.
+		menu.Closed += (object? _, ToolStripDropDownClosedEventArgs _) => BeginInvoke((Action)menu.Dispose);
 		((ToolStrip)menu).Items.Add("Add", (Image)null, (EventHandler)((object? _, EventArgs _) =>
 		{
 			AddProfile();
@@ -3037,6 +3040,15 @@ internal class MainForm : Form
 				nagaBrightOn.Checked = true;
 			}
 			KbProfile kp = KP;
+			// With no keyboard profile active there is nothing for these to change: greyed out, so a flip can
+			// never look saved when it was not.
+			((Control)snap).Enabled = kp != null;
+			((Control)kbBrightOn).Enabled = kp != null;
+			((Control)kbBright).Enabled = kp != null;
+			foreach (var (_, combo) in arrowCombos)
+			{
+				((Control)combo).Enabled = kp != null;
+			}
 			if (kp != null)
 			{
 				kbBright.Value = kp.Brightness;

@@ -43,7 +43,9 @@ internal class Toggle : Control
 		g.Clear(base.BackColor);
 		// Windows 11 style: off is an outlined track with a grey knob, on is the accent with a dark knob.
 		using GraphicsPath path = Theme.Round(new RectangleF(1f, 2f, base.Width - 3, base.Height - 5), (float)(base.Height - 5) / 2f);
-		using (SolidBrush fill = new SolidBrush(on ? Theme.Green : Theme.Raised))
+		// A switch that cannot be used must not look like one that can: muted, whatever its position.
+		Color onColor = base.Enabled ? Theme.Green : Theme.GreenDark;
+		using (SolidBrush fill = new SolidBrush(on ? onColor : Theme.Raised))
 		{
 			g.FillPath(fill, path);
 		}
@@ -54,8 +56,15 @@ internal class Toggle : Control
 		}
 		float d = base.Height - 11;
 		float x = on ? ((float)base.Width - d - 6f) : 5f;
-		using SolidBrush knob = new SolidBrush(on ? Color.Black : Color.FromArgb(200, 200, 205));
+		using SolidBrush knob = new SolidBrush(on ? Color.Black : (base.Enabled ? Color.FromArgb(200, 200, 205) : Color.FromArgb(110, 110, 116)));
 		g.FillEllipse(knob, x, 5f, d, d);
+	}
+
+	protected override void OnEnabledChanged(EventArgs e)
+	{
+		base.OnEnabledChanged(e);
+		base.Cursor = base.Enabled ? Cursors.Hand : Cursors.Default;
+		base.Invalidate();
 	}
 
 	protected override void OnMouseClick(MouseEventArgs e)
