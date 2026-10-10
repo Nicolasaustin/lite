@@ -551,6 +551,32 @@ public class DeviceTuningTests
 	}
 
 	[Theory]
+	// The query says so on its own line, because the process exit code cannot: with -ErrorAction
+	// SilentlyContinue the script succeeded whether or not WMI answered, so "no devices" and "refused"
+	// looked identical and the window told the user to plug the mouse in either way.
+	[InlineData("READABLE|1", true)]
+	[InlineData("READABLE|0", false)]
+	[InlineData("  READABLE|1  ", true)]
+	[InlineData("True|USB\\VID_1532&PID_008D\\x_0|Razer Naga", null)]
+	[InlineData("", null)]
+	[InlineData(null, null)]
+	public void WhetherTheQueryCouldReadAtAll(string line, bool? expected)
+	{
+		Assert.Equal(expected, DeviceTuning.ParseReadable(line));
+	}
+
+	[Fact]
+	public void TheQueryAsksForThePowerManagementClassAndSaysIfItFailed()
+	{
+		Assert.Contains("MSPower_DeviceEnable", DeviceTuning.QueryScript);
+		Assert.Contains("READABLE|$ok", DeviceTuning.QueryScript);
+		// -ErrorAction Stop, so the catch is what sets $ok: SilentlyContinue would make the failure invisible.
+		Assert.Contains("-ErrorAction Stop", DeviceTuning.QueryScript);
+		// The power-management suffix is any number, not just _0: a composite device uses _1, _2 and so on.
+		Assert.Contains("'_\\d+$'", DeviceTuning.QueryScript);
+	}
+
+	[Theory]
 	[InlineData(null, "unknown")]
 	[InlineData(0, "off")]
 	[InlineData(1, "on")]
@@ -592,9 +618,14 @@ public class DeviceTuningTests
 	[Fact]
 	public void TheSummarySaysWhatIsLeft()
 	{
-		DeviceTuningState none = new DeviceTuningState();
+		// Read fine, found nothing: the mouse is probably unplugged.
+		DeviceTuningState none = new DeviceTuningState { Readable = true };
 		Assert.Contains("No Razer device", DeviceTuning.Summary(none));
 		Assert.Contains("No Razer device", DeviceTuning.Summary(null));
+		// Could not read at all: saying "plug the mouse in" would send the user after the wrong problem.
+		DeviceTuningState refused = new DeviceTuningState { Readable = false };
+		Assert.Contains("administrator", DeviceTuning.Summary(refused));
+		Assert.DoesNotContain("Plug the mouse in", DeviceTuning.Summary(refused));
 		DeviceTuningState awake = new DeviceTuningState
 		{
 			Devices = new List<TunedDevice> { new TunedDevice { Instance = "a", PowerSaving = false } }

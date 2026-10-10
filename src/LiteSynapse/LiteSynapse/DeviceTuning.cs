@@ -115,15 +115,38 @@ internal static class DeviceTuning
 	// covers the lot. -ErrorAction SilentlyContinue throughout: on a PC without the device, or without rights
 	// to root\WMI, this prints nothing instead of failing, and the caller reports that it could not read
 	// rather than claiming the devices are fine.
+	// The first line is always READABLE|0 or READABLE|1, because the process exit code cannot carry that:
+	// with -ErrorAction SilentlyContinue the script succeeds whether or not the query returned anything, so
+	// "no devices" and "could not read root\WMI" would look identical from the outside - and the window would
+	// tell the user to plug the mouse in when the real problem was that it had no rights to ask.
 	internal const string QueryScript =
-		"$d = Get-CimInstance -Namespace root/WMI -ClassName MSPower_DeviceEnable -ErrorAction SilentlyContinue\n" +
+		"$ok = 0\n" +
+		"$d = $null\n" +
+		"try {\n" +
+		"  $d = @(Get-CimInstance -Namespace root/WMI -ClassName MSPower_DeviceEnable -ErrorAction Stop)\n" +
+		"  $ok = 1\n" +
+		"} catch { }\n" +
+		"\"READABLE|$ok\"\n" +
 		"foreach ($x in $d) {\n" +
 		"  if ($x.InstanceName -notlike '*VID_1532*') { continue }\n" +
-		"  $id = $x.InstanceName -replace '_0$', ''\n" +
+		// The trailing _<n> is the power-management instance suffix, not part of the PnP instance id. It is
+		// _0 on a single-function device and _1, _2 ... on a composite one.
+		"  $id = $x.InstanceName -replace '_\\d+$', ''\n" +
 		"  $n = ''\n" +
 		"  try { $n = (Get-PnpDevice -InstanceId $id -ErrorAction SilentlyContinue).FriendlyName } catch { }\n" +
 		"  \"$($x.Enable)|$($x.InstanceName)|$n\"\n" +
 		"}\n";
+
+	// The READABLE line: true when the WMI query itself ran, false when it was refused. null for any other
+	// line, so the caller can tell "not this line" from "it said no".
+	internal static bool? ParseReadable(string line)
+	{
+		if (string.IsNullOrWhiteSpace(line) || !line.TrimStart().StartsWith("READABLE|", StringComparison.Ordinal))
+		{
+			return null;
+		}
+		return line.Trim().EndsWith("|1", StringComparison.Ordinal);
+	}
 
 	public static DeviceTuningState Check()
 	{
@@ -131,14 +154,25 @@ internal static class DeviceTuning
 		try
 		{
 			string output = RazerLeftovers.RunPowerShell(QueryScript, 20000, out int code);
-			s.Readable = code == 0;
+			// The script could not even be started (or timed out): nothing is known either way.
+			s.Readable = false;
 			foreach (string line in (output ?? "").Split('\n'))
 			{
+				bool? readable = ParseReadable(line);
+				if (readable.HasValue)
+				{
+					s.Readable = readable.Value;
+					continue;
+				}
 				TunedDevice d = ParseDevice(line);
 				if (d != null && !s.Devices.Any((TunedDevice x) => x.Instance == d.Instance))
 				{
 					s.Devices.Add(d);
 				}
+			}
+			if (code != 0)
+			{
+				Cfg.Log($"device tuning: the power-management query exited with {code}");
 			}
 			if (s.Devices.Count == 0)
 			{
@@ -265,7 +299,11 @@ internal static class DeviceTuning
 	{
 		if (s == null || s.Devices.Count == 0)
 		{
-			return "No Razer device answered. Plug the mouse in and check again.";
+			// Now that the query says whether it could read at all, do not tell someone to plug in a mouse
+			// that is already plugged in when the real problem was that Windows refused the question.
+			return (s != null && !s.Readable)
+				? "Windows would not let LiteSynapse read the devices' power settings. Start LiteSynapse as administrator and try again."
+				: "No Razer device answered. Plug the mouse in and check again.";
 		}
 		int sleeping = s.Devices.Count((TunedDevice d) => d.PowerSaving);
 		if (sleeping == 0)
