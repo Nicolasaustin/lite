@@ -564,14 +564,23 @@ internal sealed class RazerDevice : IDisposable
 
 	public bool SetDpi(int dpi, int? slot = null)
 	{
+		return SetDpi(dpi, out int _);
+	}
+
+	// sentTo: the storage the DPI was written to (a slot number, or 1 for the 0x01 fallback), 0 when nothing
+	// was sent because the mouse already had it.
+	public bool SetDpi(int dpi, out int sentTo)
+	{
 		lock (gate)
 		{
+			sentTo = 0;
 			if (this.dpi == dpi)
 			{
 				return true;
 			}
 			// To the profile the mouse is running now (its slot), falling back to 0x01 if the mouse refuses that.
 			byte store = ActiveStorageLocked();
+			sentTo = store;
 			int s = TransactAuto(4, 5, 7, stackalloc byte[5]
 			{
 				store,
@@ -583,6 +592,7 @@ internal sealed class RazerDevice : IDisposable
 			if (s != StatusOk && store != 1)
 			{
 				Cfg.Log($"{Name}: DPI for slot {store} refused (status {s}), using 0x01");
+				sentTo = 1;
 				s = TransactAuto(4, 5, 7, stackalloc byte[5]
 				{
 					1,

@@ -66,6 +66,9 @@ internal sealed class Service
 	// The program really in front (LiteSynapse included) is a linked game: no flash writes now.
 	private volatile bool gameInFront;
 
+	// A pre-write skipped or stopped because a game came to the front, tried again when it leaves.
+	private volatile string skippedPrewrite;
+
 	private string currentKey = "\0";
 
 	// ---- Target state (stateLock) ----
@@ -449,7 +452,14 @@ internal sealed class Service
 			// DPI is stored per slot: while the mouse is still on one of the user's own slots, the live slot write
 			// that follows brings it instead.
 			bool toSlot = !LiveWrite || OnboardSlots.IsLiveSlot(m.ActiveStorage());
-			bool dpiOk = toSlot && m.SetDpi(mp.Dpi);
+			int sentTo = 0;
+			bool dpiOk = toSlot && m.SetDpi(mp.Dpi, out sentTo);
+			if (LiveWrite && sentTo > 0 && OnboardSlots.IsLiveSlot(sentTo))
+			{
+				// That slot now holds a DPI its recorded profile does not: never switch to it as a match again.
+				// The slot write SaveProfiles asked for writes the profile as it is now.
+				liveProfile.ForgetSlot(sentTo);
+			}
 			bool pollOk = m.SetPolling(mp.PollingRate);
 			Cfg.Log(toSlot ? $"mouse now: dpi {mp.Dpi}:{dpiOk} poll {mp.PollingRate}:{pollOk}" : $"mouse now: poll {mp.PollingRate}:{pollOk}; dpi {mp.Dpi} comes with the live slot");
 		});
@@ -945,6 +955,12 @@ internal sealed class Service
 				rule = GameRule.Find(games, exe, path);
 			}
 			gameInFront = rule != null;
+			if (!gameInFront && skippedPrewrite != null)
+			{
+				string again = skippedPrewrite;
+				skippedPrewrite = null;
+				SchedulePrewrite(again);
+			}
 			bool elevatedChanged = false;
 			if (pid != fgPid || (rule != null) != (fgRule != null))
 			{
@@ -1216,6 +1232,12 @@ internal sealed class Service
 			{
 				status = liveProfile.Status;
 				Cfg.Log("live: " + status);
+				// The slot write just put this lighting into the slot: sending it again would be six more
+				// flash writes with the game starting.
+				if (liveProfile.Wrote && mp.Lighting != null && liveProfile.LiveSlot >= 1 && liveProfile.LiveSlot <= OnboardSlots.SlotCount)
+				{
+					slotLighting[liveProfile.LiveSlot] = MouseLighting.Describe(mp.Lighting);
+				}
 			}
 			bool failed = err != null;
 			lock (stateLock)
@@ -1290,17 +1312,14 @@ internal sealed class Service
 			return;
 		}
 		string err = MouseLighting.Apply(m, s, store);
-		byte sentTo = store;
-		if (err != null && store != MouseLighting.VarStore)
+		// Remembered either way. A zone the mouse refuses is refused again next time, and retrying on every
+		// game start and desktop restore sent up to twelve commands each time. It is tried again when the
+		// lighting or the profile changes, or the device is reset. (There is no 0x01 fallback: 0x01 reaches
+		// slot 1 only, so for the slot the mouse is on it changed nothing visible and overwrote slot 1.)
+		lastLighting = key;
+		if (store >= 1 && store <= OnboardSlots.SlotCount)
 		{
-			Cfg.Log($"mouse lighting for slot {store}: {err}; trying 0x01");
-			err = MouseLighting.Apply(m, s, MouseLighting.VarStore);
-			sentTo = MouseLighting.VarStore;
-		}
-		lastLighting = (err == null) ? key : null;
-		if (sentTo >= 1 && sentTo <= OnboardSlots.SlotCount)
-		{
-			slotLighting[sentTo] = (err == null) ? want : null;
+			slotLighting[store] = want;
 		}
 		Cfg.Log($"mouse lighting {want} (slot {store}): {err ?? "ok"}");
 	}
@@ -1321,9 +1340,10 @@ internal sealed class Service
 		bool changed = kp.Name != lastKbName;
 		if (changed)
 		{
-			// The brightness keys on the keyboard may have changed it: send the new profile's values.
+			// The brightness keys on the keyboard may have changed it: send the new profile's brightness. The
+			// effect is only sent when it differs - two profiles with the same backlight switched on every
+			// alt-tab used to send it again each time.
 			k.InvalidateCache();
-			lastKbEffect = null;
 			lastKbName = kp.Name;
 		}
 		string name = KbLighting.Normalize(kp.Effect);
@@ -1344,6 +1364,15 @@ internal sealed class Service
 		}
 	}
 
+	// The active keyboard profile's brightness, through the device worker like every other device write.
+	public void ApplyKbBrightness()
+	{
+		if (keyboard != null && !DryRun)
+		{
+			RequestKeyboard(forceLighting: false);
+		}
+	}
+
 	private void Prewrite(string profile)
 	{
 		MouseProfile mp;
@@ -1360,14 +1389,21 @@ internal sealed class Service
 		}
 		if (gameInFront)
 		{
-			// Never write the mouse's memory while a game is in front; the game start writes it if still needed.
+			// Never write the mouse's memory while a game is in front: tried again when the game leaves.
 			Cfg.Log("pre-write of \"" + profile + "\" skipped: a game is in front");
+			skippedPrewrite = profile;
 			return;
 		}
-		string err = liveProfile.Prewrite(m, mp);
+		// And stop between commands if one comes to the front while it writes, rather than finishing thirty
+		// flash writes under it.
+		string err = liveProfile.Prewrite(m, mp, () => gameInFront);
 		if (err != null)
 		{
 			Cfg.Log("pre-write failed: " + err);
+			if (gameInFront)
+			{
+				skippedPrewrite = profile;
+			}
 		}
 		else
 		{
@@ -1460,8 +1496,10 @@ internal sealed class Service
 			sleeping = false;
 			UpdateEngineLocked(force: true);
 		}
-		// The devices were powered down: new handles, nothing cached, state applied again.
-		worker.Post("devices", () => SyncDevices(reset: true));
+		// The devices were powered down and get new handles, nothing cached and the state applied again - once,
+		// from TrayHost's settle timer after USB has come back. Posting it here as well ran it twice, the first
+		// time often before the devices were back, which logged them as disconnected and flipped the input
+		// engine to software remaps and back.
 		Cfg.Log("resume");
 		Notify();
 	}

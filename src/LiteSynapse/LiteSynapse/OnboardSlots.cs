@@ -271,9 +271,13 @@ internal sealed class OnboardSlots
 		return new OnboardSlots();
 	}
 
+	// Written to a temporary file and moved over the old one, so a crash or power cut mid-write leaves the
+	// previous table rather than a truncated one (which loads as empty and forces every slot to be rewritten).
 	public void Save(string path)
 	{
 		Directory.CreateDirectory(Path.GetDirectoryName(path));
-		File.WriteAllText(path, ToJson());
+		string tmp = path + ".tmp";
+		File.WriteAllText(tmp, ToJson());
+		File.Move(tmp, path, overwrite: true);
 	}
 }

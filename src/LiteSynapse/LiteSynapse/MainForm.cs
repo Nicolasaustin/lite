@@ -2250,7 +2250,7 @@ internal class MainForm : Form
 				p.Brightness = kbBright.Value;
 				kbBrightOn.Checked = p.Brightness > 0;
 				SaveProfiles();
-				Task.Run(() => app.Kb?.SetBrightness(p.Brightness));
+				app.ApplyKbBrightness();
 			}
 		};
 		kbBrightOn.CheckedChanged += () =>
@@ -2271,7 +2271,7 @@ internal class MainForm : Form
 						kbBright.Value = 50;
 					}
 					SaveProfiles();
-					Task.Run(() => app.Kb?.SetBrightness(p.Brightness));
+					app.ApplyKbBrightness();
 				}
 			}
 		};

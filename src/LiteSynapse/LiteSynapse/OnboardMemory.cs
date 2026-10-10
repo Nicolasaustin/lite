@@ -409,7 +409,9 @@ internal static class OnboardMemory
 		return sb.ToString();
 	}
 
-	public static string Write(RazerDevice dev, int slot, MouseProfile p, Action<string> progress = null)
+	// abort: asked before every command; true stops the write (the slot then stays marked unknown, so a half
+	// write is never trusted). A pre-write passes "a game came to the front".
+	public static string Write(RazerDevice dev, int slot, MouseProfile p, Action<string> progress = null, Func<bool> abort = null)
 	{
 		if (dev == null)
 		{
@@ -427,6 +429,10 @@ internal static class OnboardMemory
 		byte txn = 3;
 		foreach (OnboardCommand c in commands)
 		{
+			if (abort != null && abort())
+			{
+				return "stopped: a game came to the front";
+			}
 			if (c.Progress != null)
 			{
 				progress?.Invoke(c.Progress);

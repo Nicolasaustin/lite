@@ -70,7 +70,15 @@ internal static class Program
 		if (args.Length >= 1 && args[0] == "testall")
 		{
 			AttachConsole(-1);
-			// While this is held, a running LiteSynapse leaves the devices alone (Service.BeginSelfTest).
+			// The self-test writes and switches the mouse's slots itself. A running LiteSynapse would drive the
+			// same mouse at the same time and both would then trust slot records the other overwrote, so the
+			// test refuses to run beside it rather than pretending the other copy stands back.
+			if (Mutex.TryOpenExisting("LiteSynapse.single", out Mutex running))
+			{
+				running.Dispose();
+				Console.WriteLine("LiteSynapse is running. Exit it from the tray first: the self-test drives the mouse itself.");
+				return 2;
+			}
 			using Mutex selfTest = new Mutex(initiallyOwned: true, SelfTestMutex, out bool owned);
 			try
 			{

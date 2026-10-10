@@ -170,7 +170,7 @@ internal class LiveProfile
 
 	// Writes p into slot and records it. The slot is marked unknown first, so a write that fails half way is
 	// never mistaken for a good copy.
-	public string WriteSlot(RazerDevice dev, int slot, MouseProfile p, Action<string> progress = null)
+	public string WriteSlot(RazerDevice dev, int slot, MouseProfile p, Action<string> progress = null, Func<bool> abort = null)
 	{
 		string hash = OnboardSlots.ContentHash(p);
 		lock (tableLock)
@@ -179,7 +179,7 @@ internal class LiveProfile
 			SaveTable();
 		}
 		SlotWritten?.Invoke(slot);
-		string err = OnboardMemory.Write(dev, slot, p, progress);
+		string err = OnboardMemory.Write(dev, slot, p, progress, abort);
 		if (err != null)
 		{
 			return err;
@@ -250,7 +250,7 @@ internal class LiveProfile
 
 	// Puts p into an idle live slot ahead of time (no switch), so the next game start only switches slots.
 	// Returns null when done or when nothing was needed.
-	public string Prewrite(RazerDevice dev, MouseProfile p)
+	public string Prewrite(RazerDevice dev, MouseProfile p, Func<bool> abort = null)
 	{
 		int active = dev.GetActiveSlot() ?? (-1);
 		if (active < 1)
@@ -266,9 +266,25 @@ internal class LiveProfile
 		{
 			return null;
 		}
-		string err = WriteSlot(dev, plan.Slot, p);
+		string err = WriteSlot(dev, plan.Slot, p, null, abort);
 		Cfg.Log($"pre-wrote \"{p.Name}\" to slot {plan.Slot}: {err ?? "ok"}");
 		return err;
+	}
+
+	// Marks what a slot holds as unknown: something was written into it outside a full slot write (the DPI
+	// slider sends the new DPI to the slot the mouse is on), so its recorded profile no longer describes it and
+	// must never be switched to as a match.
+	public void ForgetSlot(int slot)
+	{
+		if (slot < 1 || slot > OnboardSlots.SlotCount)
+		{
+			return;
+		}
+		lock (tableLock)
+		{
+			Table().Forget(slot);
+			SaveTable();
+		}
 	}
 
 	// Forgets which live slot is active (after a reconnect); what the slots hold stays known.

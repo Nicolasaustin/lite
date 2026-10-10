@@ -79,10 +79,14 @@ public static class Cfg
 		return new T();
 	}
 
+	// Written to a temporary file and moved over the old one: a crash or power cut mid-write must not leave
+	// profiles.json or settings.json truncated, which would load as empty and lose the user's settings.
 	public static void Save<T>(string path, T v)
 	{
 		Directory.CreateDirectory(Dir);
-		File.WriteAllText(path, JsonSerializer.Serialize(v, Opt));
+		string tmp = path + ".tmp";
+		File.WriteAllText(tmp, JsonSerializer.Serialize(v, Opt));
+		File.Move(tmp, path, overwrite: true);
 	}
 
 	// Copies the files that exist into a new folder data/backup-<yyyyMMdd-HHmmss>[-n] and returns that folder,
