@@ -823,15 +823,31 @@ internal sealed class Service
 		return Task.Run(RefreshTuning);
 	}
 
-	// Keeps the chosen devices awake, or lets Windows power them down again (UAC prompt), then checks again.
-	public Task<string> TuneDevicesAsync(IReadOnlyList<string> instances, bool powerPlan, bool keepAwake)
+	// Keeps some devices awake and hands others back to Windows (one UAC prompt), and keeps the state the same
+	// elevated run read back.
+	public Task<string> TuneDevicesAsync(IReadOnlyList<string> awake, IReadOnlyList<string> allow, bool? planAllow)
 	{
 		return Task.Run(() =>
 		{
-			string msg = DeviceTuning.Apply(instances, powerPlan, keepAwake);
-			RefreshTuning();
+			string msg = DeviceTuning.Apply(awake, allow, planAllow, out DeviceTuningState after);
+			if (after != null)
+			{
+				Tuning = after;
+			}
 			Notify();
 			return msg;
+		});
+	}
+
+	// Reads the devices with administrator rights, for an account whose own read Windows refuses.
+	public Task<string> CheckDevicesAsAdminAsync()
+	{
+		return Task.Run(() =>
+		{
+			string problem = DeviceTuning.ReadAsAdmin();
+			RefreshTuning();
+			Notify();
+			return problem ?? DeviceTuning.Summary(Tuning);
 		});
 	}
 

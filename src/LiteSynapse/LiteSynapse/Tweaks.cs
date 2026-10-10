@@ -821,7 +821,7 @@ internal static class Tweaks
 			What = "Stops Windows marking data pages as non-executable.",
 			Cost = "Removes one of the oldest and cheapest defences against code-execution exploits, and it costs " +
 				"almost nothing to leave on - the gain here is the smallest on this page and the loss is not. " +
-				"Needs a restart.",
+				"FACEIT's anti-cheat will not start with DEP off. Needs a restart.",
 			Risk = Risky,
 			Source = "fr33thy",
 			NeedsAdmin = true,

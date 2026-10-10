@@ -9,19 +9,24 @@ namespace LiteSynapse;
 
 // The Performance tab: everything LiteSynapse can do to the PC rather than to a profile.
 //
-// Five pages, each a list of things to tick and two buttons. The rule across all of them is the same: only
-// what the user ticked is changed, and every row can go both ways, so nothing here is one-directional. The
-// state badge on each row says what the PC is set to now, read fresh each time the page opens.
+// Every row on every page reads the same way: a badge that says whether the thing is ON or OFF and whether
+// that is HELPING or HURTING performance, and a switch showing the side it is on. Flip the switch to the side
+// you want - the row then says what will happen and whether that helps - and press APPLY. FIX ALL HURTING
+// flips every row that is costing performance (never a security trade-off) so the whole page can be fixed in
+// two clicks. Nothing changes until APPLY, and every row can go back the other way the same way.
 //
-//   Razer        what Razer's own software left behind (a report plus the three elevated clean-up steps)
+//   Razer        what Razer's own software left behind (reported; three clean-up buttons)
 //   Device       whether Windows may power the mouse and keyboard down
-//   Windows      the tweak catalog, grouped, each with its source and what it costs
-//   Services     Windows services worth turning off on a gaming PC, and turning back on
-//   Start-up     what starts with Windows, what holds a network connection, and a Defender scan
+//   Windows      the settings catalog, grouped
+//   Services     Windows services worth turning off on a gaming PC
+//   Start-up     what starts with Windows, and a Defender scan of any of it
 internal sealed class PerfPage
 {
 	// Pill order; MainForm shows these as the Performance tab's sub-tabs.
 	public static readonly string[] Pills = new string[5] { "RAZER", "DEVICE", "WINDOWS", "SERVICES", "START-UP" };
+
+	private const string Legend = "Each row says whether it is ON or OFF, and whether that is HELPING or HURTING performance. " +
+		"Flip a switch to the side you want, then press APPLY. FIX ALL HURTING flips everything that is costing you.";
 
 	private readonly Service app;
 
@@ -29,16 +34,19 @@ internal sealed class PerfPage
 
 	private readonly Panel[] pages = new Panel[5];
 
-	private readonly CheckList[] lists = new CheckList[5];
+	private readonly SwitchList[] lists = new SwitchList[5];
 
 	private readonly Label[] notes = new Label[5];
 
+	private readonly Label[] totals = new Label[5];
+
 	private readonly List<PillButton> buttons = new List<PillButton>();
 
-	// Per page: the buttons that act on ticked rows, with the caption they were given. A destructive button
-	// that says how many rows it will change is the difference between "I meant that" and "I did not".
-	private readonly List<(int Page, PillButton Button, string Caption)> counted =
-		new List<(int, PillButton, string)>();
+	// Buttons whose caption carries a count: (page, button, caption with {0}, caption with nothing to count,
+	// which count). A button that says how many rows it will change is the difference between "I meant that"
+	// and "I did not".
+	private readonly List<(int Page, PillButton Button, string Some, string None, bool Pending)> counted =
+		new List<(int, PillButton, string, string, bool)>();
 
 	// Which pages have been filled since the window opened, so switching back does not re-read the PC.
 	private readonly bool[] loaded = new bool[5];
@@ -62,8 +70,8 @@ internal sealed class PerfPage
 	}
 
 	// Called when the page becomes visible. Reading the PC costs a moment (every service, a signature per
-	// start-up program, a WMI query), so it happens once per window rather than on every tab click, and
-	// "Check again" re-reads on demand.
+	// start-up program, a PowerShell start), so it happens once per window rather than on every tab click,
+	// and CHECK AGAIN re-reads on demand.
 	//
 	// The first time a page is shown, whatever it needs is fetched in the background rather than leaving the
 	// user looking at "not read yet" above a button they would press anyway. Opening the tab is the ask.
@@ -135,7 +143,36 @@ internal sealed class PerfPage
 
 	// ---- Layout helpers -------------------------------------------------------------------------------
 
-	private Panel Shell(int index, string title, string blurb, params (string Text, bool Primary, Action Click)[] actions)
+	private readonly struct Action2
+	{
+		public readonly string Some;
+
+		public readonly string None;
+
+		public readonly bool Primary;
+
+		public readonly Action Click;
+
+		// Some: the caption with a count ("APPLY {0} CHANGES"); None: without one. counts: "pending" for the
+		// rows waiting to be applied, "fixable" for the rows FIX ALL would flip, null for no count.
+		public readonly string Counts;
+
+		public Action2(string some, string none, bool primary, string counts, Action click)
+		{
+			Some = some;
+			None = none;
+			Primary = primary;
+			Counts = counts;
+			Click = click;
+		}
+	}
+
+	private static Action2 Plain(string text, bool primary, Action click)
+	{
+		return new Action2(text, text, primary, null, click);
+	}
+
+	private Panel Shell(int index, string title, string blurb, bool switches, params Action2[] actions)
 	{
 		Panel page = new Panel
 		{
@@ -146,56 +183,62 @@ internal sealed class PerfPage
 		Panel head = new Panel
 		{
 			Dock = DockStyle.Top,
-			Height = blurb.Length > 0 ? 112 : 86,
+			Height = 150,
 			BackColor = Theme.Bg,
 			Padding = new Padding(0)
 		};
-		Label heading = new Label
+		head.Controls.Add(new Label
 		{
 			Text = title,
 			AutoSize = true,
 			ForeColor = Theme.Text,
 			BackColor = Color.Transparent,
 			Font = Theme.F(13f, FontStyle.Bold),
-			Location = new Point(18, 14)
-		};
-		head.Controls.Add(heading);
-		if (blurb.Length > 0)
+			Location = new Point(18, 12)
+		});
+		// How many rows are hurting and helping, next to the title: the page's answer at a glance.
+		Label count = new Label
 		{
-			head.Controls.Add(new Label
-			{
-				Text = blurb,
-				ForeColor = Theme.Dim,
-				BackColor = Color.Transparent,
-				Font = Theme.F(9.5f),
-				Location = new Point(18, 42),
-				Size = new Size(820, 34)
-			});
-		}
-		int x = 18;
-		int y = blurb.Length > 0 ? 80 : 48;
-		foreach ((string text, bool primary, Action click) in actions)
+			Text = "",
+			AutoSize = true,
+			ForeColor = Theme.Dim,
+			BackColor = Color.Transparent,
+			Font = Theme.F(10f, FontStyle.Bold),
+			Location = new Point(18, 40)
+		};
+		head.Controls.Add(count);
+		totals[index] = count;
+		Label text = new Label
+		{
+			Text = blurb + (switches ? "\n" + Legend : ""),
+			AutoSize = false,
+			ForeColor = Theme.Dim,
+			BackColor = Color.Transparent,
+			Font = Theme.F(9f),
+			Location = new Point(18, 64)
+		};
+		head.Controls.Add(text);
+		List<PillButton> row = new List<PillButton>();
+		foreach (Action2 a in actions)
 		{
 			PillButton b = new PillButton
 			{
-				Primary = primary
+				Primary = a.Primary
 			};
-			b.Text = text;
-			// Wide enough for the caption with a two-digit count spliced into it, so "TURN TICKED OFF"
-			// becoming "TURN 12 TICKED OFF" does not clip.
-			string widest = text.Replace("TICKED", "99 TICKED");
-			b.Width = (int)Tx.Measure(widest, b.Font).Width + 40;
-			b.Location = new Point(x, y);
-			Action handler = click;
+			b.Text = a.None;
+			// Wide enough for the caption with a three-digit count in it, so it never clips.
+			string widest = a.Some.Contains("{0}") ? string.Format(a.Some, 999) : a.Some;
+			b.Width = (int)Math.Max(Tx.Measure(widest, b.Font).Width, Tx.Measure(a.None, b.Font).Width) + 40;
+			Action handler = a.Click;
 			int onPage = index;
 			b.Click += (object _1, EventArgs _2) => Guarded(onPage, handler);
 			head.Controls.Add(b);
 			buttons.Add(b);
-			if (text.IndexOf("TICKED", StringComparison.Ordinal) >= 0)
+			row.Add(b);
+			if (a.Counts != null)
 			{
-				counted.Add((index, b, text));
+				counted.Add((index, b, a.Some, a.None, a.Counts == "pending"));
 			}
-			x += b.Width + 10;
 		}
 		Label note = new Label
 		{
@@ -203,14 +246,53 @@ internal sealed class PerfPage
 			ForeColor = Theme.Green,
 			BackColor = Color.Transparent,
 			Font = Theme.F(9.5f),
-			Location = new Point(x + 6, y + 8),
-			Size = new Size(Math.Max(120, 1100 - x), 24),
 			AutoEllipsis = true
 		};
 		head.Controls.Add(note);
 		notes[index] = note;
+		// Laid out to the width the page actually has: the text wraps, the buttons wrap onto a second line
+		// rather than running off the edge, and the result line sits under them at full width.
+		bool laying = false;
+		void Layout()
+		{
+			if (laying || head.Width <= 0)
+			{
+				return;
+			}
+			laying = true;
+			try
+			{
+				int room = Math.Max(300, head.Width - 36);
+				// Measured here rather than left to AutoSize, whose new height is not known until a layout pass
+				// that may not have run yet.
+				int textH = TextRenderer.MeasureText(text.Text, text.Font, new Size(room, int.MaxValue),
+					TextFormatFlags.WordBreak).Height;
+				text.SetBounds(18, 64, room, textH + 4);
+				int x = 18;
+				int y = text.Bottom + 10;
+				foreach (PillButton b in row)
+				{
+					if (x > 18 && x + b.Width > 18 + room)
+					{
+						x = 18;
+						y += b.Height + 8;
+					}
+					b.Location = new Point(x, y);
+					x += b.Width + 10;
+				}
+				int bottom = (row.Count > 0) ? (y + row[0].Height) : y;
+				note.SetBounds(18, bottom + 6, room, 22);
+				head.Height = note.Bottom + 8;
+			}
+			finally
+			{
+				laying = false;
+			}
+		}
+		head.Resize += (object _1, EventArgs _2) => Layout();
+		Layout();
 
-		CheckList list = new CheckList
+		SwitchList list = new SwitchList
 		{
 			Dock = DockStyle.Fill,
 			BackColor = Theme.Bg
@@ -253,18 +335,35 @@ internal sealed class PerfPage
 		note.Text = text ?? "";
 	}
 
-	// Puts the number of ticked rows on this page's apply buttons, so a destructive press is never a guess.
+	// The counts on this page's buttons and next to its title.
 	private void ShowCounts(int index)
 	{
-		int n = lists[index]?.TickedCount ?? 0;
-		foreach ((int page, PillButton button, string caption) in counted)
+		SwitchList list = lists[index];
+		if (list == null)
+		{
+			return;
+		}
+		int pending = list.PendingCount;
+		int fixable = list.Fixable.Count();
+		foreach ((int page, PillButton button, string some, string none, bool isPending) in counted)
 		{
 			if (page != index || button.IsDisposed)
 			{
 				continue;
 			}
-			button.Text = (n > 0) ? caption.Replace("TICKED", n.ToString() + " TICKED") : caption;
+			int n = isPending ? pending : fixable;
+			button.Text = (n > 0) ? string.Format(some, n) : none;
 			button.Invalidate();
+		}
+		Label total = totals[index];
+		if (total != null && !total.IsDisposed)
+		{
+			int hurt = list.Items.Count((SwitchList.Row r) => !r.Header && r.Verdict == PerfModel.Hurting);
+			int help = list.Items.Count((SwitchList.Row r) => !r.Header && r.Verdict == PerfModel.Helping);
+			total.ForeColor = (hurt > 0) ? Color.FromArgb(240, 150, 60) : Theme.Green;
+			total.Text = (hurt + help == 0) ? "" : ((hurt > 0)
+				? $"{hurt} hurting performance  ·  {help} helping"
+				: $"Nothing here is hurting performance  ·  {help} helping");
 		}
 	}
 
@@ -288,25 +387,149 @@ internal sealed class PerfPage
 				busy = false;
 				return;
 			}
-			owner.BeginInvoke((Action)(() =>
+			try
 			{
-				busy = false;
-				foreach (PillButton b in buttons)
+				owner.BeginInvoke((Action)(() =>
 				{
-					b.Enabled = true;
-				}
-				string message = t.IsFaulted
-					? ("Could not finish: " + (t.Exception?.GetBaseException().Message ?? "unknown error"))
-					: t.Result;
-				// The Windows, Services and Start-up pages all read the same scan, so a change made on one
-				// leaves the others showing the state from before it. Mark them for a re-fill and redraw the
-				// one in front now.
-				Invalidate();
-				loaded[index] = true;
-				Refresh(index);
-				Say(index, message, t.IsFaulted);
-			}));
+					busy = false;
+					foreach (PillButton b in buttons)
+					{
+						b.Enabled = true;
+					}
+					string message = t.IsFaulted
+						? ("Could not finish: " + (t.Exception?.GetBaseException().Message ?? "unknown error"))
+						: t.Result;
+					// The Windows, Services and Start-up pages all read the same scan, so a change made on one
+					// leaves the others showing the state from before it. Mark them for a re-fill and redraw the
+					// one in front now.
+					Invalidate();
+					loaded[index] = true;
+					Refresh(index);
+					Say(index, message, t.IsFaulted);
+				}));
+			}
+			catch (InvalidOperationException)
+			{
+				// The window closed between the check and the post.
+				busy = false;
+			}
 		});
+	}
+
+	// The two buttons every switch page has.
+	private Action2 FixAll(int index)
+	{
+		return new Action2("FIX ALL HURTING ({0})", "FIX ALL HURTING", false, "fixable", () =>
+		{
+			int n = lists[index].FixAll();
+			Say(index, (n == 0)
+				? "Nothing on this page is hurting performance (security trade-offs are never flipped for you)."
+				: $"{n} switch(es) flipped to the helping side. Check them, then press APPLY.");
+		});
+	}
+
+	private Action2 ApplyButton(int index)
+	{
+		return new Action2("APPLY {0} CHANGE(S)", "APPLY", true, "pending", () => ApplyPending(index));
+	}
+
+	private Action2 Undo(int index)
+	{
+		return Plain("CLEAR", false, () =>
+		{
+			lists[index].ClearPending();
+			Say(index, "Nothing is waiting to be applied.");
+		});
+	}
+
+	// ---- Applying -------------------------------------------------------------------------------------
+
+	private void ApplyPending(int index)
+	{
+		List<SwitchList.Row> rows = lists[index].PendingRows.ToList();
+		if (rows.Count == 0)
+		{
+			Say(index, "Flip a switch first: nothing is waiting to be applied.", problem: true);
+			return;
+		}
+		// Moving a security feature to its helping side gives up security; ask by name. (Moving one back to
+		// its safe default never needs asking.)
+		List<SwitchList.Row> risky = rows.Where((SwitchList.Row r) => r.Risk == Tweaks.Risky && r.Want == r.HelpsWhenOn).ToList();
+		if (risky.Count > 0)
+		{
+			string names = string.Join("\n  ", risky.Select((SwitchList.Row r) => "- " + r.Title));
+			DialogResult answer = MessageBox.Show(owner,
+				"These give up security or a part of Windows you may need:\n\n  " + names +
+				"\n\nEach one's cost is written on its row. Change them anyway?",
+				"LiteSynapse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+			if (answer != DialogResult.Yes)
+			{
+				Say(index, "Nothing was changed.");
+				return;
+			}
+		}
+		if (index == 1)
+		{
+			ApplyDevices(rows);
+			return;
+		}
+		// A row's id is "<kind>:<what>"; the kind travels with it so Apply never has to guess which of three
+		// namespaces a bare id belongs to (a start-up entry's id is a Run value name any program can choose).
+		List<(string Kind, string Id, bool On)> choices = new List<(string, string, bool)>();
+		foreach (SwitchList.Row r in rows)
+		{
+			(string kind, string what) = Split(r.Id);
+			bool want = r.Want.Value;
+			switch (kind)
+			{
+			case "tweak":
+				// A setting is applied or not; the switch is the thing's side, which is the same or the
+				// opposite depending on the setting.
+				choices.Add((kind, what, PerfModel.TweakOn(want, r.HelpsWhenOn)));
+				break;
+			case "svc":
+			case "start":
+				choices.Add((kind, what, want));
+				break;
+			}
+		}
+		if (choices.Count == 0)
+		{
+			Say(index, "Nothing that can be switched from here was changed.", problem: true);
+			return;
+		}
+		Work(index, "Applying " + choices.Count + " change(s)...",
+			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult());
+	}
+
+	// The Device page's switches are "power saving": OFF keeps the device awake.
+	private void ApplyDevices(List<SwitchList.Row> rows)
+	{
+		List<string> awake = new List<string>();
+		List<string> allow = new List<string>();
+		bool? plan = null;
+		foreach (SwitchList.Row r in rows)
+		{
+			if (r.Id == "plan")
+			{
+				plan = r.Want.Value;
+			}
+			else if (r.Id.StartsWith("dev:", StringComparison.Ordinal))
+			{
+				(r.Want.Value ? allow : awake).Add(r.Id.Substring(4));
+			}
+		}
+		Work(1, "Waiting for Windows to ask permission...",
+			() => app.TuneDevicesAsync(awake, allow, plan).GetAwaiter().GetResult());
+	}
+
+	// "tweak:accel" -> ("tweak", "accel"); "file:C:\\x.exe" -> ("file", "C:\\x.exe"). Only the first colon
+	// separates, because the rest of the id may be a Windows path.
+	private static (string Kind, string What) Split(string id)
+	{
+		string s = id ?? "";
+		int at = s.IndexOf(':');
+		return (at < 0) ? ("", s) : (s.Substring(0, at), s.Substring(at + 1));
 	}
 
 	// ---- Razer ---------------------------------------------------------------------------------------
@@ -314,60 +537,61 @@ internal sealed class PerfPage
 	private Panel BuildRazer()
 	{
 		return Shell(0, "Razer software left on this PC",
-			"What Razer's own software installed and still runs. LiteSynapse talks to the devices directly, so " +
-			"none of it is needed - but the filter drivers are left alone unless you say so, because removing " +
-			"the wrong one takes the mouse with it.",
-			("CHECK AGAIN", false, () => Work(0, "Checking...", () =>
+			"What Razer's own software installed and still runs. LiteSynapse talks to the devices directly, so none of it " +
+			"is needed. Anything ON here is HURTING: it runs alongside your game. The filter drivers are left alone " +
+			"unless you say so, because removing the wrong one takes the mouse with it.",
+			false,
+			Plain("CHECK AGAIN", false, () => Work(0, "Checking...", () =>
 			{
 				app.RefreshRazer(deep: true);
 				return "Checked.";
 			})),
-			("TURN OFF RAZER SERVICES", true, () => Work(0, "Waiting for Windows to ask permission...",
+			Plain("TURN OFF RAZER SERVICES", true, () => Work(0, "Waiting for Windows to ask permission...",
 				() => app.RazerCleanup("disableServices"))),
-			("TURN OFF GAME MANAGER", false, () => Work(0, "Waiting for Windows to ask permission...",
+			Plain("TURN OFF GAME MANAGER", false, () => Work(0, "Waiting for Windows to ask permission...",
 				() => app.RazerCleanup("disableGameManager"))),
-			("FILTER DRIVERS", false, () => Work(0, "Working...", () => app.RazerCleanup("driverGuide"))));
+			Plain("FILTER DRIVERS", false, () => Work(0, "Working...", () => app.RazerCleanup("driverGuide"))));
 	}
 
 	private void FillRazer()
 	{
 		RazerLeftovers r = app.Razer;
-		List<CheckList.Row> rows = new List<CheckList.Row>();
+		List<SwitchList.Row> rows = new List<SwitchList.Row>();
 		if (!r.Checked)
 		{
-			rows.Add(Header("Not checked yet", "Press Check again."));
-			lists[0].Items = rows;
+			rows.Add(Header("Not checked yet", "Press CHECK AGAIN."));
+			SetItems(0, rows);
 			return;
 		}
 		rows.Add(Header("Synapse", ""));
-		rows.Add(Info("Razer Synapse", r.SynapseInstalled ? "Installed on this PC." : "Not installed.",
+		rows.Add(Info("Razer Synapse installed", r.SynapseInstalled ? "Installed on this PC." : "Not installed.",
 			r.SynapseInstalled ? "on" : "off"));
 		if (r.SynapseRunning)
 		{
-			rows.Add(Info("Synapse is running now",
+			rows.Add(Info("Razer Synapse running",
 				"While it runs it can change the lighting and switch the mouse's slots behind LiteSynapse. Close it from the tray.",
-				"on", Tweaks.Risky, "Fights with LiteSynapse"));
+				"on", Tweaks.Caution, "Fights with LiteSynapse"));
 		}
-		rows.Add(Info("Razer Game Manager Service 3", GmsText(r.GmsService), r.GmsService));
+		rows.Add(Info("Razer Game Manager Service 3", GmsText(r.GmsService), PerfModel.ServiceState(r.GmsService)));
 		if (r.RzCommon)
 		{
 			rows.Add(Info("RzCommon folder", "Razer's shared files are still in ProgramData.", "on"));
 		}
 
 		rows.Add(Header("Services", !r.Deep
-			? "Not read yet: press Check again for the services."
+			? "Not read yet: press CHECK AGAIN for the services."
 			: (r.Services.Count == 0
 				? "None of Razer's services are set to start."
-				: "Each of these starts with Windows. \"Turn off Razer services\" sets them all to disabled.")));
+				: "Each of these starts with Windows. TURN OFF RAZER SERVICES sets them all to disabled.")));
 		foreach (RazerService s in r.Services)
 		{
 			rows.Add(Info(s.Label ?? s.Name,
 				(s.Driver ? "A driver service. " : "") + (s.Network ? "Opens a network or localhost listener." : ""),
-				s.State, s.Driver ? Tweaks.Caution : Tweaks.Safe, s.Network ? "Uses the network" : ""));
+				PerfModel.ServiceState(s.State), s.Driver ? Tweaks.Caution : Tweaks.Safe, s.Network ? "Uses the network" : ""));
 		}
 
 		rows.Add(Header("Starts with Windows", (!r.Deep && r.RunOnce.Count == 0)
-			? "The Run entries were read; press Check again for the RunOnce ones."
+			? "The Run entries were read; press CHECK AGAIN for the RunOnce ones."
 			: (r.Autostart.Count == 0 && r.RunOnce.Count == 0
 				? "Nothing of Razer's starts with Windows."
 				: "Razer entries in this account's start-up list.")));
@@ -383,44 +607,44 @@ internal sealed class PerfPage
 		// A shallow check does not read the task cache or the firewall at all, so "none" would be a claim it
 		// has not earned. Say which it is.
 		rows.Add(Header("Scheduled tasks", !r.Deep
-			? "Not read yet: press Check again for the scheduled tasks."
+			? "Not read yet: press CHECK AGAIN for the scheduled tasks."
 			: (r.Tasks.Count == 0 && r.UpgradeTask == "absent"
 				? "No Razer scheduled tasks."
 				: "Tasks Razer's installers left behind.")));
 		if (r.UpgradeTask != "absent")
 		{
-			rows.Add(Info("Razer upgrade task", "Checks for and installs Synapse updates on a schedule.", r.UpgradeTask));
+			rows.Add(Info("Razer upgrade task", "Checks for and installs Synapse updates on a schedule.", PerfModel.ServiceState(r.UpgradeTask)));
 		}
 		foreach (RazerTask t in r.Tasks)
 		{
 			// Whether a task is enabled is not in the task cache, so this does not claim to know. The
 			// clean-up disables it either way, which costs nothing if it was off already.
-			rows.Add(Info(t.Path, "A scheduled task in a Razer folder. Whether Windows has it enabled is not " +
-				"readable from here; the clean-up disables it either way.", ""));
+			rows.Add(Info(t.Path, "A scheduled task in a Razer folder. Whether Windows has it enabled is not readable " +
+				"from here; TURN OFF RAZER SERVICES disables it either way.", "unknown"));
 		}
 
 		rows.Add(Header("Firewall and drivers", ""));
-		rows.Add(Info("Firewall rules", !r.Deep
-			? "Not read yet: press Check again for the firewall rules."
+		rows.Add(Info("Firewall rules for Razer software", !r.Deep
+			? "Not read yet: press CHECK AGAIN for the firewall rules."
 			: (r.FirewallRules == 0
 				? "No firewall rules for Razer software."
 				: $"{r.FirewallRules} rule(s) let Razer software through the firewall."),
-			!r.Deep ? "" : (r.FirewallRules == 0 ? "off" : "on")));
+			!r.Deep ? "unknown" : (r.FirewallRules == 0 ? "off" : "on")));
 		if (r.FilterDrivers.Count == 0)
 		{
-			rows.Add(Info("Filter drivers", "None of Razer's filter drivers are on the devices.", "off"));
+			rows.Add(Info("Razer filter drivers", "None of Razer's filter drivers are on the devices.", "off"));
 		}
 		else
 		{
 			foreach (string d in r.FilterDrivers)
 			{
 				rows.Add(Info(d,
-					"A Razer filter driver sits between Windows and the device. LiteSynapse does not need it. " +
-					"Removing it is done by a script you run yourself, because a mistake here leaves you without a mouse.",
+					"A Razer filter driver sits between Windows and the device. LiteSynapse does not need it. Removing it is " +
+					"done by a script you run yourself (FILTER DRIVERS), because a mistake here leaves you without a mouse.",
 					"on", Tweaks.Caution, "Remove by hand"));
 			}
 		}
-		lists[0].Items = rows;
+		SetItems(0, rows);
 	}
 
 	private static string GmsText(string state)
@@ -430,7 +654,7 @@ internal sealed class PerfPage
 		case "absent":
 			return "Not installed.";
 		case "disabled":
-			return "Installed but disabled, which is what we want.";
+			return "Installed but disabled.";
 		default:
 			return "Installed and set to start. It watches which game is in front so Synapse can switch profiles - " +
 				"LiteSynapse does that itself.";
@@ -442,77 +666,66 @@ internal sealed class PerfPage
 	private Panel BuildDevice()
 	{
 		return Shell(1, "Device latency",
-			"Whether Windows is allowed to power the mouse and keyboard down between reports. A device that is " +
-			"allowed to idle has to wake up before the first movement of a flick gets through, which is the one " +
-			"kind of latency you feel rather than measure.",
-			("CHECK AGAIN", false, () => Work(1, "Asking Windows about the devices...", () =>
+			"Whether Windows may power the mouse and keyboard down between reports. A device that is allowed to idle has " +
+			"to wake up before the first movement of a flick gets through - the one kind of latency you feel rather than measure.",
+			true,
+			Plain("CHECK AGAIN", false, () => Work(1, "Asking Windows about the devices...", () =>
 			{
 				app.RefreshTuning();
-				return "Checked.";
+				return DeviceTuning.Summary(app.Tuning);
 			})),
-			("KEEP TICKED AWAKE", true, () => Apply(1, keepAwake: true)),
-			("LET WINDOWS MANAGE TICKED", false, () => Apply(1, keepAwake: false)));
-	}
-
-	private void Apply(int index, bool keepAwake)
-	{
-		List<CheckList.Row> ticked = lists[index].Ticked.ToList();
-		if (ticked.Count == 0)
-		{
-			Say(index, "Tick the devices you want to change first.", problem: true);
-			return;
-		}
-		List<string> instances = ticked.Where((CheckList.Row r) => r.Id.StartsWith("dev:", StringComparison.Ordinal))
-			.Select((CheckList.Row r) => r.Id.Substring(4)).ToList();
-		bool plan = ticked.Any((CheckList.Row r) => r.Id == "plan");
-		Work(index, "Waiting for Windows to ask permission...",
-			() => app.TuneDevicesAsync(instances, plan, keepAwake).GetAwaiter().GetResult());
+			Plain("CHECK AS ADMIN", false, () => Work(1, "Waiting for Windows to ask permission...",
+				() => app.CheckDevicesAsAdminAsync().GetAwaiter().GetResult())),
+			FixAll(1),
+			ApplyButton(1),
+			Undo(1));
 	}
 
 	private void FillDevice()
 	{
 		DeviceTuningState s = app.Tuning;
-		List<CheckList.Row> rows = new List<CheckList.Row>();
+		List<SwitchList.Row> rows = new List<SwitchList.Row>();
+		string where = s.AdminAtUtc.HasValue
+			? $" Windows only tells an administrator, so these are as last read with administrator rights ({s.AdminAtUtc.Value.ToLocalTime():g})."
+			: "";
 		rows.Add(Header("Your devices", s.Devices.Count > 0
-			? "This is the \"Allow the computer to turn off this device to save power\" checkbox on each device's Power Management tab."
+			? "\"Allow the computer to turn off this device to save power\" on each device's Power Management tab." + where
 			: (s.Readable
-				? "No Razer device answered. Plug the mouse in and press Check again."
-				: "Windows would not let LiteSynapse read the devices' power settings. Start LiteSynapse as administrator and check again.")));
+				? "No Razer device answered. Plug the mouse in and press CHECK AGAIN."
+				: "Windows would not list the devices. Press CHECK AS ADMIN.")));
 		foreach (TunedDevice d in s.Devices)
 		{
-			rows.Add(new CheckList.Row
+			rows.Add(new SwitchList.Row
 			{
 				Id = "dev:" + d.Instance,
-				Title = d.Name,
-				Desc = d.PowerSaving
-					? "Windows may currently power this device down to save power."
-					: "Windows may not power this device down. This is what you want.",
-				State = d.PowerSaving ? "on" : "off",
-				Badge = d.PowerSaving ? "Worth changing" : "",
-				Risk = d.PowerSaving ? Tweaks.Caution : Tweaks.Safe,
-				Checked = d.PowerSaving,
+				Title = "Power saving: " + d.Name,
+				Desc = "ON lets Windows power the device down when it thinks it is idle; OFF keeps it awake.",
+				Note = d.Known ? "" : "Windows will not say how this one is set without administrator rights. Switching it " +
+					"runs as administrator and reads it back, or press CHECK AS ADMIN.",
+				State = d.Known ? (d.PowerSaving ? "on" : "off") : "unknown",
+				HelpsWhenOn = false,
+				Risk = Tweaks.Safe,
 				Can = true
 			});
 		}
 		rows.Add(Header("Power plan", "The active plan's own USB setting, which applies to every USB port."));
-		rows.Add(new CheckList.Row
+		rows.Add(new SwitchList.Row
 		{
 			Id = "plan",
 			Title = "USB selective suspend",
 			Desc = s.UsbSuspend switch
 			{
 				"on" => "The active power plan lets Windows suspend idle USB devices, which includes the mouse.",
-				"off" => "Already off in the active power plan.",
+				"off" => "The active power plan never suspends idle USB devices.",
 				_ => "Could not read it from the active power plan."
 			},
 			State = s.UsbSuspend,
-			Checked = s.UsbSuspend == "on",
+			HelpsWhenOn = false,
 			Can = s.UsbSuspend != "unknown"
 		});
-		rows.Add(Header("The rest of the input settings moved",
-			"Pointer acceleration, pointer speed, the 125 Hz background raw-input cap and the mouse and keyboard " +
-			"buffers are on the Windows page now, where each one has its own checkbox and can be turned back on."));
-		lists[1].Items = rows;
+		rows.Add(Header("The rest of the input settings are on the Windows page",
+			"Pointer acceleration, pointer speed, the background raw-input cap and the mouse and keyboard buffers."));
+		SetItems(1, rows);
 	}
 
 	// ---- Windows settings ----------------------------------------------------------------------------
@@ -520,121 +733,27 @@ internal sealed class PerfPage
 	private Panel BuildWindows()
 	{
 		return Shell(2, "Windows settings",
-			"Every setting here can be turned on and off on its own: tick what you want and press one of the two " +
-			"buttons. Each row says where it comes from and what it costs - read that before ticking anything in " +
-			"the last group.",
-			("CHECK AGAIN", false, () => Work(2, "Reading the settings...", () =>
+			"From the FR33THY, Chris Titus and other trusted guides. Each row says where it comes from and what it costs. " +
+			"The last group trades security for speed, so FIX ALL HURTING never touches it.",
+			true,
+			Plain("CHECK AGAIN", false, () => Work(2, "Reading the settings...", () =>
 			{
 				app.RunScanAsync().GetAwaiter().GetResult();
 				return "Checked.";
 			})),
-			("TURN TICKED ON", true, () => ApplyScan(2, on: true)),
-			("TURN TICKED OFF", false, () => ApplyScan(2, on: false)));
-	}
-
-	private void ApplyScan(int index, bool on)
-	{
-		List<CheckList.Row> ticked = lists[index].Ticked.ToList();
-		if (ticked.Count == 0)
-		{
-			Say(index, "Tick what you want to change first.", problem: true);
-			return;
-		}
-		// A risky row has to be ticked and then confirmed by name: these are the ones that give up security.
-		//
-		// Which direction is the dangerous one depends on what the row is. Turning a tweak ON is what applies
-		// it, so that is the direction to ask about. For a service it is the other way round: turning
-		// Defender, the firewall or Windows Update OFF is the change that costs something, and turning it back
-		// on is the safe direction. Asking about "on" for everything meant the Services page's green
-		// "TURN TICKED OFF" button disabled Defender with no confirmation at all, while "TURN TICKED BACK ON"
-		// put up a warning about giving up security for restoring it.
-		List<CheckList.Row> risky = ticked.Where((CheckList.Row r) => r.Risk == Tweaks.Risky && Destructive(r, on)).ToList();
-		if (risky.Count > 0)
-		{
-			string list = string.Join("\n  ", risky.Select((CheckList.Row r) => "- " + r.Title));
-			DialogResult answer = MessageBox.Show(owner,
-				"These give up security or a part of Windows you may need:\n\n  " + list +
-				"\n\nEach one's cost is written on its row. " + (on ? "Turn them on?" : "Turn them off?"),
-				"LiteSynapse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
-			if (answer != DialogResult.Yes)
-			{
-				Say(index, "Nothing was changed.");
-				return;
-			}
-		}
-		// A row's id is "<kind>:<what>". Only the first colon is a separator: a file path has its own
-		// ("file:C:\\Program Files\\x.exe"), so splitting on the last one would mangle it.
-		// The kind travels with the id. Without it, Apply had to guess which of three namespaces a bare id
-		// belonged to, and a start-up entry's id is a Run value name any program can choose.
-		List<(string Kind, string Id, bool On)> choices = new List<(string, string, bool)>();
-		List<string> notSwitchable = new List<string>();
-		foreach (CheckList.Row r in ticked)
-		{
-			(string kind, string what) = Split(r.Id);
-			// A start-up entry LiteSynapse cannot switch is still tickable, so Defender can be pointed at its
-			// file. Pressing a turn-on/off button on one used to report "nothing was changed", which read as a
-			// failure rather than as "this one has no switch".
-			if (kind == "file")
-			{
-				notSwitchable.Add(r.Title);
-				continue;
-			}
-			choices.Add((kind, what, on));
-		}
-		if (choices.Count == 0)
-		{
-			Say(index, Cannot(notSwitchable), problem: true);
-			return;
-		}
-		string trailer = (notSwitchable.Count > 0) ? " " + Cannot(notSwitchable) : "";
-		Work(index, on ? "Turning them on..." : "Turning them off...",
-			() => app.ScanApplyAsync(choices).GetAwaiter().GetResult() + trailer);
-	}
-
-	// Is this the direction that takes something away? Applying a tweak is "on"; disabling a service is "off".
-	// A start-up entry is neither: turning one off costs nothing that cannot be undone from the same list.
-	private static bool Destructive(CheckList.Row row, bool on)
-	{
-		switch (Split(row.Id).Kind)
-		{
-		case "svc":
-			return !on;
-		case "tweak":
-			return on;
-		default:
-			return false;
-		}
-	}
-
-	// "tweak:accel" -> ("tweak", "accel"); "file:C:\\x.exe" -> ("file", "C:\\x.exe"). Only the first colon
-	// separates, because the rest of the id may be a Windows path.
-	private static (string Kind, string What) Split(string id)
-	{
-		string s = id ?? "";
-		int at = s.IndexOf(':');
-		return (at < 0) ? ("", s) : (s.Substring(0, at), s.Substring(at + 1));
-	}
-
-	private static string Cannot(List<string> names)
-	{
-		if (names == null || names.Count == 0)
-		{
-			return "Nothing that can be switched was ticked.";
-		}
-		string which = (names.Count == 1) ? names[0] : string.Join(", ", names);
-		return which + ": LiteSynapse cannot switch " + (names.Count == 1 ? "this one" : "these") +
-			" from here (it starts for every account, or from the Startup folder). " +
-			(names.Count == 1 ? "It can still be scanned with Defender." : "They can still be scanned with Defender.");
+			FixAll(2),
+			ApplyButton(2),
+			Undo(2));
 	}
 
 	private void FillWindows()
 	{
 		ScanResult scan = app.Scan;
-		List<CheckList.Row> rows = new List<CheckList.Row>();
+		List<SwitchList.Row> rows = new List<SwitchList.Row>();
 		if (!scan.Checked)
 		{
-			rows.Add(Header("Not read yet", "Press Check again."));
-			lists[2].Items = rows;
+			rows.Add(Header("Not read yet", "Press CHECK AGAIN."));
+			SetItems(2, rows);
 			return;
 		}
 		foreach ((string gid, string gtitle, string gblurb) in Tweaks.Groups)
@@ -647,20 +766,43 @@ internal sealed class PerfPage
 			rows.Add(Header(gtitle, gblurb));
 			foreach (TweakRow t in group)
 			{
-				rows.Add(new CheckList.Row
+				rows.Add(new SwitchList.Row
 				{
 					Id = "tweak:" + t.Id,
-					Title = t.Title,
-					Desc = t.What,
+					Title = (t.Thing.Length > 0) ? t.Thing : t.Title,
+					Desc = t.What + " Source: " + Tweaks.SourceText(t.Source) + ".",
 					Cost = Costly(t),
-					State = t.State,
-					Badge = Tweaks.SourceText(t.Source),
+					Note = HowKnown(t),
+					State = PerfModel.ThingState(t.State, t.PerfOn),
+					HelpsWhenOn = t.PerfOn,
 					Risk = t.Risk,
 					Can = true
 				});
 			}
 		}
-		lists[2].Items = rows;
+		SetItems(2, rows);
+	}
+
+	// Why the state on a row is what it is, when it is not simply read off the PC.
+	private static string HowKnown(TweakRow t)
+	{
+		if (t.Restart)
+		{
+			return "Set by LiteSynapse this session - takes effect after a restart.";
+		}
+		if (t.Remembered)
+		{
+			return "Windows does not report this one without administrator rights, so this is what LiteSynapse last set.";
+		}
+		if (t.State == "other")
+		{
+			return "Set to a value of its own by something else (another tweak tool, or a policy). Switching it puts ours or Windows' back.";
+		}
+		if (t.State == "unknown")
+		{
+			return "Windows does not report this one, and LiteSynapse has not set it. Switch it to set it either way.";
+		}
+		return "";
 	}
 
 	private static string Costly(TweakRow t)
@@ -683,35 +825,36 @@ internal sealed class PerfPage
 	private Panel BuildServices()
 	{
 		return Shell(3, "Windows services",
-			"Services worth turning off on a gaming PC, from FR33THY's guide, each with what you give up and the " +
-			"start type Windows ships so it can be put back. The input stack the mouse and keyboard run on, and " +
-			"the services Windows will not boot without, are not on this list at all.",
-			("CHECK AGAIN", false, () => Work(3, "Reading the services...", () =>
+			"Services worth turning off on a gaming PC, from FR33THY's guide, each with what you give up. The input stack " +
+			"the mouse and keyboard run on, and the services Windows will not boot without, are not on this list at all.",
+			true,
+			Plain("CHECK AGAIN", false, () => Work(3, "Reading the services...", () =>
 			{
 				app.RunScanAsync().GetAwaiter().GetResult();
 				return "Checked.";
 			})),
-			("TURN TICKED OFF", true, () => ApplyScan(3, on: false)),
-			("TURN TICKED BACK ON", false, () => ApplyScan(3, on: true)));
+			FixAll(3),
+			ApplyButton(3),
+			Undo(3));
 	}
 
 	private void FillServices()
 	{
 		ScanResult scan = app.Scan;
-		List<CheckList.Row> rows = new List<CheckList.Row>();
+		List<SwitchList.Row> rows = new List<SwitchList.Row>();
 		if (!scan.Checked)
 		{
-			rows.Add(Header("Not read yet", "Press Check again."));
-			lists[3].Items = rows;
+			rows.Add(Header("Not read yet", "Press CHECK AGAIN."));
+			SetItems(3, rows);
 			return;
 		}
 		List<ScanItem> services = scan.Items.Where((ScanItem i) => i.Kind == "service").ToList();
 		foreach ((string risk, string title, string blurb) in new[]
 		{
 			(Tweaks.Safe, "Safe to turn off", "Nothing you use on a gaming PC stops working."),
-			(Tweaks.Caution, "Turns a feature off", "Each row says which feature. Read it before ticking it."),
-			(Tweaks.Risky, "Affects security, updates or networking",
-				"These are on the list because the guides include them, not because they are recommended. The row says what breaks.")
+			(Tweaks.Caution, "Turns a feature off", "Each row says which feature. Read it before switching it."),
+			(Tweaks.Risky, "Security, updates or networking",
+				"On the list because the guides include them. ON is the safe default here, and FIX ALL HURTING leaves them alone.")
 		})
 		{
 			List<ScanItem> group = services.Where((ScanItem i) => i.Risk == risk)
@@ -723,16 +866,21 @@ internal sealed class PerfPage
 			rows.Add(Header(title, blurb));
 			foreach (ScanItem i in group)
 			{
-				rows.Add(new CheckList.Row
+				bool can = i.CanDisable || i.CanEnable;
+				rows.Add(new SwitchList.Row
 				{
 					Id = "svc:" + i.Id,
 					Title = i.Name,
 					Desc = i.Costs,
-					Cost = i.Lose,
-					State = i.State,
+					Cost = "Turning it off: " + i.Lose,
+					Note = can ? "" : (i.State == "disabled"
+						? "Windows ships this one disabled too, so there is nothing to turn back on."
+						: "Reported only: LiteSynapse does not switch this one."),
+					State = PerfModel.ServiceState(i.State),
+					HelpsWhenOn = false,
 					Badge = i.Network ? "Uses the network" : "",
 					Risk = i.Risk,
-					Can = i.CanDisable || i.CanEnable
+					Can = can
 				});
 			}
 		}
@@ -740,7 +888,7 @@ internal sealed class PerfPage
 		{
 			rows.Add(Header("Nothing to show", "None of the catalog's services are installed on this PC."));
 		}
-		lists[3].Items = rows;
+		SetItems(3, rows);
 	}
 
 	// ---- Start-up ------------------------------------------------------------------------------------
@@ -748,63 +896,51 @@ internal sealed class PerfPage
 	private Panel BuildStartup()
 	{
 		return Shell(4, "What starts with Windows",
-			"Everything in this account's and the machine's start-up lists, with where it lives, who signed it " +
-			"and whether it is holding a network connection. LiteSynapse never says a file is malware - the rows " +
-			"marked worth a look are facts, and Microsoft Defender gives the verdict.",
-			("CHECK AGAIN", false, () => Work(4, "Reading the start-up list...", () =>
+			"Everything in this account's and the machine's start-up lists. ON means it starts at sign-in and runs in the " +
+			"background; tools that help a gaming PC (Process Lasso, LiteSynapse) are marked HELPING when ON. Click a row " +
+			"and press SCAN WITH DEFENDER to have its file checked - LiteSynapse never calls anything malware.",
+			true,
+			Plain("CHECK AGAIN", false, () => Work(4, "Reading the start-up list...", () =>
 			{
 				app.RunScanAsync().GetAwaiter().GetResult();
 				return "Checked.";
 			})),
-			("TURN TICKED OFF", true, () => ApplyScan(4, on: false)),
-			("TURN TICKED BACK ON", false, () => ApplyScan(4, on: true)),
-			("SCAN WITH DEFENDER", false, DefenderScan));
+			FixAll(4),
+			ApplyButton(4),
+			Undo(4),
+			Plain("SCAN WITH DEFENDER", false, DefenderScan));
 	}
 
 	private void DefenderScan()
 	{
-		List<CheckList.Row> ticked = lists[4].Ticked.ToList();
-		// Every start-up row carries its program's file, switchable or not, so any of them can be scanned.
-		List<string> paths = ticked.Select((CheckList.Row r) => r.Path)
-			.Where((string p) => !string.IsNullOrWhiteSpace(p))
-			.Distinct(StringComparer.OrdinalIgnoreCase)
-			.ToList();
-		if (paths.Count == 0)
+		SwitchList.Row row = lists[4].SelectedRow;
+		string path = row?.Path;
+		if (string.IsNullOrWhiteSpace(path))
 		{
-			Say(4, "Tick a start-up program whose file you want Defender to scan.", problem: true);
+			Say(4, "Click a start-up program first, then press SCAN WITH DEFENDER.", problem: true);
 			return;
 		}
-		// A custom scan can take minutes. Doing several in a row would look like the window had hung, so this
-		// asks for one at a time rather than quietly scanning only the first.
-		if (paths.Count > 1)
-		{
-			Say(4, $"Defender scans one file at a time, and each can take a few minutes. {paths.Count} are " +
-				"ticked - untick all but one.", problem: true);
-			return;
-		}
-		string path = paths[0];
-		Work(4, "Asking Microsoft Defender to scan it...",
+		Work(4, "Asking Microsoft Defender to scan " + row.Title + "...",
 			() => app.DefenderScanAsync(path).GetAwaiter().GetResult());
 	}
 
 	private void FillStartup()
 	{
 		ScanResult scan = app.Scan;
-		List<CheckList.Row> rows = new List<CheckList.Row>();
+		List<SwitchList.Row> rows = new List<SwitchList.Row>();
 		if (!scan.Checked)
 		{
-			rows.Add(Header("Not read yet", "Press Check again."));
-			lists[4].Items = rows;
+			rows.Add(Header("Not read yet", "Press CHECK AGAIN."));
+			SetItems(4, rows);
 			return;
 		}
 		rows.Add(Header("Microsoft Defender", "LiteSynapse is not an antivirus. It reports facts and leaves the verdict to Defender."));
-		rows.Add(Info("Real-time protection", scan.Defender switch
+		rows.Add(Info("Defender real-time protection", scan.Defender switch
 		{
-			"on" => "On. Tick a program below and press Scan ticked with Defender to have it checked.",
-			"off" => "Off. Nothing is scanning files on this PC as they are opened.",
+			"on" => "Scanning files as they are opened.",
+			"off" => "Nothing is scanning files on this PC as they are opened.",
 			_ => "Could not be read: policy or tamper protection is hiding it."
-		}, scan.Defender, scan.Defender == "off" ? Tweaks.Risky : Tweaks.Safe,
-			scan.Defender == "off" ? "No antivirus running" : ""));
+		}, scan.Defender, Tweaks.Risky, scan.Defender == "off" ? "No antivirus running" : ""));
 
 		List<ScanItem> startup = scan.Items.Where((ScanItem i) => i.Kind == "startup").ToList();
 		List<ScanItem> flagged = startup.Where((ScanItem i) => i.Flag.Length > 0).ToList();
@@ -819,15 +955,15 @@ internal sealed class PerfPage
 		}
 		rows.Add(Header("Starts with Windows", rest.Count == 0
 			? "Nothing else starts with Windows."
-			: "Turning one off is the same switch as Task Manager's Startup apps, and only for this account."));
+			: "Switching one is the same switch as Task Manager's Startup apps, and only for this account."));
 		foreach (ScanItem i in rest)
 		{
 			rows.Add(StartupRow(i));
 		}
-		lists[4].Items = rows;
+		SetItems(4, rows);
 	}
 
-	private static CheckList.Row StartupRow(ScanItem i)
+	private static SwitchList.Row StartupRow(ScanItem i)
 	{
 		List<string> facts = new List<string>();
 		if (i.Path.Length > 0)
@@ -839,36 +975,41 @@ internal sealed class PerfPage
 		{
 			facts.Add("Holding a network connection right now.");
 		}
+		bool can = i.CanDisable || i.CanEnable;
+		string note = "";
 		if (i.Scope == "HKLM")
 		{
-			facts.Add("Starts for every account, which LiteSynapse cannot change from here.");
+			note = "Starts for every account, which LiteSynapse cannot switch from here.";
 		}
-		if (i.Scope == "folder")
+		else if (i.Scope == "folder")
 		{
-			facts.Add("A shortcut in the Startup folder; delete the shortcut to stop it.");
+			note = "A shortcut in the Startup folder; delete the shortcut to stop it.";
 		}
-		return new CheckList.Row
+		bool helps = PerfModel.HelpsAtSignIn(i.Name, i.Path);
+		bool security = PerfModel.IsSecurity(i.Name, i.Path);
+		return new SwitchList.Row
 		{
 			// "start:" is a row with a switch; "file:" is one LiteSynapse can only report on. Either way Path
 			// carries the program's file, so Defender can be pointed at it.
-			Id = (i.CanDisable || i.CanEnable) ? ("start:" + i.Id) : ("file:" + i.Id),
+			Id = can ? ("start:" + i.Id) : ("file:" + i.Id),
 			Path = i.Path,
 			Title = i.Name,
 			Desc = string.Join("  ", facts),
 			Cost = ScanRules.FlagText(i.Flag),
-			State = i.State,
-			Badge = i.Flag.Length > 0 ? "Worth a look" : "",
-			Risk = i.Flag.Length > 0 ? Tweaks.Caution : Tweaks.Safe,
-			// Only this account's Run values have a switch; everything else is reported, and can still be scanned.
-			Can = i.CanDisable || i.CanEnable || i.Path.Length > 0
+			Note = note,
+			State = PerfModel.ServiceState(i.State),
+			HelpsWhenOn = helps,
+			Badge = i.Flag.Length > 0 ? "Worth a look" : (helps ? "Helps games" : ""),
+			Risk = security ? Tweaks.Risky : (i.Flag.Length > 0 ? Tweaks.Caution : Tweaks.Safe),
+			Can = can
 		};
 	}
 
 	// ---- Shared row builders -------------------------------------------------------------------------
 
-	private static CheckList.Row Header(string title, string blurb)
+	private static SwitchList.Row Header(string title, string blurb)
 	{
-		return new CheckList.Row
+		return new SwitchList.Row
 		{
 			Header = true,
 			Title = title,
@@ -876,18 +1017,48 @@ internal sealed class PerfPage
 		};
 	}
 
-	// A row that reports something without offering to change it.
-	private static CheckList.Row Info(string title, string desc, string state, string risk = Tweaks.Safe, string badge = "")
+	// A row that reports something without offering to change it. Leftovers and background things help
+	// when OFF, which is every report row this tab has.
+	private static SwitchList.Row Info(string title, string desc, string state, string risk = Tweaks.Safe, string badge = "")
 	{
-		return new CheckList.Row
+		return new SwitchList.Row
 		{
 			Title = title,
 			Desc = desc ?? "",
-			State = state ?? "",
+			State = string.IsNullOrEmpty(state) ? "unknown" : state,
+			HelpsWhenOn = false,
 			Risk = risk,
 			Badge = badge ?? "",
 			Can = false
 		};
+	}
+
+	// Puts new rows on a page, keeping any switch the user flipped and has not applied yet - a re-read caused
+	// by a change on another page must not throw away what they were in the middle of choosing. A flip that
+	// the PC now already matches is dropped, since there is nothing left to do for it.
+	private void SetItems(int index, List<SwitchList.Row> rows)
+	{
+		SwitchList list = lists[index];
+		Dictionary<string, bool> kept = new Dictionary<string, bool>(StringComparer.Ordinal);
+		foreach (SwitchList.Row old in list.Items)
+		{
+			if (!old.Header && old.Pending && old.Id.Length > 0)
+			{
+				kept[old.Id] = old.Want.Value;
+			}
+		}
+		foreach (SwitchList.Row r in rows)
+		{
+			if (!r.Header && r.Can && kept.TryGetValue(r.Id, out bool want))
+			{
+				r.Want = want;
+				if (!r.Pending)
+				{
+					r.Want = null;
+				}
+			}
+		}
+		list.Items = rows;
 	}
 
 	private void Refresh(int index)

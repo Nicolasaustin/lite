@@ -365,22 +365,33 @@ internal static class DeviceTuning
 		return sb.ToString();
 	}
 
-	// Applies the user's choice. keepAwake = true means "do not let Windows power these down", which is what
-	// the Performance page's checkbox asks for; false puts Windows' own behaviour back.
+	// Applies the user's choice in one elevated run, and reads the devices back in the same run.
 	//
-	// instances and powerPlan are what the user ticked: nothing else is touched.
-	public static string Apply(IReadOnlyList<string> instances, bool powerPlan, bool keepAwake)
+	// awake: devices to keep awake (Windows may not power them down); allow: devices handed back to Windows.
+	// planAllow: null leaves the power plan alone; false turns its USB selective suspend off, true back on.
+	// Nothing the user did not switch is touched. after is the state read back, null when nothing ran.
+	public static string Apply(IReadOnlyList<string> awake, IReadOnlyList<string> allow, bool? planAllow, out DeviceTuningState after)
 	{
-		if ((instances == null || instances.Count == 0) && !powerPlan)
+		after = null;
+		int count = (awake?.Count ?? 0) + (allow?.Count ?? 0);
+		if (count == 0 && !planAllow.HasValue)
 		{
-			return "Nothing was selected.";
+			return "Nothing was switched.";
 		}
 		try
 		{
-			int code = RazerLeftovers.RunElevated(ApplyScript(instances, powerPlan, !keepAwake, SnapshotFile), 60000);
-			Cfg.Log($"device tuning: {instances?.Count ?? 0} device(s), power plan {(powerPlan ? "yes" : "no")}, " +
-				$"keep awake {keepAwake} -> exit code {code}");
-			DeviceTuningState after = Check();
+			int code = RazerLeftovers.RunElevated(MixedScript(awake, allow, planAllow, SnapshotFile), 60000);
+			Cfg.Log($"device tuning: {awake?.Count ?? 0} kept awake, {allow?.Count ?? 0} handed back, power plan " +
+				$"{(planAllow.HasValue ? (planAllow.Value ? "suspend on" : "suspend off") : "untouched")} -> exit code {code}");
+			after = Check();
+			if (code == -2)
+			{
+				return "It did not finish in time and may still be running - check again in a moment. " + Summary(after);
+			}
+			if (code == RazerLeftovers.Tampered)
+			{
+				return "The script file was changed before it ran, so it was not run.";
+			}
 			if (code > 0)
 			{
 				return $"{code} step(s) did not apply. " + Summary(after);
@@ -398,15 +409,41 @@ internal static class DeviceTuning
 		}
 	}
 
-	// Reads the devices with administrator rights (one UAC prompt), for an account the unelevated query
-	// cannot answer for.
-	public static string CheckElevated()
+	// Both directions and the read-back in one script, so a mixed change costs one consent prompt.
+	internal static string MixedScript(IEnumerable<string> awake, IEnumerable<string> allow, bool? planAllow, string file)
+	{
+		return "$failed = 0\n" +
+			Body(Script(awake, planAllow == false, allowPowerSaving: false)) +
+			Body(Script(allow, planAllow == true, allowPowerSaving: true)) +
+			QueryToFile(file) +
+			"exit $failed\n";
+	}
+
+	private static string Body(string script)
+	{
+		const string head = "$failed = 0\n";
+		const string tail = "exit $failed\n";
+		string body = script ?? "";
+		if (body.StartsWith(head, StringComparison.Ordinal))
+		{
+			body = body.Substring(head.Length);
+		}
+		if (body.EndsWith(tail, StringComparison.Ordinal))
+		{
+			body = body.Substring(0, body.Length - tail.Length);
+		}
+		return body;
+	}
+
+	// Reads the devices with administrator rights (one UAC prompt) into the snapshot the page falls back on.
+	// Returns null when it ran, or what went wrong.
+	public static string ReadAsAdmin()
 	{
 		try
 		{
 			int code = RazerLeftovers.RunElevated("$failed = 0\n" + QueryToFile(SnapshotFile) + "exit $failed\n", 60000);
 			Cfg.Log($"device tuning: read as administrator -> exit code {code}");
-			return Summary(Check());
+			return (code == 0) ? null : ((code == -2) ? "It did not finish in time." : $"It exited with {code}.");
 		}
 		catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
 		{
