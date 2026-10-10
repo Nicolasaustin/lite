@@ -81,6 +81,9 @@ public class RazerLeftovers
 	// CpuzRunOnce values present in HKLM RunOnce (either registry view).
 	public List<string> RunOnce { get; set; } = new List<string>();
 
+	// The services, the upgrade task and the RunOnce values were looked for (a start-up check skips them).
+	public bool Deep { get; set; }
+
 	// ---- Pure helpers (tested) ------------------------------------------------------------------------
 
 	// startType: the service's Start value (2 automatic, 3 manual, 4 disabled); state: SERVICE_STATUS
@@ -486,9 +489,14 @@ public class RazerLeftovers
 
 	// Registry, SetupAPI and service-manager reads (schtasks only when the task cache can't say whether the upgrade
 	// task exists); a few tens of milliseconds. Never throws.
-	public static RazerLeftovers Check()
+	//
+	// deep: also walk every Windows service and look for the upgrade task and the RunOnce values. That part reads
+	// a few hundred registry keys and may start schtasks.exe, so it is left out at start-up (Service.RefreshRazer
+	// keeps what an earlier deep check found) and done when the window asks for it.
+	public static RazerLeftovers Check(bool deep = true)
 	{
 		RazerLeftovers r = new RazerLeftovers();
+		r.Deep = deep;
 		try
 		{
 			r.SynapseInstalled = Win.SynapseInstalled();
@@ -537,29 +545,32 @@ public class RazerLeftovers
 		{
 			Cfg.Log("razer check (autostart): " + ex5.Message);
 		}
-		try
+		if (deep)
 		{
-			r.Services = Win.RazerServices();
-		}
-		catch (Exception ex6)
-		{
-			Cfg.Log("razer check (services): " + ex6.Message);
-		}
-		try
-		{
-			r.UpgradeTask = Win.TaskState(UpgradeTaskName);
-		}
-		catch (Exception ex7)
-		{
-			Cfg.Log("razer check (task): " + ex7.Message);
-		}
-		try
-		{
-			r.RunOnce = Win.RunOnceLeftovers();
-		}
-		catch (Exception ex8)
-		{
-			Cfg.Log("razer check (RunOnce): " + ex8.Message);
+			try
+			{
+				r.Services = Win.RazerServices();
+			}
+			catch (Exception ex6)
+			{
+				Cfg.Log("razer check (services): " + ex6.Message);
+			}
+			try
+			{
+				r.UpgradeTask = Win.TaskState(UpgradeTaskName);
+			}
+			catch (Exception ex7)
+			{
+				Cfg.Log("razer check (task): " + ex7.Message);
+			}
+			try
+			{
+				r.RunOnce = Win.RunOnceLeftovers();
+			}
+			catch (Exception ex8)
+			{
+				Cfg.Log("razer check (RunOnce): " + ex8.Message);
+			}
 		}
 		r.Checked = true;
 		return r;
@@ -638,7 +649,7 @@ public class RazerLeftovers
 	// values (deleted). Works from a fresh check, not from what the window showed.
 	private static string DisableServices()
 	{
-		RazerLeftovers before = Check();
+		RazerLeftovers before = Check(deep: true);
 		ServicesPlan plan = PlanServices(before);
 		if (plan.IsEmpty)
 		{
@@ -664,7 +675,7 @@ public class RazerLeftovers
 				Cfg.Log("razer cleanup: services not changed (UAC prompt declined)");
 			}
 		}
-		return ServicesOutcome(plan, before, Check(), code, adminRan);
+		return ServicesOutcome(plan, before, Check(deep: true), code, adminRan);
 	}
 
 	private static string DriverGuide(RazerLeftovers current)

@@ -63,6 +63,28 @@ public class LiveProfileTests : IDisposable
 		Assert.Equal(OnboardSlots.ContentHash(Profile("CS2")), saved[1].Hash);
 	}
 
+	// Entering a game costs one slot switch and nothing else: the DPI is already in the slot, so no DPI command
+	// goes out while the game is taking the foreground.
+	[Fact]
+	public void AGameStartSendsNoDpiCommand()
+	{
+		RazerDevice dev = new RazerDevice { ActiveSlot = 3 };
+		LiveProfile live = new LiveProfile(table);
+		MouseProfile cs2 = Profile("CS2");
+		cs2.DpiStages = new List<int> { 400, 1600 };
+		cs2.DpiActive = 2;
+		Assert.Null(live.Apply(dev, cs2));
+		Assert.Empty(dev.DpiWrites);
+		Assert.Equal(new List<int> { 1600 }, dev.DpiSeeds);
+		// The seeded value is the one the slot write stored.
+		Assert.Equal(1600, OnboardMemory.ActiveDpi(cs2));
+		Assert.Equal(new List<int> { 1000 }, dev.PollingWrites);
+		// Back to the desktop profile and into the game again: still no DPI command.
+		Assert.Null(live.Restore(dev));
+		Assert.Null(live.Apply(dev, cs2));
+		Assert.Empty(dev.DpiWrites);
+	}
+
 	[Fact]
 	public void AltTabBackIntoTheGameSendsNoWriteAndNoSwitch()
 	{

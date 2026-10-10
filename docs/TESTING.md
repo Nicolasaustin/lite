@@ -1,3 +1,78 @@
+# LiteSynapse 1.1.6 test build 7: the optimization pass
+
+Build 7 is about doing less: fewer commands to the mouse, less work when a game comes to the front, and less
+memory held while you play. Nothing about how you use it changed.
+
+## Fewer commands to the mouse
+
+Switching into a game used to send up to nine commands to the Naga right as the game took the foreground
+(read the slot, switch it, set DPI, set the polling rate, then six lighting commands). It now sends **one**:
+the slot switch.
+
+- The slot already stores its own DPI, and the slot LiteSynapse switches to was written with this profile, so
+  the DPI command is not needed. LiteSynapse just remembers the value.
+- The polling rate is not part of a slot (its command carries no slot number), so a slot switch cannot change
+  it and it is no longer re-sent afterwards.
+- The lighting is already in the slot too (build 6 stopped re-sending it after a switch).
+
+So an alt-tab into CS2 and back is about 10 ms of USB traffic instead of about 90 ms, and none of it lands
+while the game is loading its first frames.
+
+## Less work while a game runs
+
+- **Repeated foreground events cost nothing.** Windows sends "a new window is in front" again for the same
+  window (a game re-focusing itself, an overlay closing). LiteSynapse now recognizes that with two cheap calls
+  and stops there, instead of opening the game's process, reading its path and matching it against your 47
+  rules every time.
+- **Device work runs below your game.** The thread that talks to the mouse and keyboard was at normal
+  priority; it is now below normal. It waits on USB rather than using the CPU, so it can never take time from
+  a frame.
+- **The tray tooltip is only rewritten when its text really changes** (it used to be rewritten on every
+  change the window made, including dragging a lighting slider).
+
+## Less at start-up and less memory
+
+- The Razer leftovers check used to walk every Windows service and start `schtasks.exe` five seconds after
+  sign-in, which is exactly when you might be launching a game. That part now waits until you open the
+  Settings → Performance page. The quick checks still run at start-up, so the warning dot still appears.
+- When the last window closes, LiteSynapse gives its memory back to Windows instead of holding what the
+  window needed for the rest of the session. It skips this while a game profile is live, so it can never
+  pause anything.
+- The app is built with the workstation garbage collector, no ETW plumbing and no hot-reload support: a
+  smaller, quieter process.
+
+**At rest LiteSynapse wakes for nothing.** Every thread waits on an event: no polling loop, no timer, no
+periodic check. It runs only when a window comes to the front, a key is pressed with a profile live, a device
+is plugged in, or you use the window.
+
+## Install
+
+1. Run `LiteSynapse-Setup-1.1.6.exe`. It closes the running LiteSynapse, replaces the old build and keeps your
+   profiles, games and macros.
+   - SmartScreen says "Windows protected your PC" because the app isn't code-signed: **More info → Run anyway**.
+2. Quit Razer Synapse fully (tray icon → **Quit**).
+3. Click **Finish** with "Launch" ticked.
+
+## Checklist
+
+| # | Try this | Expected |
+|---|---|---|
+| 1 | Start CS2, alt-tab out and back a few times | The profile follows; the log shows one "live slot" line per switch and no "mouse dpi" lines |
+| 2 | Check the log after a game switch | No DPI or polling line, just the slot switch |
+| 3 | **Mouse → Performance**: change DPI | Takes effect right away (this path still sends it) |
+| 4 | Open Task Manager, watch LiteSynapse while playing | 0% CPU except at the moment of a switch |
+| 5 | Open the window, close it, look at the memory column | It drops back after closing |
+| 6 | **Settings → Performance → Check now** | Still finds the services, the task and the autostart |
+| 7 | Everything from build 6 | Unchanged |
+
+**Don't test Snap Tap or macros in Valve matchmaking or FACEIT.**
+
+## If something goes wrong
+
+**Settings → Open config folder** opens `%LOCALAPPDATA%\Programs\LiteSynapse\data`. Send me `log.txt`.
+
+---
+
 # LiteSynapse 1.1.5 test build 6: what to try
 
 Build 6 is the bug-test build: two full review rounds over the whole app (CS2 and anti-cheat, latency,

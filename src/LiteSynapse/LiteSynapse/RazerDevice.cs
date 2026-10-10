@@ -552,6 +552,16 @@ internal sealed class RazerDevice : IDisposable
 		}
 	}
 
+	// Records a DPI the device is known to have without sending anything: after a slot switch or a slot write,
+	// the slot's own stored DPI is in effect and the profile's write already put it there.
+	public void SeedDpi(int value)
+	{
+		lock (gate)
+		{
+			dpi = value;
+		}
+	}
+
 	public bool SetDpi(int dpi, int? slot = null)
 	{
 		lock (gate)
@@ -658,9 +668,10 @@ internal sealed class RazerDevice : IDisposable
 			}
 			// Same bytes (including transaction id 0x41) as the switch that was verified on the mouse.
 			int s = Transact(65, 5, 4, 1, stackalloc byte[1] { (byte)slot }, null);
-			// A slot switch loads that slot's DPI (and possibly polling): forget both.
+			// A slot switch loads that slot's own DPI, so what was last sent no longer holds. The polling rate is
+			// not part of a slot: its command (00/05) and its read (00/85) take no slot byte, and an onboard write
+			// never stores one, so the rate stays as it was and its cache is still good.
 			dpi = null;
-			polling = null;
 			this.slot = null;
 			bool ok = s == StatusOk;
 			if (!ok && s != IoError)

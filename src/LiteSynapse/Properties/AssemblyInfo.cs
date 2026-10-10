@@ -7,10 +7,10 @@ using System.Security.Permissions;
 
 [assembly: AssemblyCompany("LiteSynapse")]
 [assembly: AssemblyConfiguration("Release")]
-[assembly: AssemblyFileVersion("1.1.5.0")]
-[assembly: AssemblyInformationalVersion("1.1.5")]
+[assembly: AssemblyFileVersion("1.1.6.0")]
+[assembly: AssemblyInformationalVersion("1.1.6")]
 [assembly: AssemblyProduct("LiteSynapse")]
 [assembly: AssemblyTitle("LiteSynapse")]
 [assembly: TargetPlatform("Windows7.0")]
 [assembly: SupportedOSPlatform("Windows7.0")]
-[assembly: AssemblyVersion("1.1.5.0")]
+[assembly: AssemblyVersion("1.1.6.0")]

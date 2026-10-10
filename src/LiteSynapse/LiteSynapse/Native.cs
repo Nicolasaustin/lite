@@ -346,6 +346,27 @@ internal static class Native
 
 	private const int ERROR_ACCESS_DENIED = 5;
 
+	// Which window is in front and which process owns it, without opening a handle: two cheap calls, so a
+	// repeated foreground event for the same window costs nothing more.
+	public static void ForegroundWindow(out nint hwnd, out uint pid)
+	{
+		pid = 0u;
+		hwnd = IntPtr.Zero;
+		try
+		{
+			hwnd = GetForegroundWindow();
+			if (hwnd != IntPtr.Zero)
+			{
+				GetWindowThreadProcessId(hwnd, out pid);
+			}
+		}
+		catch
+		{
+			hwnd = IntPtr.Zero;
+			pid = 0u;
+		}
+	}
+
 	// Full path of the program that owns the foreground window, or null (no window, or the process cannot be
 	// queried). pid receives its process id (0 when unknown).
 	public static string ForegroundExePath(out uint pid)

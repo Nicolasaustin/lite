@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -26,6 +27,9 @@ internal static class UiHost
 	private static Control invoker;
 
 	private static WebWindow web;
+
+	// Only for the memory release after the last window closed.
+	private static Service svcForMemory;
 
 	private static MainForm main;
 
@@ -134,7 +138,27 @@ internal static class UiHost
 		}
 		if (exit)
 		{
+			ReleaseMemory();
 			Application.ExitThread();
+		}
+	}
+
+	// The window is gone (with it WebView2 and everything the page needed): hand the memory back instead of
+	// sitting on tens of megabytes for the rest of the session. Skipped while the keyboard hook is live, because
+	// a compacting collection pauses every thread; the next time the window closes it runs.
+	private static void ReleaseMemory()
+	{
+		try
+		{
+			if (svcForMemory?.EngineBusy == true)
+			{
+				return;
+			}
+			GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+			GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+		}
+		catch
+		{
 		}
 	}
 
@@ -151,6 +175,7 @@ internal static class UiHost
 	// a { type: "navigate" } message.
 	public static void ShowWindow(Service svc, int page = -1, int tab = 0, bool mem = false)
 	{
+		svcForMemory = svc;
 		Post(() =>
 		{
 			if (!WebAvailable())
@@ -200,6 +225,7 @@ internal static class UiHost
 
 	private static void OpenClassic(Service svc, int page, int tab, bool mem)
 	{
+		svcForMemory = svc;
 		if (main == null || main.IsDisposed)
 		{
 			main = new MainForm(svc);

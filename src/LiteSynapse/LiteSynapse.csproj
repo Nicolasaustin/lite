@@ -15,7 +15,15 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- Workstation GC: one small heap, no per-core heaps or GC threads. Freed segments go back to Windows
+         instead of being kept for later, so the tray app's memory stays small between uses. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
     <TieredPGO>false</TieredPGO>
+    <!-- Nothing here uses EventSource/ETW, hot reload or globalization data: leaving them out saves start-up
+         work and a few MB of mapped data in every run. -->
+    <EventSourceSupport>false</EventSourceSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
     <!-- Precompiled native code: no JIT pause the first time a key or profile switch is handled. -->
     <PublishReadyToRun>true</PublishReadyToRun>
     <!-- Do not copy package API docs (.xml) next to the exe. -->

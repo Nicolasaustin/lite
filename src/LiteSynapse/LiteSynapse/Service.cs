@@ -52,6 +52,9 @@ internal sealed class Service
 	// The last foreground program that is not LiteSynapse, and its game rule (null = not a linked game).
 	private string fgExe;
 
+	// The window the last Check looked at, so a repeated event for it costs two calls and nothing else.
+	private nint fgWindow;
+
 	private string fgPath;
 
 	private uint fgPid;
@@ -190,6 +193,9 @@ internal sealed class Service
 	public bool ElevatedGame { get; private set; }
 
 	public RazerLeftovers Razer { get; private set; } = new RazerLeftovers();
+
+	// The keyboard hook is on (a game or a profile picked by hand): nothing may pause the process now.
+	public bool EngineBusy => engineSet && !engineInputs.IsOff;
 
 	// Slot number -> profile name last written there.
 	public Dictionary<string, string> OnboardNames => liveProfile.Names();
@@ -350,6 +356,9 @@ internal sealed class Service
 	// The next Check() applies the foreground program's profiles again even if they look unchanged.
 	public void ForceRecheck()
 	{
+		// Also forgets which window Check last looked at: the rules or profiles changed, so the program in front
+		// has to be matched again even though it is still the same window.
+		fgWindow = IntPtr.Zero;
 		lock (stateLock)
 		{
 			currentKey = "\0";
@@ -707,8 +716,23 @@ internal sealed class Service
 
 	public void RefreshRazer()
 	{
-		RazerLeftovers r = RazerLeftovers.Check();
-		string before = Razer?.ToString();
+		RefreshRazer(deep: true);
+	}
+
+	// deep: also look for the Razer services, the upgrade task and the RunOnce values (a few hundred registry
+	// reads and possibly schtasks.exe). A shallow check keeps what an earlier deep one found.
+	public void RefreshRazer(bool deep)
+	{
+		RazerLeftovers r = RazerLeftovers.Check(deep);
+		RazerLeftovers old = Razer;
+		if (!deep && old != null && old.Deep)
+		{
+			r.Deep = true;
+			r.Services = old.Services;
+			r.UpgradeTask = old.UpgradeTask;
+			r.RunOnce = old.RunOnce;
+		}
+		string before = old?.ToString();
 		Razer = r;
 		if (r.ToString() != before)
 		{
@@ -738,11 +762,13 @@ internal sealed class Service
 	{
 		Thread t = new Thread(() =>
 		{
-			// Let the startup profile apply first; this is a few registry reads, not urgent.
+			// Let the startup profile apply first; this is a few registry reads, not urgent. The heavy part (every
+			// Windows service, the scheduled task) waits until the window asks, so starting a game right after
+			// sign-in never competes with it.
 			Thread.Sleep(5000);
 			try
 			{
-				RefreshRazer();
+				RefreshRazer(deep: false);
 			}
 			catch (Exception ex)
 			{
@@ -775,17 +801,29 @@ internal sealed class Service
 	{
 		try
 		{
+			// Windows sends EVENT_SYSTEM_FOREGROUND again for the same window (a game that re-activates itself, an
+			// overlay closing, a click on the window that is already in front). Two cheap calls tell us that, and
+			// then nothing else runs: no process handle, no path, no rule matching.
+			Native.ForegroundWindow(out nint hwnd, out uint fg);
+			if (hwnd != IntPtr.Zero && hwnd == fgWindow && fg == fgPid)
+			{
+				return;
+			}
 			string path = Native.ForegroundExePath(out uint pid);
 			if (path == null)
 			{
 				return;
 			}
+			fgWindow = hwnd;
 			string exe = Path.GetFileName(path);
 			if (string.Equals(exe, selfExe, StringComparison.OrdinalIgnoreCase))
 			{
 				// LiteSynapse's own window: keep the game's state, but no game is in front now and the keyboard
 				// hook leaves keys alone.
 				gameInFront = false;
+				// fgPid still belongs to the program before this window, so the cheap check above must not match
+				// on it next time.
+				fgWindow = IntPtr.Zero;
 				lock (stateLock)
 				{
 					if (!selfInFront)

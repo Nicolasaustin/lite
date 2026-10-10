@@ -89,6 +89,14 @@ internal class RazerDevice
 		return true;
 	}
 
+	// DPI values recorded without sending anything (the slot already holds them).
+	public readonly List<int> DpiSeeds = new List<int>();
+
+	public void SeedDpi(int value)
+	{
+		DpiSeeds.Add(value);
+	}
+
 	public bool SetDpi(int dpi, int? slot = null)
 	{
 		DpiWrites.Add(dpi);

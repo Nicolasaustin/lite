@@ -218,9 +218,7 @@ internal static class OnboardMemory
 			Array.Copy(blob, off, a, 5, len);
 			list.Add(new OnboardCommand(5, 8, (byte)(5 + len), a) { Progress = (off == 0) ? "Writing profile info" : null });
 		}
-		List<int> dpiStages = p.DpiStages ?? new List<int>();
-		List<int> stages = ((dpiStages.Count > 0) ? dpiStages : new List<int> { p.Dpi }).Select((int d) => Math.Clamp(d, 100, 20000)).Take(5).ToList();
-		int active = Math.Clamp((dpiStages.Count <= 0) ? 1 : p.DpiActive, 1, stages.Count);
+		List<int> stages = DpiStages(p, out int active);
 		int dpi = stages[active - 1];
 		list.Add(new OnboardCommand(4, 5, 7, new byte[7]
 		{
@@ -344,6 +342,22 @@ internal static class OnboardMemory
 			Required = false
 		});
 		return list;
+	}
+
+	// The DPI stages a slot write stores for p, and which of them is active (1-based). ActiveDpi is the DPI the
+	// mouse runs once that slot is active, so nothing has to be sent after a switch.
+	internal static List<int> DpiStages(MouseProfile p, out int active)
+	{
+		List<int> dpiStages = p.DpiStages ?? new List<int>();
+		List<int> stages = ((dpiStages.Count > 0) ? dpiStages : new List<int> { p.Dpi }).Select((int d) => Math.Clamp(d, 100, 20000)).Take(5).ToList();
+		active = Math.Clamp((dpiStages.Count <= 0) ? 1 : p.DpiActive, 1, stages.Count);
+		return stages;
+	}
+
+	public static int ActiveDpi(MouseProfile p)
+	{
+		List<int> stages = DpiStages(p, out int active);
+		return stages[active - 1];
 	}
 
 	internal static List<OnboardCommand> BuildCommands(int slot, MouseProfile p)

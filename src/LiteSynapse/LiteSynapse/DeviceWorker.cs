@@ -143,7 +143,10 @@ internal sealed class DeviceWorker : IDisposable
 		thread = new Thread(Loop)
 		{
 			IsBackground = true,
-			Name = "LiteSynapse devices"
+			Name = "LiteSynapse devices",
+			// Below the game's threads: this one waits on USB most of the time, and a slot write must never take
+			// CPU from a frame. It is not on any input path, so being scheduled late costs nothing.
+			Priority = ThreadPriority.BelowNormal
 		};
 		thread.Start();
 	}

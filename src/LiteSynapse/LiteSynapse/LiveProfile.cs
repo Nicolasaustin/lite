@@ -232,7 +232,10 @@ internal class LiveProfile
 		}
 		Touch(slot);
 		liveSlot = OnboardSlots.IsLiveSlot(slot) ? slot : (-1);
-		dev.SetDpi(p.Dpi);
+		// The slot stores the DPI, and the slot now holds this profile (written, or its content hash matched), so
+		// the mouse is already at p.Dpi: no DPI command is sent at a game start. The polling rate is not stored
+		// with the slot, so it is still ensured (and skipped by the cache when it is already right).
+		dev.SeedDpi(OnboardMemory.ActiveDpi(p));
 		dev.SetPolling(p.PollingRate);
 		Status = $"\"{p.Name}\" is running on the mouse (slot {slot}, {OnboardMemory.SlotNames[slot]})";
 		string how = plan.Action switch

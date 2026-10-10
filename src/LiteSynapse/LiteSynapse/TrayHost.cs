@@ -437,8 +437,18 @@ internal sealed class TrayHost
 		Shell_NotifyIcon(0u, ref d);
 	}
 
+	private string shownTip;
+
 	private void ModifyTip()
 	{
+		// Changed fires for everything the window shows (a lighting slider, a DPI change); the tooltip only has
+		// the profile name in it, so Windows is left alone unless that text really changed.
+		string tip = svc.TrayText ?? "";
+		if (tip == shownTip)
+		{
+			return;
+		}
+		shownTip = tip;
 		NOTIFYICONDATA d = Data(4u);
 		Shell_NotifyIcon(1u, ref d);
 	}
