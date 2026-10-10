@@ -1647,12 +1647,12 @@ internal sealed class Service
 				SetStartup(want.Value);
 				return;
 			}
-			bool? state = StartupTask.State(me, out bool otherPath);
-			if (otherPath)
+			bool? state = StartupTask.State(me, out bool stale);
+			if (stale)
 			{
-				// Installed somewhere else since: the task follows this copy.
+				// Moved or updated since the task was registered: it follows this copy, with this file's hash.
 				SetStartup(true);
-				Cfg.Log("start with Windows: sign-in task re-pointed to " + me);
+				Cfg.Log("start with Windows: sign-in task registered again for " + me);
 				return;
 			}
 			if (state.HasValue)

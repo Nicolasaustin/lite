@@ -54,6 +54,7 @@
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\PerfLedger.cs" Link="App\PerfLedger.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\PerfModel.cs" Link="App\PerfModel.cs" />
     <Compile Include="..\..\src\LiteSynapse\LiteSynapse\Hardware.cs" Link="App\Hardware.cs" />
+    <Compile Include="..\..\src\LiteSynapse\LiteSynapse\StartupTask.cs" Link="App\StartupTask.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

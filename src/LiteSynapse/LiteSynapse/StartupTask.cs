@@ -15,6 +15,14 @@ namespace LiteSynapse;
 //
 // Task Scheduler is driven through its COM interface (Schedule.Service), late bound: no process to start, and
 // reading the state for the Settings page or the tray menu costs a few milliseconds.
+//
+// The task does not start LiteSynapse.exe directly. It lives in a folder this account can write to, and a task
+// that starts it with administrator rights and no prompt would hand those rights to any program that replaced
+// it. So the task starts Windows PowerShell (System32, which only an administrator can change) with a short
+// command that checks the file's SHA-256 against the one LiteSynapse had when it registered the task, clears
+// the .NET variables that could load other code into it (DOTNET_*, COMPlus_*, CORECLR_*), and only then starts
+// it. The task itself can only be changed by an administrator. LiteSynapse re-registers it whenever the file
+// changes (an update), so the hash is always its own.
 internal static class StartupTask
 {
 	public const string Name = "LiteSynapse";
@@ -32,11 +40,12 @@ internal static class StartupTask
 
 	private const int TaskLogonInteractiveToken = 3;
 
-	// The task's state: true when it exists, is enabled and starts this LiteSynapse.exe; false when it does not
-	// exist or starts something else; null when Task Scheduler could not be asked.
-	public static bool? State(string exePath, out bool otherPath)
+	// The task's state: true when it exists, is enabled and starts this LiteSynapse.exe as it is now; false when
+	// it does not exist or is disabled; null when Task Scheduler could not be asked. stale: it is enabled but
+	// starts another path or an older file (moved, or updated since), so it needs registering again.
+	public static bool? State(string exePath, out bool stale)
 	{
-		otherPath = false;
+		stale = false;
 		object service = null;
 		object folder = null;
 		object task = null;
@@ -57,8 +66,8 @@ internal static class StartupTask
 				return false;
 			}
 			string xml = Get(task, "Xml") as string ?? "";
-			otherPath = exePath != null && xml.IndexOf(Escape(exePath), StringComparison.OrdinalIgnoreCase) < 0;
-			return !otherPath;
+			stale = exePath != null && xml.IndexOf(Arguments(exePath, FileHash(exePath)), StringComparison.Ordinal) < 0;
+			return !stale;
 		}
 		catch (Exception ex) when (ex is COMException || ex is TargetInvocationException || ex is MissingMethodException
 			|| ex is UnauthorizedAccessException || ex is InvalidCastException || ex is ArgumentException)
@@ -86,8 +95,8 @@ internal static class StartupTask
 			folder = Call(service, "GetFolder", "\\");
 			if (on)
 			{
-				task = Call(folder, "RegisterTask", Name, Xml(exePath, CurrentUser()), TaskCreateOrUpdate, null, null,
-					TaskLogonInteractiveToken, null);
+				task = Call(folder, "RegisterTask", Name, Xml(exePath, FileHash(exePath), CurrentUser()), TaskCreateOrUpdate,
+					null, null, TaskLogonInteractiveToken, null);
 			}
 			else
 			{
@@ -103,7 +112,8 @@ internal static class StartupTask
 			return null;
 		}
 		catch (Exception ex) when (ex is COMException || ex is TargetInvocationException || ex is MissingMethodException
-			|| ex is UnauthorizedAccessException || ex is InvalidCastException || ex is ArgumentException || ex is SecurityException)
+			|| ex is UnauthorizedAccessException || ex is InvalidCastException || ex is ArgumentException || ex is SecurityException
+			|| ex is System.IO.IOException)
 		{
 			string why = (ex.InnerException ?? ex).Message;
 			Cfg.Log("start with Windows: the sign-in task could not be " + (on ? "registered: " : "removed: ") + why);
@@ -123,15 +133,44 @@ internal static class StartupTask
 		return me.Name;
 	}
 
+	// Windows PowerShell by its full path, never a powershell.exe found some other way.
+	internal static string LauncherPath => System.IO.Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+
+	// SHA-256 of the file, upper-case hex like Get-FileHash.
+	internal static string FileHash(string path)
+	{
+		using System.IO.FileStream f = new System.IO.FileStream(path, System.IO.FileMode.Open, System.IO.FileAccess.Read,
+			System.IO.FileShare.Read | System.IO.FileShare.Delete);
+		return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(f));
+	}
+
+	// What the task asks PowerShell to do (see the top of this file). The path is quoted through Ps(), and the hash
+	// is hex, so nothing in here can end a literal.
+	internal static string LauncherScript(string exePath, string sha256)
+	{
+		return "$p = " + RazerLeftovers.Ps(exePath) + "\n" +
+			"Get-ChildItem Env: | Where-Object { $_.Name -match '^(DOTNET_|COMPlus_|CORECLR_)' } | " +
+			"ForEach-Object { Remove-Item -LiteralPath ('Env:' + $_.Name) }\n" +
+			"if ((Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash -eq '" + sha256 + "') " +
+			"{ Start-Process -FilePath $p -ArgumentList '--tray' } else { exit 3 }\n";
+	}
+
+	internal static string Arguments(string exePath, string sha256)
+	{
+		string encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(
+			RazerLeftovers.Quiet + LauncherScript(exePath, sha256)));
+		return "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encoded;
+	}
+
 	// The task definition. Normal priority (Task Scheduler's default of 7 would start LiteSynapse below normal),
 	// no time limit, not stopped on battery, one copy at a time.
-	internal static string Xml(string exePath, string user)
+	internal static string Xml(string exePath, string sha256, string user)
 	{
 		return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n" +
 			"<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n" +
 			"  <RegistrationInfo>\n" +
 			"    <Author>LiteSynapse</Author>\n" +
-			"    <Description>Starts LiteSynapse at sign-in with administrator rights, so its macros and Snap Tap reach games that run as administrator.</Description>\n" +
+			"    <Description>Starts LiteSynapse at sign-in with administrator rights, so its macros and Snap Tap reach games that run as administrator. It checks LiteSynapse.exe's SHA-256 first and starts nothing if the file was changed.</Description>\n" +
 			"  </RegistrationInfo>\n" +
 			"  <Triggers>\n" +
 			"    <LogonTrigger>\n" +
@@ -167,8 +206,8 @@ internal static class StartupTask
 			"  </Settings>\n" +
 			"  <Actions Context=\"Author\">\n" +
 			"    <Exec>\n" +
-			"      <Command>\"" + Escape(exePath) + "\"</Command>\n" +
-			"      <Arguments>--tray</Arguments>\n" +
+			"      <Command>" + Escape(LauncherPath) + "</Command>\n" +
+			"      <Arguments>" + Escape(Arguments(exePath, sha256)) + "</Arguments>\n" +
 			"    </Exec>\n" +
 			"  </Actions>\n" +
 			"</Task>\n";
