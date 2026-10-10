@@ -41,6 +41,14 @@ public class RazerLeftovers
 	// The clean-up steps the window can ask for.
 	internal static readonly string[] Actions = new string[3] { "disableServices", "disableGameManager", "driverGuide" };
 
+	// Razer services known to open a network or localhost listener: the Chroma SDK server (its REST API on
+	// 127.0.0.1), Razer Central and the Synapse service itself (updates and sign-in). Only used to say so in the
+	// window; what gets turned off is decided by the program's folder, as for every other Razer service.
+	internal static readonly string[] NetworkServiceHints = new string[6]
+	{
+		"chroma", "central", "synapse", "update", "experience", "game manager"
+	};
+
 	// The filter-driver services LiteSynapse looks for, and how the UI names them.
 	internal static readonly (string Service, string Label)[] Filters = new (string, string)[2]
 	{
@@ -80,6 +88,13 @@ public class RazerLeftovers
 
 	// CpuzRunOnce values present in HKLM RunOnce (either registry view).
 	public List<string> RunOnce { get; set; } = new List<string>();
+
+	// Scheduled tasks whose name or program is Razer's (the upgrade task is reported on its own above).
+	public List<RazerTask> Tasks { get; set; } = new List<RazerTask>();
+
+	// Windows Firewall rules that let a Razer program through. While they exist, anything Razer can talk to the
+	// network as soon as it runs again.
+	public int FirewallRules { get; set; }
 
 	// The services, the upgrade task and the RunOnce values were looked for (a start-up check skips them).
 	public bool Deep { get; set; }
@@ -193,7 +208,44 @@ public class RazerLeftovers
 		{
 			return (type & 0x03) != 0;
 		}
-		return (type & 0x30) != 0 && (type & 0x80) == 0 && InRazerFolder(imagePath);
+		if ((type & 0x30) == 0 || (type & 0x80) != 0)
+		{
+			return false;
+		}
+		// Its program is in a Razer folder, or it is named after Razer (a service called "Razer ..." or "RzFoo"
+		// is Razer's wherever its program was installed). "Rz" alone would be too loose, so it needs more.
+		return InRazerFolder(imagePath) || n.StartsWith("Razer", StringComparison.OrdinalIgnoreCase)
+			|| (n.Length > 3 && n.StartsWith("Rz", StringComparison.OrdinalIgnoreCase) && char.IsUpper(n[2]));
+	}
+
+	// True for a Razer service that is known to listen on the network or on localhost.
+	internal static bool IsNetworkService(string name, string label)
+	{
+		string text = ((name ?? "") + " " + (label ?? "")).ToLowerInvariant();
+		return NetworkServiceHints.Any(text.Contains);
+	}
+
+	// A scheduled task is Razer's when its name says so, or the program it starts is in a Razer folder.
+	internal static bool IsRazerTask(string path, string command)
+	{
+		return (!string.IsNullOrWhiteSpace(path) && path.Contains("razer", StringComparison.OrdinalIgnoreCase)) || InRazerFolder(command);
+	}
+
+	// A firewall rule's registry data (App=..., Name=...) belongs to a Razer program.
+	internal static bool IsRazerFirewallRule(string rule)
+	{
+		if (string.IsNullOrWhiteSpace(rule))
+		{
+			return false;
+		}
+		foreach (string part in rule.Split('|'))
+		{
+			if (part.StartsWith("App=", StringComparison.OrdinalIgnoreCase) && InRazerFolder(part.Substring(4)))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// A service's display name unless it is a resource reference ("@file.dll,-101").
@@ -339,13 +391,19 @@ public class RazerLeftovers
 
 		public bool DisableTask { get; set; }
 
+		// Other Razer scheduled tasks to disable (/TN paths).
+		public List<string> Tasks { get; } = new List<string>();
+
+		// Razer's Windows Firewall rules are removed, so nothing Razer can reach the network again.
+		public bool Firewall { get; set; }
+
 		// HKLM RunOnce values to delete.
 		public List<string> RunOnce { get; } = new List<string>();
 
 		// Service name -> label for the message.
 		public Dictionary<string, string> Labels { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-		public bool NeedsAdmin => Disable.Count > 0 || Delete.Count > 0 || DisableTask || RunOnce.Count > 0;
+		public bool NeedsAdmin => Disable.Count > 0 || Delete.Count > 0 || DisableTask || Tasks.Count > 0 || Firewall || RunOnce.Count > 0;
 
 		public bool IsEmpty => Autostart.Count == 0 && !NeedsAdmin;
 	}
@@ -373,12 +431,16 @@ public class RazerLeftovers
 			p.Labels[s.Name] = string.IsNullOrWhiteSpace(s.Label) ? s.Name : s.Label;
 		}
 		p.DisableTask = r.UpgradeTask == "ready";
+		p.Tasks.AddRange((r.Tasks ?? new List<RazerTask>())
+			.Where((RazerTask t) => t != null && !string.IsNullOrWhiteSpace(t.Path) && t.State == "ready")
+			.Select((RazerTask t) => t.Path));
+		p.Firewall = r.FirewallRules > 0;
 		p.RunOnce.AddRange((r.RunOnce ?? new List<string>()).Where((string v) => CpuzRunOnce.Contains(v, StringComparer.OrdinalIgnoreCase)));
 		return p;
 	}
 
 	// A PowerShell single-quoted string.
-	internal static string Ps(string s)
+	public static string Ps(string s)
 	{
 		return "'" + (s ?? "").Replace("'", "''") + "'";
 	}
@@ -409,6 +471,21 @@ public class RazerLeftovers
 		{
 			sb.Append("schtasks.exe /Change /TN " + Ps(UpgradeTaskName) + " /DISABLE | Out-Null\n");
 			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
+		}
+		foreach (string t in p.Tasks)
+		{
+			sb.Append("schtasks.exe /Change /TN " + Ps(t.TrimStart('\\')) + " /DISABLE | Out-Null\n");
+			sb.Append("if ($LASTEXITCODE -ne 0) { $failed++ }\n");
+		}
+		if (p.Firewall)
+		{
+			// Every rule that lets a Razer program through, by the program's folder and by the rule's name.
+			// Removing a rule does not block anything that was allowed by another rule; Windows simply stops
+			// making an exception for Razer.
+			sb.Append("$rules = @(Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | " +
+				"Where-Object { $_.Program -match '\\\\Razer' } | Get-NetFirewallRule -ErrorAction SilentlyContinue)\n");
+			sb.Append("$rules += @(Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*Razer*' })\n");
+			sb.Append("$rules | Sort-Object -Property Name -Unique | Remove-NetFirewallRule -ErrorAction SilentlyContinue\n");
 		}
 		foreach (string v in p.RunOnce)
 		{
@@ -455,6 +532,23 @@ public class RazerLeftovers
 			if (p.DisableTask)
 			{
 				((after?.UpgradeTask == "ready") ? on : off).Add("upgrade task");
+			}
+			foreach (string t in p.Tasks)
+			{
+				bool still = (after?.Tasks ?? new List<RazerTask>()).Any((RazerTask x) => x != null && x.State == "ready" && string.Equals(x.Path, t, StringComparison.OrdinalIgnoreCase));
+				(still ? on : off).Add("task " + t.TrimStart('\\'));
+			}
+			if (p.Firewall)
+			{
+				int left = after?.FirewallRules ?? 0;
+				if (left > 0)
+				{
+					on.Add(left + " firewall rule" + ((left == 1) ? "" : "s"));
+				}
+				else
+				{
+					off.Add("every Razer firewall rule");
+				}
 			}
 			foreach (string v in p.RunOnce)
 			{
@@ -570,6 +664,22 @@ public class RazerLeftovers
 			catch (Exception ex8)
 			{
 				Cfg.Log("razer check (RunOnce): " + ex8.Message);
+			}
+			try
+			{
+				r.Tasks = Win.RazerTasks();
+			}
+			catch (Exception ex9)
+			{
+				Cfg.Log("razer check (tasks): " + ex9.Message);
+			}
+			try
+			{
+				r.FirewallRules = Win.RazerFirewallRules();
+			}
+			catch (Exception ex10)
+			{
+				Cfg.Log("razer check (firewall): " + ex10.Message);
 			}
 		}
 		r.Checked = true;
@@ -706,6 +816,13 @@ public class RazerLeftovers
 	// Windows PowerShell by its full path: a bare name would also find a powershell.exe in the working directory
 	// (LiteSynapse's own, user-writable folder), and that copy would get the administrator rights.
 	private static string PowerShellPath => Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+
+	// Runs an elevated PowerShell script (one UAC prompt) and returns its exit code; -2 when it did not finish
+	// within waitMs. Shared with DeviceTuning.
+	internal static int RunElevated(string script, int waitMs)
+	{
+		return RunElevatedPowerShell(script, hidden: true, waitMs);
+	}
 
 	// Exit code of the script; -2 when it did not finish within waitMs.
 	private static int RunElevatedPowerShell(string script, bool hidden, int waitMs)
@@ -855,12 +972,14 @@ public class RazerLeftovers
 						}
 						int start = (k.GetValue("Start") is int st) ? st : 3;
 						bool deleting = k.GetValue("DeleteFlag") is int d && d != 0;
+						string label = ServiceLabel(name, k.GetValue("DisplayName") as string);
 						list.Add(new RazerService
 						{
 							Name = name,
-							Label = ServiceLabel(name, k.GetValue("DisplayName") as string),
+							Label = label,
 							State = ServiceMode(start, RunState(scm, name), deleting),
-							Driver = (type & 0x03) != 0
+							Driver = (type & 0x03) != 0,
+							Network = IsNetworkService(name, label)
 						});
 					}
 					catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
@@ -922,6 +1041,95 @@ public class RazerLeftovers
 			}
 			string xml = RunTool(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), "/Query /TN \"" + name + "\" /XML", 5000, out int code);
 			return TaskStateFromXml(code, xml);
+		}
+
+		// Razer's scheduled tasks, from the task cache in the registry: no process is started and the task's own
+		// program is read from its Actions blob, so a task in a Razer folder is found whatever it is called.
+		public static List<RazerTask> RazerTasks()
+		{
+			List<RazerTask> found = new List<RazerTask>();
+			using RegistryKey tree = Registry.LocalMachine.OpenSubKey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree");
+			if (tree != null)
+			{
+				WalkTasks(tree, "", found, 0);
+				found.Sort((RazerTask a, RazerTask b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+			}
+			return found;
+		}
+
+		private static void WalkTasks(RegistryKey key, string path, List<RazerTask> found, int depth)
+		{
+			if (depth > 6 || found.Count > 64)
+			{
+				return;
+			}
+			foreach (string name in key.GetSubKeyNames())
+			{
+				try
+				{
+					using RegistryKey sub = key.OpenSubKey(name);
+					if (sub == null)
+					{
+						continue;
+					}
+					string full = path + "\\" + name;
+					string id = sub.GetValue("Id") as string;
+					if (id == null)
+					{
+						WalkTasks(sub, full, found, depth + 1);
+						continue;
+					}
+					// A leaf: the task itself. Its program is in the Actions blob under TaskCache\Tasks\{Id}.
+					string command = TaskCommand(id);
+					if (IsRazerTask(full, command) && !full.Equals("\\" + UpgradeTaskName, StringComparison.OrdinalIgnoreCase))
+					{
+						found.Add(new RazerTask
+						{
+							Path = full,
+							State = ((sub.GetValue("Index") is int idx) && idx == 0) ? "disabled" : "ready"
+						});
+					}
+				}
+				catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+				{
+				}
+			}
+		}
+
+		// The program a task starts, read from its Actions value (UTF-16 with binary around it).
+		private static string TaskCommand(string id)
+		{
+			try
+			{
+				using RegistryKey task = Registry.LocalMachine.OpenSubKey("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tasks\\" + id);
+				if (task?.GetValue("Actions") is byte[] blob)
+				{
+					return Encoding.Unicode.GetString(blob);
+				}
+			}
+			catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException || ex is IOException)
+			{
+			}
+			return "";
+		}
+
+		// Windows Firewall rules that let a Razer program through, counted from the registry (no netsh run).
+		public static int RazerFirewallRules()
+		{
+			int n = 0;
+			using RegistryKey k = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\FirewallRules");
+			if (k == null)
+			{
+				return 0;
+			}
+			foreach (string name in k.GetValueNames())
+			{
+				if (IsRazerFirewallRule(k.GetValue(name) as string))
+				{
+					n++;
+				}
+			}
+			return n;
 		}
 
 		// CpuzRunOnce values in HKLM RunOnce, 64- or 32-bit view (the cpuz installer is 32-bit NSIS).
@@ -1144,6 +1352,15 @@ public class RazerLeftovers
 	}
 }
 
+// One Razer scheduled task. Path is what schtasks calls /TN, e.g. "\\Razer\\Razer Update".
+public sealed class RazerTask
+{
+	public string Path { get; set; }
+
+	// ready | disabled
+	public string State { get; set; }
+}
+
 // One Razer background service. State: running | auto (starts with Windows) | manual (starts when a program asks for
 // it) | disabled | removing (deleted; gone after the next restart).
 public sealed class RazerService
@@ -1156,4 +1373,7 @@ public sealed class RazerService
 
 	// A kernel driver (the CPUID driver): deleted rather than disabled.
 	public bool Driver { get; set; }
+
+	// It is known to listen on the network or on localhost.
+	public bool Network { get; set; }
 }

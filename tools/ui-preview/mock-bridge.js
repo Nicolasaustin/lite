@@ -336,8 +336,11 @@
         if (r.gmsService === 'running' || r.gmsService === 'stopped') off.push('Razer Game Manager Service 3');
         (r.services || []).filter(s => ['running', 'auto', 'manual'].includes(s.state)).forEach(s => off.push(s.label));
         if (r.upgradeTask === 'ready') off.push('upgrade task');
+        (r.tasks || []).filter(t => t.state === 'ready').forEach(t => off.push('task ' + t.path));
+        if (r.firewallRules) off.push('every Razer firewall rule');
         st.razer = Object.assign({}, r, {
           autostart: [], gmsService: r.gmsService === 'absent' ? 'absent' : 'disabled', upgradeTask: r.upgradeTask === 'absent' ? 'absent' : 'disabled', runOnce: [],
+          tasks: (r.tasks || []).map(t => Object.assign({}, t, { state: 'disabled' })), firewallRules: 0,
           services: (r.services || []).filter(s => !s.driver).map(s => Object.assign({}, s, { state: 'disabled' }))
         });
         pushState();
@@ -346,6 +349,12 @@
       if (a.action === 'driverGuide') return delay(400).then(() => ({ message: 'Opened the driver removal guide in an administrator PowerShell window (dry run first).' }));
       return fail(`Unknown action "${a.action}".`);
     },
+    tuneDevices: () => delay(900).then(() => {
+      const t = st.tuning || {};
+      st.tuning = Object.assign({}, t, { backgroundCap: false, acceleration: false, pointerSpeed: 10, usbSuspend: 'off', devices: (t.devices || []).map(d => Object.assign({}, d, { powerSaving: false })) });
+      pushState();
+      return { message: 'Turned off: the 125 Hz cap on background windows (after the next sign-in), mouse acceleration, pointer speed scaling, 1 device kept awake, USB selective suspend in the power plan. Sign out and back in (or restart) so every part of Windows picks this up.' };
+    }),
     runSelfTest: () => null,
     openConfigFolder: () => null,
     reloadConfig: () => st,

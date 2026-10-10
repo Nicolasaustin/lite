@@ -194,6 +194,9 @@ internal sealed class Service
 
 	public RazerLeftovers Razer { get; private set; } = new RazerLeftovers();
 
+	// Windows power saving that would make the mouse answer late (checked with the Razer leftovers).
+	public DeviceTuningState Tuning { get; private set; } = new DeviceTuningState();
+
 	// The keyboard hook is on (a game or a profile picked by hand): nothing may pause the process now.
 	public bool EngineBusy => engineSet && !engineInputs.IsOff;
 
@@ -732,6 +735,17 @@ internal sealed class Service
 			r.UpgradeTask = old.UpgradeTask;
 			r.RunOnce = old.RunOnce;
 		}
+		if (deep)
+		{
+			try
+			{
+				Tuning = DeviceTuning.Check();
+			}
+			catch (Exception ex)
+			{
+				Cfg.Log("device tuning check: " + ex.Message);
+			}
+		}
 		string before = old?.ToString();
 		Razer = r;
 		if (r.ToString() != before)
@@ -756,6 +770,17 @@ internal sealed class Service
 	public Task<string> RazerCleanupAsync(string action)
 	{
 		return Task.Run(() => RazerCleanup(action));
+	}
+
+	// Turns Windows' USB power saving off for the Naga and the BlackWidow Lite (UAC prompt), then checks again.
+	public Task<string> TuneDevicesAsync()
+	{
+		return Task.Run(() =>
+		{
+			string msg = DeviceTuning.Apply();
+			RefreshRazer(deep: true);
+			return msg;
+		});
 	}
 
 	private void StartRazerCheck()

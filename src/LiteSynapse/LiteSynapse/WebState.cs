@@ -62,6 +62,8 @@ internal sealed class StateDto
 
 	public RazerDto Razer { get; set; } = new RazerDto();
 
+	public TuningDto Tuning { get; set; } = new TuningDto();
+
 	// Not in the v1.2 contract yet: the "close this window when a game starts" setting (setCloseOnGame).
 	public bool CloseOnGame { get; set; } = true;
 }
@@ -172,6 +174,47 @@ internal sealed class RazerDto
 
 	// cpuz install/uninstall values waiting in HKLM RunOnce.
 	public List<string> RunOnce { get; set; } = new List<string>();
+
+	// Razer scheduled tasks other than the upgrade one.
+	public List<RazerTaskDto> Tasks { get; set; } = new List<RazerTaskDto>();
+
+	// Windows Firewall rules that let a Razer program reach the network.
+	public int FirewallRules { get; set; }
+}
+
+internal sealed class RazerTaskDto
+{
+	public string Path { get; set; } = "";
+
+	// ready | disabled
+	public string State { get; set; } = "ready";
+}
+
+// Windows power saving that would delay the mouse's reports.
+internal sealed class TuningDto
+{
+	public bool Checked { get; set; }
+
+	public List<TunedDeviceDto> Devices { get; set; } = new List<TunedDeviceDto>();
+
+	// on | off | unknown
+	public string UsbSuspend { get; set; } = "unknown";
+
+	// Windows caps raw mouse input at 125 Hz for windows that are not in front.
+	public bool BackgroundCap { get; set; }
+
+	// "Enhance pointer precision" (mouse acceleration).
+	public bool Acceleration { get; set; }
+
+	// The pointer speed slider, 1..20 (10 = the middle notch, where Windows scales nothing).
+	public int PointerSpeed { get; set; } = 10;
+}
+
+internal sealed class TunedDeviceDto
+{
+	public string Name { get; set; } = "";
+
+	public bool PowerSaving { get; set; }
 }
 
 internal sealed class RazerServiceDto
@@ -184,6 +227,9 @@ internal sealed class RazerServiceDto
 	public string State { get; set; } = "auto";
 
 	public bool Driver { get; set; }
+
+	// Known to listen on the network or on localhost.
+	public bool Network { get; set; }
 }
 
 // getDeviceInfo

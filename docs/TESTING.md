@@ -1,3 +1,85 @@
+# LiteSynapse 1.1.7 test build 8: Razer off for good, and the mouse at its fastest
+
+Settings → Performance now has two cards: **Device latency** (new) and **Razer leftovers** (wider).
+
+## Device latency (new card)
+
+It checks the five Windows settings that put delay between your hand and the game, and one button fixes
+all of them:
+
+- **Background polling cap.** Windows throttles raw mouse input to **125 Hz** for any window that is not in
+  front. An overlay, a second monitor or a moment of lost focus and your 1000 Hz mouse is sending a quarter
+  of its reports. LiteSynapse turns the cap off (`RawMouseThrottleEnabled`).
+- **Mouse acceleration** ("Enhance pointer precision"): the same hand movement travels a different distance
+  depending on how fast you move it, so aim is not repeatable. Turned off.
+- **Pointer speed.** Anything but the middle notch (6 of 11) makes Windows scale the mouse's counts, which
+  throws movement away or doubles it. Put back to the middle.
+- **USB power saving** on the Naga and the BlackWidow: Windows may put them to sleep, and the first movement
+  after a quiet moment waits for the device to wake. Turned off per device.
+- **USB selective suspend** in the power plan: the same thing, plan-wide. Turned off.
+
+The first three are settings of your Windows account and apply at once, no administrator prompt. The two USB
+ones ask for administrator permission once. Everything can be set back in Windows' own Mouse settings, Device
+Manager and Power Options; the dialog lists exactly what it will change before you agree.
+
+Two of your own notes are already covered: maximum polling rate is on the Mouse → Performance page, and the
+DPI advice (400 at 1080p, 800 at 1440p, 1600 at 4K) is your call per profile.
+
+## Razer leftovers (wider)
+
+"Turn off Razer services" now covers everything Razer leaves running, not just part of it:
+
+- **Any Razer service**, found three ways: its program sits in a Razer folder, or it is named `Razer…`, or
+  it is the CPUID driver. That picks up Chroma SDK Server and Service, Razer Central, the Synapse service,
+  RazerExperienceService, the elevation service, haptics — wherever they were installed.
+- **Network.** Services known to listen (Chroma SDK, Central, Synapse, updaters) are marked **network** in the
+  list. A new row counts the **Windows Firewall rules** that let a Razer program through, and the clean-up
+  removes them. After that, nothing Razer can reach the network or accept a connection even if it comes back.
+- **Every Razer scheduled task**, not only the upgrade one. They are found by reading the task cache, so
+  nothing is started to look for them.
+
+## Also in this build
+
+The optimization work from build 7 is in here too: one command to the mouse per game switch, repeated
+foreground events cost nothing, device work below your game's threads, and memory given back when the window
+closes.
+
+## Install
+
+1. Run `LiteSynapse-Setup-1.1.7.exe`. It keeps your profiles, games and macros.
+   - SmartScreen: **More info → Run anyway**.
+2. Quit Razer Synapse fully (tray icon → **Quit**).
+3. Click **Finish** with "Launch" ticked.
+
+## Checklist
+
+| # | Try this | Expected |
+|---|---|---|
+| 1 | **Settings → Performance → Check now** | Both cards fill in |
+| 2 | Read the **Device latency** rows | They match what Windows actually has (check Mouse settings and Device Manager) |
+| 3 | **Set up for lowest latency** | Lists what it will change, one UAC prompt, then reports what is off |
+| 4 | Afterwards: Windows Mouse settings | "Enhance pointer precision" off, speed at the middle notch |
+| 5 | Afterwards: Device Manager → the Naga → Power Management | "Allow the computer to turn off this device" unticked |
+| 6 | Look at **Other Razer services and tasks** | Lists the services with a **network** tag on the ones that listen, plus any Razer scheduled task |
+| 7 | **Turn off Razer services** | Disables them all, disables the tasks, removes the Razer firewall rules |
+| 8 | Re-check | Everything reads Off / Blocked / None |
+| 9 | Sign out and back in, then play | Report whether it feels different |
+
+**Don't test Snap Tap or macros in Valve matchmaking or FACEIT.**
+
+## If something goes wrong
+
+Everything here is reversible in Windows:
+- Mouse settings: Settings → Bluetooth & devices → Mouse → Additional mouse settings → Pointer Options.
+- Device sleep: Device Manager → the device → Power Management.
+- USB selective suspend: Power Options → Change plan settings → Advanced → USB settings.
+- Razer services: services.msc (set back to Automatic or Manual), Task Scheduler, and Razer's installer
+  re-creates its firewall rules.
+
+**Settings → Open config folder** opens `%LOCALAPPDATA%\Programs\LiteSynapse\data`. Send me `log.txt`.
+
+---
+
 # LiteSynapse 1.1.6 test build 7: the optimization pass
 
 Build 7 is about doing less: fewer commands to the mouse, less work when a game comes to the front, and less

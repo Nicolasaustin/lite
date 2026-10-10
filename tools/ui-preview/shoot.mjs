@@ -223,6 +223,12 @@ scenario('main', async browser => {
   await shot(p, '31-settings-gaming');
   await tab(p, 'Performance');
   await shot(p, '32-settings-performance');
+  await p.click('button[data-fk="tune:go"]');
+  await shot(p, '32a-latency-confirm', 400);
+  await p.click('.modal-f .btn.primary');
+  await p.waitForSelector('.modal-t:text-is("Mouse latency")');
+  await shot(p, '32a2-latency-done', 400);
+  await p.keyboard.press('Escape');
   await p.click('button[data-fk="razer:svc"]');
   await shot(p, '32b-razer-services-confirm', 400);
   await p.click('.modal-f .btn.primary');

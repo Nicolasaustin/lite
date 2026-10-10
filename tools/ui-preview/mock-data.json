@@ -4688,7 +4688,31 @@
         }
       ],
       "upgradeTask": "ready",
-      "runOnce": []
+      "runOnce": [],
+      "tasks": [
+        {
+          "path": "\\Razer\\Razer Synapse Update",
+          "state": "ready"
+        }
+      ],
+      "firewallRules": 2
+    },
+    "tuning": {
+      "checked": true,
+      "devices": [
+        {
+          "name": "Razer Naga Left-Handed Edition",
+          "powerSaving": true
+        },
+        {
+          "name": "Razer BlackWidow Lite",
+          "powerSaving": false
+        }
+      ],
+      "usbSuspend": "on",
+      "backgroundCap": true,
+      "acceleration": true,
+      "pointerSpeed": 12
     },
     "closeOnGame": true
   },

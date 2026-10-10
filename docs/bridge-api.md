@@ -71,7 +71,17 @@ All JSON property names are camelCase.
       { "name": "cpuz165", "label": "CPUID driver (cpuz165)", "state": "manual", "driver": true }
     ],                                // state: running | auto | manual | disabled | removing
     "upgradeTask": "ready",           // scheduled task "Razer Upgrade Elevation Service": absent | ready | disabled
-    "runOnce": []                     // cpuz installer/uninstaller values waiting in HKLM RunOnce
+    "runOnce": [],                    // cpuz installer/uninstaller values waiting in HKLM RunOnce
+    "tasks": [{ "path": "\\Razer\\Razer Update", "state": "ready" }],   // other Razer scheduled tasks
+    "firewallRules": 2                // Windows Firewall rules that let a Razer program reach the network
+  },
+  "tuning": {                         // Windows settings that delay the mouse's reports
+    "checked": true,
+    "devices": [{ "name": "Razer Naga Left-Handed Edition", "powerSaving": true }],
+    "usbSuspend": "on",               // USB selective suspend in the current power plan: on | off | unknown
+    "backgroundCap": true,            // Windows caps raw mouse input at 125 Hz for background windows
+    "acceleration": false,            // "Enhance pointer precision"
+    "pointerSpeed": 10                // 1..20; 10 is the middle notch (6 of 11)
   }
 }
 ```
@@ -120,7 +130,8 @@ Macro steps use Windows virtual-key codes (`vk`), `ext` = extended-key flag, `vk
 | `setGameKeyboardDefault` | `{ keyboardProfile }` (`""` = none) | State |
 | `linkRunningGame` | `{ profile }` | `{ exe: string\|null }` — adds `state.lastGameExe` to that profile's game rule (creates the rule if missing) |
 | `razerCheck` | `{}` | State (refreshes `state.razer`) |
-| `razerCleanup` | `{ action: "disableServices"\|"disableGameManager"\|"driverGuide" }` | `{ message }` — `disableServices` turns off the sign-in autostart (no UAC), then with one UAC prompt sets Game Manager and the other Razer services to Disabled and stops them, deletes the CPUID driver service, disables the upgrade task and deletes the cpuz RunOnce values; never Audiosrv, VSSrv or XTU3SERVICE |
+| `tuneDevices` | `{}` | `{ message }` — turns off the background polling cap, pointer acceleration and pointer-speed scaling for this Windows account (no UAC), then with one UAC prompt turns off USB power saving on the Razer devices and USB selective suspend in the power plan |
+| `razerCleanup` | `{ action: "disableServices"\|"disableGameManager"\|"driverGuide" }` | `{ message }` — `disableServices` turns off the sign-in autostart (no UAC), then with one UAC prompt sets Game Manager and the other Razer services to Disabled and stops them, deletes the CPUID driver service, disables the upgrade task and Razer's other scheduled tasks, removes the Windows Firewall rules for Razer programs and deletes the cpuz RunOnce values; never Audiosrv, VSSrv or XTU3SERVICE |
 | `runSelfTest` | `{}` | `null` — opens a console window running `LiteSynapse.exe testall` |
 | `openConfigFolder` | `{}` | `null` |
 | `reloadConfig` | `{}` | State |
@@ -155,7 +166,9 @@ public string ApplyMouseLighting(MouseProfile p);   // null = ok; no-op if the m
 public bool ApplyKbLighting(KbProfile p);
 public void OnSuspend(); public void OnResume(); public void OnSessionLock(); public void OnSessionUnlock();
 public class RazerLeftovers { bool Checked; bool SynapseInstalled; bool SynapseRunning; string GmsService; List<string> FilterDrivers; bool RzCommon;
-                             List<string> Autostart; List<RazerService> Services; string UpgradeTask; List<string> RunOnce; }
+                             List<string> Autostart; List<RazerService> Services; string UpgradeTask; List<string> RunOnce;
+                             List<RazerTask> Tasks; int FirewallRules; }
+internal static class DeviceTuning { public static DeviceTuningState Check(); public static string Apply(); }
 ```
 
 Lighting helpers (data/protocol work):

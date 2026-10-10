@@ -1190,6 +1190,10 @@ function normalize(s) {
   d.razer.autostart = d.razer.autostart || [];
   d.razer.services = (d.razer.services || []).filter(Boolean);
   d.razer.runOnce = d.razer.runOnce || [];
+  d.razer.tasks = (d.razer.tasks || []).filter(Boolean);
+  d.razer.firewallRules = d.razer.firewallRules || 0;
+  d.tuning = Object.assign({ checked: false, devices: [], usbSuspend: 'unknown', backgroundCap: false, acceleration: false, pointerSpeed: 10 }, s.tuning || {});
+  d.tuning.devices = (d.tuning.devices || []).filter(Boolean);
   return d;
 }
 
@@ -1218,7 +1222,13 @@ const svcOn = sv => sv.state === 'running' || sv.state === 'auto' || sv.state ==
 // Something "Turn off Razer services" would change.
 const razerServicesToTurnOff = () => {
   const r = S.razer;
-  return r.checked && (r.gmsService === 'running' || r.gmsService === 'stopped' || r.autostart.length > 0 || r.services.some(svcOn) || r.upgradeTask === 'ready' || r.runOnce.length > 0);
+  return r.checked && (r.gmsService === 'running' || r.gmsService === 'stopped' || r.autostart.length > 0 || r.services.some(svcOn)
+    || r.upgradeTask === 'ready' || r.runOnce.length > 0 || r.tasks.some(t => t.state === 'ready') || r.firewallRules > 0);
+};
+// Windows settings that delay the mouse's reports.
+const tuningToFix = () => {
+  const t = S.tuning;
+  return t.checked && (t.backgroundCap || t.acceleration || t.pointerSpeed !== 10 || t.usbSuspend === 'on' || t.devices.some(d => d.powerSaving));
 };
 const isLeftovers = () => {
   const r = S.razer;
@@ -2074,6 +2084,9 @@ function leftoversSummary() {
   const svc = r.services.filter(svcOn).length;
   if (svc) bits.push(plural(svc, 'other Razer service'));
   if (r.upgradeTask === 'ready') bits.push('Razer upgrade task');
+  const tasks = r.tasks.filter(t => t.state === 'ready').length;
+  if (tasks) bits.push(plural(tasks, 'scheduled task'));
+  if (r.firewallRules) bits.push(plural(r.firewallRules, 'firewall rule') + ' for Razer programs');
   return bits.join(' · ');
 }
 function leftoversBanner() {
@@ -3469,6 +3482,8 @@ function setPerformance() {
     if (r.gmsService === 'running' || r.gmsService === 'stopped') items.push('Razer Game Manager Service 3');
     r.services.filter(svcOn).forEach(sv => items.push(sv.driver ? sv.label + ': the driver service is removed' : sv.label));
     if (r.upgradeTask === 'ready') items.push('Razer’s upgrade task');
+    r.tasks.filter(t => t.state === 'ready').forEach(t => items.push('Scheduled task ' + t.path.replace(/^\\/, '')));
+    if (r.firewallRules) items.push(plural(r.firewallRules, 'Windows Firewall rule') + ' that let Razer programs reach the network: removed');
     r.runOnce.forEach(v => items.push(v + ' (waiting to run at the next sign-in)'));
     const ok = await confirmModal({
       title: 'Turn off Razer services?', icon: 'power', ok: 'Turn off',
@@ -3480,11 +3495,14 @@ function setPerformance() {
     if (ok) cleanup('disableServices', 'Razer services');
   };
   const svcState = { running: 'running', auto: 'starts with Windows', manual: 'starts when a program asks for it', disabled: 'disabled', removing: 'removed at the next restart' };
-  const svcOnCount = r.services.filter(svcOn).length + (r.upgradeTask === 'ready' ? 1 : 0) + r.runOnce.length;
-  const svcAny = r.services.length > 0 || r.upgradeTask !== 'absent' || r.runOnce.length > 0;
+  const readyTasks = r.tasks.filter(t => t.state === 'ready');
+  const svcOnCount = r.services.filter(svcOn).length + (r.upgradeTask === 'ready' ? 1 : 0) + r.runOnce.length + readyTasks.length;
+  const svcAny = r.services.length > 0 || r.upgradeTask !== 'absent' || r.runOnce.length > 0 || r.tasks.length > 0;
   const svcList = svcAny ? h('ul', { class: 'plain-list' },
-    r.services.map(sv => h('li', null, h('b', null, sv.label), ' · ', svcState[sv.state] || sv.state)),
+    r.services.map(sv => h('li', null, h('b', null, sv.label), ' · ', svcState[sv.state] || sv.state,
+      sv.network ? h('span', { class: 'badge warn', style: 'margin-left:6px' }, 'network') : null)),
     r.upgradeTask !== 'absent' ? h('li', null, h('b', null, 'Razer Upgrade Elevation Service'), ' (scheduled task) · ', r.upgradeTask === 'ready' ? 'on' : 'disabled') : null,
+    r.tasks.map(t => h('li', null, h('b', null, t.path.replace(/^\\/, '')), ' (scheduled task) · ', t.state === 'ready' ? 'on' : 'disabled')),
     r.runOnce.map(v => h('li', null, h('b', null, v), ' · runs at the next sign-in'))) : null;
   const recheck = async () => {
     ui.razerBusy = 'check';
@@ -3503,9 +3521,68 @@ function setPerformance() {
       leftRow('layers', 'Filter drivers', r.filterDrivers.length ? `In the input path of: ${r.filterDrivers.join(', ')}. Every mouse and keyboard report passes through them.` : 'No Razer filter on the Naga or the BlackWidow Lite.', state(!r.filterDrivers.length, 'None', plural(r.filterDrivers.length, 'driver'))),
       leftRow('chip', 'RzCommon driver', r.rzCommon ? 'Installed. It sits in every mouse and keyboard report, even when no Razer app is running.' : 'Not installed.', state(!r.rzCommon, 'Not installed', 'Installed')),
       leftRow('play', 'Sign-in autostart', r.autostart.length ? `Windows starts ${r.autostart.map(v => eqi(v, 'RazerAppEngine') ? 'Razer Synapse' : v).join(', ')} every time you sign in.` : 'Razer software does not start when you sign in.', state(!r.autostart.length, 'Off', 'On')),
-      leftRow('grid', 'Other Razer services', svcAny ? h('div', null, 'Background services, the upgrade task and the CPUID hardware driver that Synapse installs. The driver gives Synapse’s hardware monitor direct access to the CPU and its sensors, the kind of driver known to cause latency spikes.', svcList) : 'None found.',
-        state(!svcOnCount, svcAny ? 'Off' : 'None', plural(svcOnCount, 'item') + ' on')));
+      leftRow('grid', 'Other Razer services and tasks', svcAny ? h('div', null, 'Background services, scheduled tasks and the CPUID hardware driver that Synapse installs. The driver gives Synapse’s hardware monitor direct access to the CPU and its sensors, the kind of driver known to cause latency spikes.', svcList) : 'None found.',
+        state(!svcOnCount, svcAny ? 'Off' : 'None', plural(svcOnCount, 'item') + ' on')),
+      leftRow('link', 'Network access for Razer', r.firewallRules
+        ? `${plural(r.firewallRules, 'Windows Firewall rule')} let Razer programs through. Razer’s Chroma SDK server also listens on this PC for other apps. Turning the services off stops them talking; removing the rules means Windows would not let them through even if they came back.`
+        : 'No firewall rule lets a Razer program through.', state(!r.firewallRules, 'Blocked', plural(r.firewallRules, 'rule'))));
+  // ---- Device latency: Windows settings that delay the mouse's reports ----
+  const t = S.tuning;
+  const sleepy = t.devices.filter(d => d.powerSaving);
+  const tuneRows = !t.checked
+    ? emptyBlock('refresh', 'Not checked yet', 'Use “Check now” above: LiteSynapse also looks at the Windows settings that slow the mouse down.')
+    : h('div', null,
+      leftRow('zap', 'Background polling cap', t.backgroundCap
+        ? 'On. Windows throttles the mouse to 125 Hz for any window that is not in front, so an overlay or a second monitor taking focus costs you most of the mouse’s reports.'
+        : 'Off. The mouse reports at its full rate even when the game is not the front window.', state(!t.backgroundCap, 'Off', 'On')),
+      leftRow('target', 'Mouse acceleration', t.acceleration
+        ? '“Enhance pointer precision” is on: the same hand movement travels a different distance depending on how fast you move. Aim is not repeatable.'
+        : 'Off. The same hand movement always travels the same distance.', state(!t.acceleration, 'Off', 'On')),
+      leftRow('dpi', 'Pointer speed', t.pointerSpeed !== 10
+        ? `Set to ${t.pointerSpeed} of 20. Anything but the middle notch makes Windows scale the mouse’s counts, which throws movement away or doubles it.`
+        : 'The middle notch (6 of 11): Windows passes the mouse’s counts through untouched.', state(t.pointerSpeed === 10, '6 of 11', `${t.pointerSpeed} of 20`)),
+      leftRow('chip', 'USB power saving', sleepy.length
+        ? `Windows may put ${sleepy.map(d => d.name).join(', ')} to sleep to save power. The first movement after a quiet moment then waits for the device to wake up.`
+        : t.devices.length ? 'Your Razer devices are never put to sleep.' : 'No Razer device found in Windows’ device list.',
+        state(!sleepy.length, 'Off', plural(sleepy.length, 'device'))),
+      leftRow('power', 'USB selective suspend', t.usbSuspend === 'on'
+        ? 'On in the current power plan: Windows suspends idle USB devices, your mouse included.'
+        : t.usbSuspend === 'off' ? 'Off in the current power plan.' : 'Could not be read.',
+        state(t.usbSuspend === 'off', 'Off', t.usbSuspend === 'on' ? 'On' : 'Unknown')));
+  const tuneNow = async () => {
+    const items = [];
+    if (t.backgroundCap) items.push('Uncap the mouse’s polling rate for background windows');
+    if (t.acceleration) items.push('Turn “Enhance pointer precision” off');
+    if (t.pointerSpeed !== 10) items.push(`Put the pointer speed back to the middle notch (now ${t.pointerSpeed} of 20)`);
+    if (sleepy.length) items.push(`Stop Windows putting ${plural(sleepy.length, 'Razer device')} to sleep`);
+    if (t.usbSuspend === 'on') items.push('Turn USB selective suspend off in the current power plan');
+    const needsAdmin = sleepy.length > 0 || t.usbSuspend === 'on';
+    const ok = await confirmModal({
+      title: 'Set up the mouse for lowest latency?', icon: 'zap', ok: 'Set it up',
+      body: h('div', { class: 'stack tight' },
+        h('div', null, 'LiteSynapse changes these Windows settings:'),
+        h('ul', { class: 'plain-list' }, items.map(x => h('li', null, x))),
+        h('div', { class: 'muted small' }, needsAdmin
+          ? 'The first three are for your Windows account and apply at once. The USB ones ask for administrator permission once. Everything here can be set back in Windows’ own mouse, device and power settings.'
+          : 'These are settings of your Windows account and apply at once. They can be set back in Windows’ own mouse settings.'))
+    });
+    if (!ok) return;
+    ui.razerBusy = 'tune';
+    requestRender();
+    const res = await act('tuneDevices', {}, { timeout: 120000 });
+    ui.razerBusy = '';
+    requestRender();
+    if (res !== FAILED && res && res.message) infoModal('Mouse latency', res.message, 'zap');
+  };
   return h('div', { class: 'stack' },
+    h('div', { class: 'card' },
+      cardHead(['Device latency', t.checked ? (tuningToFix() ? h('span', { class: 'badge warn' }, 'Can be better') : h('span', { class: 'badge ok' }, icon('check', 12), 'Best')) : null],
+        'How fast the mouse and Windows talk to each other.', null, 'zap'),
+      tuneRows,
+      t.checked ? h('div', { class: 'row wrap', style: 'margin-top:16px;padding-top:16px;border-top:1px solid var(--line)' },
+        h('button', { class: cx('btn primary', busy === 'tune' && 'busy'), disabled: !!busy || !tuningToFix(), 'data-fk': 'tune:go',
+          onclick: tuneNow }, spinOr('tune', 'zap'), 'Set up for lowest latency'),
+        h('span', { class: 'small faint' }, 'Sign out and back in afterwards so every part of Windows picks it up.')) : null),
     h('div', { class: 'card' },
       cardHead(['Razer leftovers', r.checked ? (isLeftovers() ? h('span', { class: 'badge warn' }, 'Found') : h('span', { class: 'badge ok' }, icon('check', 12), 'Clean')) : null],
         'Razer software that costs performance even when Synapse is closed.',
@@ -3521,7 +3598,9 @@ function setPerformance() {
       h('div', null, h('b', null, 'Turn off Razer services · low risk'),
         'Turns off the sign-in autostart like Task Manager’s Startup apps does, sets Game Manager and the other Razer services to Disabled and stops them, and disables the upgrade task. Nothing else is deleted: undo it in Task Manager, services.msc (Automatic or Manual) and Task Scheduler. Only the CPUID driver service is removed; CPU-Z and HWMonitor add it again when they start.'),
       h('div', null, h('b', null, 'Driver removal guide · moderate risk'),
-        'Opens an administrator PowerShell window that lists the Razer driver packages first and changes nothing on its own. Follow its steps to back them up and remove them. Uninstall Synapse first, or it puts them back.')));
+        'Opens an administrator PowerShell window that lists the Razer driver packages first and changes nothing on its own. Follow its steps to back them up and remove them. Uninstall Synapse first, or it puts them back.'),
+      h('div', null, h('b', null, 'Set up for lowest latency · low risk'),
+        'Changes Windows settings, not Razer’s: the background polling cap, pointer acceleration and speed for your account, and USB power saving for your two Razer devices. Each one can be set back in Windows (Mouse settings, Device Manager, Power Options).')));
 }
 const ACCENTS = [['mint', 'Mint', '#2EE6A6'], ['green', 'Green', '#44D62C'], ['blue', 'Blue', '#4F8CFF'], ['violet', 'Violet', '#8B7BFF'], ['amber', 'Amber', '#FFB547']];
 function setAppearance() {

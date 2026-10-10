@@ -217,13 +217,16 @@ public class BridgeProtocolTests
 			"version", "mouse", "keyboard", "auto", "inGame", "liveWrite", "startup", "liveStatus", "activeMouse",
 			"activeKeyboard", "defaultMouse", "defaultKeyboard", "mouseProfiles", "keyboardProfiles", "macros", "games",
 			"calibration", "buttonIds", "onboard", "liveSlots", "accent", "competitiveSafe", "gameKeyboardDefault",
-			"lastGameExe", "elevatedGame", "razer",
+			"lastGameExe", "elevatedGame", "razer", "tuning",
 			// Addition (setCloseOnGame).
 			"closeOnGame"
 		};
 		Assert.Equal(contract.OrderBy(k => k, StringComparer.Ordinal).ToArray(), Keys(s));
 		Assert.Equal(new[] { "connected", "name" }, Keys(s["mouse"].AsObject()));
-		Assert.Equal(new[] { "autostart", "checked", "filterDrivers", "gmsService", "runOnce", "rzCommon", "services", "synapseInstalled", "synapseRunning", "upgradeTask" }, Keys(s["razer"].AsObject()));
+		Assert.Equal(new[] { "autostart", "checked", "filterDrivers", "firewallRules", "gmsService", "runOnce", "rzCommon", "services", "synapseInstalled", "synapseRunning", "tasks", "upgradeTask" }, Keys(s["razer"].AsObject()));
+		Assert.Equal(new[] { "acceleration", "backgroundCap", "checked", "devices", "pointerSpeed", "usbSuspend" }, Keys(s["tuning"].AsObject()));
+		Assert.Equal(10, (int)s["tuning"]["pointerSpeed"]);
+		Assert.Equal("unknown", (string)s["tuning"]["usbSuspend"]);
 		Assert.Equal("absent", (string)s["razer"]["upgradeTask"]);
 		Assert.Empty(s["razer"]["services"].AsArray());
 		Assert.Equal("mint", (string)s["accent"]);
@@ -237,7 +240,7 @@ public class BridgeProtocolTests
 		st.Razer.Autostart.Add("RazerAppEngine");
 		JsonObject r = Obj(WebProtocol.State(st))["state"]["razer"].AsObject();
 		JsonObject svc = r["services"][0].AsObject();
-		Assert.Equal(new[] { "driver", "label", "name", "state" }, Keys(svc));
+		Assert.Equal(new[] { "driver", "label", "name", "network", "state" }, Keys(svc));
 		Assert.Equal("cpuz165", (string)svc["name"]);
 		Assert.True((bool)svc["driver"]);
 		Assert.Equal("RazerAppEngine", (string)r["autostart"][0]);

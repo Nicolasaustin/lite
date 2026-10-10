@@ -350,6 +350,78 @@ public class RazerLeftoversTests
 		Assert.Equal("Nothing was changed.", RazerLeftovers.ServicesOutcome(new RazerLeftovers.ServicesPlan(), before, after, 0, adminRan: false));
 	}
 
+	[Theory]
+	[InlineData("Razer Chroma SDK Server", "Razer Chroma SDK Server", true)]
+	[InlineData("RzChromaSDK", "", true)]
+	[InlineData("Razer Central Service", "", true)]
+	[InlineData("RazerExperienceService", "Razer Experience", true)]
+	[InlineData("Razer Game Manager Service 3", "", true)]
+	[InlineData("razer_elevation_service", "Razer Elevation Service", false)]
+	[InlineData("cpuz165", "CPUID driver (cpuz165)", false)]
+	[InlineData("HapticService", "Razer Sensa Haptics", false)]
+	public void ServicesThatReachTheNetworkAreMarked(string name, string label, bool expected)
+	{
+		Assert.Equal(expected, RazerLeftovers.IsNetworkService(name, label));
+	}
+
+	[Theory]
+	[InlineData("\\Razer\\Razer Synapse Update", "", true)]
+	[InlineData("\\Razer Upgrade Elevation Service", "", true)]
+	[InlineData("\\Vendor\\Updater", "C:\\Program Files\\Razer\\RazerAppEngine\\x.exe", true)]
+	[InlineData("\\Microsoft\\Windows\\UpdateOrchestrator\\Reboot", "C:\\Windows\\System32\\usoclient.exe", false)]
+	[InlineData("", "", false)]
+	[InlineData(null, null, false)]
+	public void RazerScheduledTasksAreFoundByNameOrProgram(string path, string command, bool expected)
+	{
+		Assert.Equal(expected, RazerLeftovers.IsRazerTask(path, command));
+	}
+
+	[Theory]
+	[InlineData("v2.31|Action=Allow|Active=TRUE|Dir=In|App=C:\\Program Files\\Razer\\RazerAppEngine\\RazerAppEngine.exe|Name=Razer|", true)]
+	[InlineData("v2.31|Action=Allow|Dir=In|App=C:\\Program Files (x86)\\Razer Chroma SDK\\bin\\RzSDKServer.exe|", true)]
+	[InlineData("v2.31|Action=Allow|Dir=In|App=C:\\Program Files\\Steam\\steam.exe|Name=Steam|", false)]
+	// Only the program decides, not a rule that merely mentions Razer in its name.
+	[InlineData("v2.31|Action=Allow|Dir=In|App=C:\\Games\\game.exe|Name=Razer friendly|", false)]
+	[InlineData("", false)]
+	[InlineData(null, false)]
+	public void FirewallRulesForRazerProgramsAreCounted(string rule, bool expected)
+	{
+		Assert.Equal(expected, RazerLeftovers.IsRazerFirewallRule(rule));
+	}
+
+	[Fact]
+	public void TasksAndFirewallRulesAreTurnedOffToo()
+	{
+		RazerLeftovers r = Found();
+		r.Tasks = new List<RazerTask>
+		{
+			new RazerTask { Path = "\\Razer\\Razer Synapse Update", State = "ready" },
+			new RazerTask { Path = "\\Razer\\Already off", State = "disabled" },
+			null
+		};
+		r.FirewallRules = 3;
+		RazerLeftovers.ServicesPlan p = PlanOf(r);
+		Assert.Equal(new[] { "\\Razer\\Razer Synapse Update" }, p.Tasks);
+		Assert.True(p.Firewall);
+		string script = RazerLeftovers.ServicesScript(p);
+		Assert.Contains("schtasks.exe /Change /TN 'Razer\\Razer Synapse Update' /DISABLE", script);
+		Assert.DoesNotContain("Already off", script);
+		Assert.Contains("Remove-NetFirewallRule", script);
+		// Afterwards: the task is disabled and no rule is left.
+		RazerLeftovers after = new RazerLeftovers
+		{
+			Checked = true,
+			GmsService = "disabled",
+			UpgradeTask = "disabled",
+			Tasks = new List<RazerTask> { new RazerTask { Path = "\\Razer\\Razer Synapse Update", State = "disabled" } },
+			FirewallRules = 0
+		};
+		string msg = RazerLeftovers.ServicesOutcome(p, r, after, 0, adminRan: true);
+		Assert.Contains("task Razer\\Razer Synapse Update", msg);
+		Assert.Contains("every Razer firewall rule", msg);
+		Assert.DoesNotContain("Still on:", msg);
+	}
+
 	[Fact]
 	public void LogLineListsTheNewFindings()
 	{

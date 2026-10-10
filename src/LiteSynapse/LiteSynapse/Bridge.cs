@@ -98,6 +98,7 @@ internal sealed class Bridge
 			["linkRunningGame"] = Now(LinkRunningGame),
 			["razerCheck"] = RazerCheck,
 			["razerCleanup"] = RazerCleanup,
+			["tuneDevices"] = TuneDevices,
 			["runSelfTest"] = RunSelfTest,
 			["openConfigFolder"] = Now(_ =>
 			{
@@ -219,6 +220,7 @@ internal sealed class Bridge
 			LastGameExe = svc.LastGameExe ?? "",
 			ElevatedGame = svc.ElevatedGame,
 			Razer = Razer(svc.Razer),
+			Tuning = Tuning(svc.Tuning),
 			CloseOnGame = prefs.CloseOnGame
 		};
 		WebState.FillStore(s, svc.Store, svc.Games);
@@ -254,6 +256,27 @@ internal sealed class Bridge
 		}
 	}
 
+	private static TuningDto Tuning(DeviceTuningState t)
+	{
+		if (t == null)
+		{
+			return new TuningDto();
+		}
+		return new TuningDto
+		{
+			Checked = t.Checked,
+			UsbSuspend = string.IsNullOrEmpty(t.UsbSuspend) ? "unknown" : t.UsbSuspend,
+			BackgroundCap = t.BackgroundCap,
+			Acceleration = t.Acceleration,
+			PointerSpeed = t.PointerSpeed,
+			Devices = (t.Devices ?? new List<TunedDevice>()).Where((TunedDevice d) => d != null).Select((TunedDevice d) => new TunedDeviceDto
+			{
+				Name = d.Name ?? "",
+				PowerSaving = d.PowerSaving
+			}).ToList()
+		};
+	}
+
 	private static RazerDto Razer(RazerLeftovers r)
 	{
 		if (r == null)
@@ -274,10 +297,17 @@ internal sealed class Bridge
 				Name = s.Name ?? "",
 				Label = s.Label ?? s.Name ?? "",
 				State = s.State ?? "auto",
-				Driver = s.Driver
+				Driver = s.Driver,
+				Network = s.Network
 			}).ToList(),
 			UpgradeTask = string.IsNullOrEmpty(r.UpgradeTask) ? "absent" : r.UpgradeTask,
-			RunOnce = (r.RunOnce ?? new List<string>()).ToList()
+			RunOnce = (r.RunOnce ?? new List<string>()).ToList(),
+			Tasks = (r.Tasks ?? new List<RazerTask>()).Where((RazerTask t) => t != null).Select((RazerTask t) => new RazerTaskDto
+			{
+				Path = t.Path ?? "",
+				State = t.State ?? "ready"
+			}).ToList(),
+			FirewallRules = r.FirewallRules
 		};
 	}
 
@@ -932,6 +962,13 @@ internal sealed class Bridge
 			throw new BridgeException($"Unknown clean-up step \"{action}\".");
 		}
 		string message = await svc.RazerCleanupAsync(action);
+		return new MessageResult(message ?? "");
+	}
+
+	// Turns Windows' USB power saving off for the two devices (UAC prompt). Result: { message }.
+	private async Task<object> TuneDevices(WebArgs a)
+	{
+		string message = await svc.TuneDevicesAsync();
 		return new MessageResult(message ?? "");
 	}
 
