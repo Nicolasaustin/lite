@@ -1,5 +1,25 @@
 # Testing LiteSynapse
 
+## Build 17 (1.2.6): LiteSynapse runs as administrator, so macros reach CS2
+
+**Why:** build 16's log showed every macro firing and Windows refusing every key it sent
+(`macro "W Jumpthrow": Windows took 0 of 8 key events (error 0)`). Windows only lets a program send keys into a
+window whose program has the same rights or fewer. Running as administrator, LiteSynapse can send keys into any game.
+
+**What to check first:** install (one UAC prompt), play CS2, press Up and Right arrow, then read the log in Settings.
+The macro lines should now say `Windows took 8 of 8` / `6 of 6`.
+
+- LiteSynapse always asks for administrator rights. Opening it from the Start menu or desktop shows a UAC prompt.
+- **Start with Windows** is now a Task Scheduler task called "LiteSynapse" that starts it at sign-in with those
+  rights, with no prompt. An older "Run" entry is moved over on first start. It does not show in Task Manager's
+  Startup apps any more, and Settings' switch turns it on and off.
+- The installer runs as administrator too: it has to close an elevated LiteSynapse and register or remove the task.
+  Uninstalling removes the task.
+- The version and build are in the title bar, next to GENERAL in Settings, and at the top of every session in the log
+  (`LiteSynapse 1.2.6 · build 17 started`).
+- On a standard (non-admin) Windows account, the UAC prompt asks for an administrator's password and LiteSynapse then
+  runs as that account, with that account's profiles. This build is meant for an admin account.
+
 ## Build 16 (1.2.5): your power plan is left alone, Competitive safe is easy to find, macros are logged
 
 **What to check first:** open CS2 (offline practice), press **Up arrow** and **Right arrow** a few times, leave CS2,
