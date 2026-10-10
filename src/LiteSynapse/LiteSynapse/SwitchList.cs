@@ -262,6 +262,43 @@ internal sealed class SwitchList : Control
 		Invalidate();
 	}
 
+	// One row's height changed (its pending line came or went): measure that row only and move the ones below
+	// it. A click must not re-measure a hundred and fifty rows of wrapped text.
+	private void Reflow(int at)
+	{
+		if (at < 0 || at >= items.Count)
+		{
+			Relayout();
+			return;
+		}
+		int before = items[at].H;
+		Measure(items[at], TextWidth, (int)Tx.Measure("X", Theme.P(10.5f)).Height, Theme.P(9f));
+		int delta = items[at].H - before;
+		if (delta != 0)
+		{
+			for (int i = at + 1; i < items.Count; i++)
+			{
+				items[i].Y += delta;
+			}
+			total += delta;
+			int view = Math.Max(1, Height);
+			if ((total > view) != bar.Visible)
+			{
+				// The scroll bar comes or goes, which changes the width every row wraps to.
+				Relayout();
+				return;
+			}
+			bar.Maximum = Math.Max(0, total - 1);
+			bar.LargeChange = Math.Max(1, view);
+			int maxScroll = Math.Max(0, total - view);
+			if (bar.Value > maxScroll)
+			{
+				bar.Value = maxScroll;
+			}
+		}
+		Invalidate();
+	}
+
 	private static void Summarise(Row head, int hurt, int help)
 	{
 		if (head == null)
@@ -606,7 +643,7 @@ internal sealed class SwitchList : Control
 			{
 				r.Want = null;
 			}
-			Relayout();
+			Reflow(at);
 		}
 		else
 		{
