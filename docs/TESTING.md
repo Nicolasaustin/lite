@@ -1,6 +1,6 @@
 # Testing LiteSynapse
 
-Build 12 (1.2.1) is the first build with **no WebView2**. The window is WinForms throughout, which is the
+Build 13 (1.2.2) is the first build with **no WebView2**. The window is WinForms throughout, which is the
 change to look at first: if frame times in CS2 were worse with the window open before, they should not be now,
 because nothing renders a browser any more.
 
@@ -46,6 +46,32 @@ because nothing renders a browser any more.
   `sc.exe stop` on an already-stopped service.
 - `KeyboardDelay` was being written as a DWord; Windows ships that value as `REG_SZ`, so the setting was
   being ignored.
+
+## Round 3 (the code that writes to your registry as administrator)
+
+- **Id routing.** A start-up entry's id is a Run value name, which any program can choose without admin
+  rights. A value named `accel` made "Pointer acceleration off" report "already like that" without applying
+  it; one named `Spooler` made ticking that service disable a start-up program you never ticked. The kind of
+  thing now travels with the id.
+- **The power plan set three timeouts on the wrong plan.** `powercfg /change` edits whichever scheme is
+  *active*, and the activate step ran last - so on a first run the monitor, standby and disk timeouts landed
+  on Balanced. Your Balanced plan was left unable to sleep with nothing to put it back.
+- A script that timed out or never started was reported as complete success.
+- "Network throttling off" could never read back as applied (the write narrowed 0xFFFFFFFF to -1, the read
+  did not).
+- "Pointer speed at the middle notch" never took effect immediately: the two arguments to
+  `SPI_SETMOUSESPEED` were in the wrong slots, so it asked for speed 0.
+- `Disable-MMAgent` failures were swallowed and counted as applied.
+- A registry delete that Windows *refused* was counted as success.
+- HKCU values inside admin-only settings were written by the elevated process, so on a standard-user account
+  they landed in the elevating administrator's profile.
+- Five per-user services (OneSyncSvc and friends) cannot be stopped by name; their rows now say the change
+  takes effect at the next sign-in.
+- The Auto HDR preference was being wiped: `DirectXUserGlobalSettings` is one value holding a list Windows
+  also writes to, and it was being overwritten wholesale.
+- The Razer scheduled-task walk guessed "enabled" from a value that is not that flag, so some tasks were
+  silently dropped from the clean-up.
+- One unreadable Run value discarded the entire start-up list.
 
 ## Three things the WebView2 removal had dropped, now back
 
