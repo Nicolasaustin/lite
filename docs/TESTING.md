@@ -1,6 +1,6 @@
 # Testing LiteSynapse
 
-Build 11 (1.2.0) is the first build with **no WebView2**. The window is WinForms throughout, which is the
+Build 12 (1.2.1) is the first build with **no WebView2**. The window is WinForms throughout, which is the
 change to look at first: if frame times in CS2 were worse with the window open before, they should not be now,
 because nothing renders a browser any more.
 

@@ -181,7 +181,10 @@ internal sealed class PerfPage
 				Primary = primary
 			};
 			b.Text = text;
-			b.Width = (int)Tx.Measure(text, b.Font).Width + 40;
+			// Wide enough for the caption with a two-digit count spliced into it, so "TURN TICKED OFF"
+			// becoming "TURN 12 TICKED OFF" does not clip.
+			string widest = text.Replace("TICKED", "99 TICKED");
+			b.Width = (int)Tx.Measure(widest, b.Font).Width + 40;
 			b.Location = new Point(x, y);
 			Action handler = click;
 			int onPage = index;
