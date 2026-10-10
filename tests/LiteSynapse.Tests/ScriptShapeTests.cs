@@ -31,6 +31,24 @@ public class ScriptShapeTests
 		yield return ("devices handed back",
 			DeviceTuning.Script(new[] { "USB\\VID_1532&PID_008D\\6&1a&0&3_0" },
 				powerPlan: true, allowPowerSaving: true));
+		// The merged script is the one that actually runs when a selection spans services and settings: the
+		// halves are stitched together by stripping each one's counter and exit line. That stitching is where
+		// a structural mistake would land, so it is checked at its largest and at its smallest.
+		yield return ("services and every setting merged", SystemScanner.Combine(
+			ServiceCatalog.Script(ServiceCatalog.All.Select((ServiceCatalog.Row r) => (r.Service, false)).ToList()),
+			Tweaks.Script(Tweaks.Catalog.Select((Tweaks.Tweak t) => (t.Id, true)).ToList())));
+		yield return ("one service and one setting merged", SystemScanner.Combine(
+			ServiceCatalog.Script(new[] { ("DiagTrack", false) }),
+			Tweaks.Script(new[] { ("accel", true) })));
+		// The halves can also be empty, which is what an all-start-up selection looks like by the time it
+		// reaches here.
+		yield return ("nothing on either side merged", SystemScanner.Combine(
+			ServiceCatalog.Script(null), Tweaks.Script(null)));
+		yield return ("only settings merged", SystemScanner.Combine(
+			ServiceCatalog.Script(null), Tweaks.Script(new[] { ("nagle", true) })));
+		yield return ("only services merged", SystemScanner.Combine(
+			ServiceCatalog.Script(new[] { ("Spooler", false) }), Tweaks.Script(null)));
+
 		// One of each kind together, which is what a real selection looks like.
 		foreach (Tweaks.Tweak t in Tweaks.Catalog)
 		{

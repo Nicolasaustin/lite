@@ -741,7 +741,7 @@ internal static class SystemScanner
 
 	// Two scripts into one, so the whole selection costs a single consent prompt. Each half counts its own
 	// failures into $failed and the exit code carries the total.
-	private static string Combine(string first, string second)
+	internal static string Combine(string first, string second)
 	{
 		string a = Strip(first);
 		string b = Strip(second);
