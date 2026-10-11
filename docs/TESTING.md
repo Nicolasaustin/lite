@@ -1,5 +1,22 @@
 # Testing LiteSynapse
 
+## Build 26 (1.2.15): no blank window at sign-in
+
+The "Start LiteSynapse with Windows" task used to flash a blank PowerShell window at every sign-in. That window is
+PowerShell: the task launches it (hidden) to verify LiteSynapse.exe before starting it, and -WindowStyle Hidden
+hides the console only after it has already appeared. Build 26 launches the same launcher through
+`conhost.exe --headless`, which runs it attached to a console that is never shown, so there is no window at all.
+The hash check, the planted-DLL refusal and the .NET-variable scrubbing are unchanged; only the window is gone.
+(The app is also built with StartupHookSupport=false, closing the DOTNET_STARTUP_HOOKS vector at compile time.)
+
+LiteSynapse re-registers the task when it updates, and also when it finds an older task that still launches
+PowerShell directly, so the fix reaches machines that already had the old task - no manual step needed. If the
+task was changed or disabled by hand, toggle Settings > "Start LiteSynapse with Windows" off and on to rebuild it.
+
+To test: with "Start with Windows" on, reboot - LiteSynapse appears in the tray with no blank window. The log
+reads `start with Windows: on (sign-in task, as administrator)`. In Task Scheduler the task's action is
+`conhost.exe` with `--headless "...powershell.exe" ... -EncodedCommand ...`.
+
 ## Build 25 (1.2.14): macro editor hardening (from the build-23 review)
 
 Confirmed findings from the adversarial review of the macro editor, all fixed:

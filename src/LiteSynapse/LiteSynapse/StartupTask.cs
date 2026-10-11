@@ -16,13 +16,20 @@ namespace LiteSynapse;
 // Task Scheduler is driven through its COM interface (Schedule.Service), late bound: no process to start, and
 // reading the state for the Settings page or the tray menu costs a few milliseconds.
 //
-// The task does not start LiteSynapse.exe directly. It lives in a folder this account can write to, and a task
-// that starts it with administrator rights and no prompt would hand those rights to any program that replaced
-// it. So the task starts Windows PowerShell (System32, which only an administrator can change) with a short
-// command that checks the file's SHA-256 against the one LiteSynapse had when it registered the task, clears
-// the .NET variables that could load other code into it (DOTNET_*, COMPlus_*, CORECLR_*), and only then starts
-// it. The task itself can only be changed by an administrator. LiteSynapse re-registers it whenever the file
-// changes (an update), so the hash is always its own.
+// The task does not start LiteSynapse.exe directly. A task that starts it with administrator rights and no prompt
+// would hand those rights to anything that could put code in its place, so the task starts Windows PowerShell
+// (System32, which only an administrator can change) with a short command that checks the file's SHA-256 against
+// the one LiteSynapse had when it registered the task, refuses if a DLL was planted beside it, clears the .NET
+// variables that could load other code into it (DOTNET_*, COMPlus_*, CORECLR_*), and only then starts it.
+//
+// PowerShell is a console program, so launching it - even with -WindowStyle Hidden - flashes a blank console
+// window at sign-in. To stop that, the task launches conhost.exe --headless, which runs PowerShell attached to a
+// console that is never shown. The checks are unchanged; only the window is gone. (The app is also built with
+// startup hooks disabled, so the DOTNET_STARTUP_HOOKS vector is closed at compile time as well.)
+//
+// The task itself can only be changed by an administrator. LiteSynapse re-registers it whenever the file changes
+// (an update) or when an older task still launches PowerShell directly, so the hash is always its own and the
+// window-flash fix reaches machines that had the older task.
 internal static class StartupTask
 {
 	// One task per Windows account ("LiteSynapse-<SID>"): two accounts on the same PC each keep their own, and one
@@ -71,7 +78,11 @@ internal static class StartupTask
 				return false;
 			}
 			string xml = Get(task, "Xml") as string ?? "";
-			stale = exePath != null && xml.IndexOf(Arguments(exePath, FileHash(exePath)), StringComparison.Ordinal) < 0;
+			// Stale when it starts another file or an older one (the encoded command carries the path and hash), or
+			// when it is an older task that still launches PowerShell directly instead of through conhost (so the
+			// window-flash fix is applied the next time the app starts).
+			stale = exePath != null && (xml.IndexOf(Arguments(exePath, FileHash(exePath)), StringComparison.Ordinal) < 0
+				|| xml.IndexOf("conhost", StringComparison.OrdinalIgnoreCase) < 0);
 			return !stale;
 		}
 		catch (Exception ex) when (ex is COMException || ex is TargetInvocationException || ex is MissingMethodException
@@ -147,6 +158,11 @@ internal static class StartupTask
 	// Windows PowerShell by its full path, never a powershell.exe found some other way.
 	internal static string LauncherPath => System.IO.Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
 
+	// conhost.exe (System32, administrator-only to change) runs the launcher attached to a headless console, so no
+	// console window is ever created - PowerShell's own -WindowStyle Hidden still flashes a blank window for an
+	// instant at sign-in, which is what people see. --headless prevents the window instead of hiding it afterwards.
+	internal static string ConhostPath => System.IO.Path.Combine(Environment.SystemDirectory, "conhost.exe");
+
 	// SHA-256 of the file, upper-case hex like Get-FileHash.
 	internal static string FileHash(string path)
 	{
@@ -183,6 +199,12 @@ internal static class StartupTask
 		string encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(
 			RazerLeftovers.Quiet + LauncherScript(exePath, sha256)));
 		return "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand " + encoded;
+	}
+
+	// The task runs conhost.exe, which runs the PowerShell launcher headless: conhost --headless "<powershell>" <args>.
+	internal static string TaskArguments(string exePath, string sha256)
+	{
+		return "--headless \"" + LauncherPath + "\" " + Arguments(exePath, sha256);
 	}
 
 	// The task definition. Priority 4: normal CPU, I/O and memory priority (Task Scheduler's default of 7 would start
@@ -230,8 +252,8 @@ internal static class StartupTask
 			"  </Settings>\n" +
 			"  <Actions Context=\"Author\">\n" +
 			"    <Exec>\n" +
-			"      <Command>" + Escape(LauncherPath) + "</Command>\n" +
-			"      <Arguments>" + Escape(Arguments(exePath, sha256)) + "</Arguments>\n" +
+			"      <Command>" + Escape(ConhostPath) + "</Command>\n" +
+			"      <Arguments>" + Escape(TaskArguments(exePath, sha256)) + "</Arguments>\n" +
 			"    </Exec>\n" +
 			"  </Actions>\n" +
 			"</Task>\n";

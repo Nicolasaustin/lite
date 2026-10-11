@@ -24,14 +24,20 @@ public class StartupTaskTests
 	}
 
 	[Fact]
-	public void TheTaskStartsPowerShellFromSystem32NotTheExeItself()
+	public void TheTaskRunsPowerShellHeadlessThroughConhostNotTheExeItself()
 	{
 		XDocument x = XDocument.Parse(StartupTask.Xml(Exe, Hash, "PC\\me"));
 		XElement exec = x.Descendants(Ns + "Exec").Single();
 		string command = exec.Element(Ns + "Command").Value;
-		Assert.EndsWith(Path.Combine("WindowsPowerShell", "v1.0", "powershell.exe"), command);
+		string args = exec.Element(Ns + "Arguments").Value;
+		// conhost runs the show; LiteSynapse.exe is never the task's own program.
+		Assert.EndsWith("conhost.exe", command);
 		Assert.DoesNotContain("LiteSynapse.exe", command);
-		Assert.Equal(StartupTask.Arguments(Exe, Hash), exec.Element(Ns + "Arguments").Value);
+		// Headless, then PowerShell from System32, then the launcher arguments.
+		Assert.StartsWith("--headless \"", args);
+		Assert.Contains(Path.Combine("WindowsPowerShell", "v1.0", "powershell.exe"), args);
+		Assert.EndsWith(StartupTask.Arguments(Exe, Hash), args);
+		Assert.Equal(StartupTask.TaskArguments(Exe, Hash), args);
 	}
 
 	[Fact]
