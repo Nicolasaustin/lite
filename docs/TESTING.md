@@ -1,5 +1,25 @@
 # Testing LiteSynapse
 
+## Build 28 (1.2.17): zero-spike pass (perf/stability review)
+
+A four-reviewer adversarial pass (input latency, frametime/stutter, stability/leaks, recent-build regressions), each
+finding verified against "does it actually cost a frame or crash in-game." The keyboard-hook hot path came back
+clean - no per-keystroke allocation, no locks, no logging, pre-JIT'd, nothing crash-prone. Two low-severity but
+worthwhile items were confirmed and fixed:
+
+- **GC mode while the hook is live is now SustainedLowLatency, not LowLatency.** LowLatency is meant for a short
+  burst: it holds gen-2 off until memory pressure forces one big blocking collection, which would stall the input
+  thread. SustainedLowLatency is the mode for a window held open a whole match - gen-2 still runs when it must, but
+  concurrently in the background, so it never stops input. (The engine allocates almost nothing in-game, so
+  collections are rare either way; this makes the rare one not a stall.)
+- **No full mouse-memory rewrite while a game is in front.** The forced first write after start/reconnect
+  (~30 USB control transfers) now waits until no game is the foreground window; while a game is in front LiteSynapse
+  only does the cheap slot switch (the records still match across an ordinary reconnect, since onboard memory
+  survives unplugging), and the forced re-validation runs when the game leaves the foreground. Removes the one
+  device-write burst that could share the mouse's USB endpoint with the game's polling.
+
+No change to the hot path, the power plan or mshidkmdf. 667 tests pass.
+
 ## Build 27 (1.2.16): the sign-in task heals itself - no manual step
 
 Build 26 stopped the blank window but, if the task had been disabled or changed by hand (e.g. a troubleshooting

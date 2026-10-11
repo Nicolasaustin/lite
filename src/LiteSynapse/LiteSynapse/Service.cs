@@ -1341,7 +1341,14 @@ internal sealed class Service
 			// The first write after a start, and after the mouse comes back, never trusts the slot records: Razer
 			// Synapse (a reinstall writes its stock layout) or a driver reset may have changed the mouse's memory
 			// while LiteSynapse was not watching, and a trusted record then left the mouse on the wrong layout.
-			string err = liveProfile.Apply(m, mp, force: firstMouseWrite);
+			//
+			// But a forced write is the whole profile (~30 control transfers to the mouse): never start one while a
+			// game is in front, where it would share the mouse's USB endpoint with the game's 1000 Hz polling for a
+			// moment. While a game is in front, do the normal plan (a cheap slot switch when the records still match,
+			// which they do across an ordinary reconnect - onboard memory survives unplugging); the forced
+			// re-validation waits for the game to leave the foreground, since firstMouseWrite stays set until it runs.
+			bool forceNow = firstMouseWrite && !gameInFront;
+			string err = liveProfile.Apply(m, mp, force: forceNow);
 			switched = liveProfile.Switched;
 			if (err != null)
 			{
@@ -1350,7 +1357,10 @@ internal sealed class Service
 			}
 			else
 			{
-				firstMouseWrite = false;
+				if (forceNow)
+				{
+					firstMouseWrite = false;
+				}
 				status = liveProfile.Status;
 				Cfg.Log("live: " + status);
 				// The slot write just put this lighting into the slot: sending it again would be six more

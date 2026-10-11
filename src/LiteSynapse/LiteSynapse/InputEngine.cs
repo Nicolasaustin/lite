@@ -477,13 +477,18 @@ internal class InputEngine : IDisposable
 		}
 	}
 
-	// No gen-2 collections while the hook is live; restored as soon as it is removed.
+	// Keeps gen-2 collections off the hook's back while it is live; restored as soon as it is removed.
+	// SustainedLowLatency, not LowLatency: the hook stays on for a whole match, and LowLatency is meant for a short
+	// burst - it only holds gen-2 off until memory pressure forces one big blocking collection. SustainedLowLatency
+	// is the mode for a window held open indefinitely: gen-2 still runs when it must, but in the background
+	// (concurrent, non-compacting), so it never stops the input thread. The engine allocates almost nothing during
+	// play, so either way collections are rare; this just makes the rare one not a stall.
 	private void GcMode(bool low)
 	{
 		if (low && !lowLatencySet)
 		{
 			savedGcMode = GCSettings.LatencyMode;
-			GCSettings.LatencyMode = GCLatencyMode.LowLatency;
+			GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
 			lowLatencySet = true;
 		}
 		else if (!low && lowLatencySet)
