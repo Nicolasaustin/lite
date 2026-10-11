@@ -1134,11 +1134,38 @@ internal class MainForm : Form
 	}
 
 	private const string CompetitiveSafeNote = "ON keeps macros and Snap Tap off while CS2 or another anti-cheat game is in " +
-		"front: Valve kicks for them on official servers and FACEIT bans for them. OFF lets them run - for offline practice.";
+		"front: on official matchmaking and FACEIT the input is blocked anyway, and trying it risks a kick or a ban. OFF lets " +
+		"them run - for offline, workshop and community servers that allow them. LiteSynapse cannot tell an official match from " +
+		"a community server, so it leaves the choice to you per game.";
 
-	// Both switches (Settings and the Macro keys card) go through here, so they never disagree.
+	// Both switches (Settings and the Macro keys card) go through here, so they never disagree. Turning the guard OFF
+	// asks first, because it lets macros and Snap Tap fire in anti-cheat games; turning it back ON never asks.
 	private void SetCompetitiveSafe(bool on)
 	{
+		if (!on && !loading)
+		{
+			DialogResult answer = MessageBox.Show((IWin32Window)(object)this,
+				"Turning Competitive safe OFF lets macros and Snap Tap fire in CS2 and other anti-cheat games.\n\n" +
+				"Use this only on servers that allow them - offline, workshop, or community servers. On official " +
+				"matchmaking and FACEIT the input is blocked anyway, and trying it can get you kicked or banned.\n\n" +
+				"Turn Competitive safe off?",
+				"LiteSynapse", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+			if (answer != DialogResult.Yes)
+			{
+				// Cancelled: put both switches back to on without re-triggering this.
+				loading = true;
+				try
+				{
+					tgSafe.Checked = true;
+					tgSafeKb.Checked = true;
+				}
+				finally
+				{
+					loading = false;
+				}
+				return;
+			}
+		}
 		app.SetCompetitiveSafe(on);
 		bool was = loading;
 		loading = true;

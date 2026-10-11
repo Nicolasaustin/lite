@@ -1,5 +1,23 @@
 # Testing LiteSynapse
 
+## Build 29 (1.2.18): clearer macro / anti-cheat guardrails
+
+From an external review that pushed toward more safety (not evasion). Added the sound parts:
+
+- **Turning Competitive safe OFF now asks first**, with a warning: it lets macros and Snap Tap fire in CS2 and
+  other anti-cheat games; use it only on servers that allow them; on official matchmaking / FACEIT the input is
+  blocked anyway and trying it risks a kick or ban. Cancel puts the switch back. Turning it back ON never asks.
+- **Clearer disclaimer** on the Competitive safe setting and on the macro page: macros are for offline/workshop/
+  community servers that allow them, and LiteSynapse cannot tell an official match from a community server, so the
+  choice is left to the user per game.
+
+Deliberately NOT added (from the same review): matchmaking detection by window title
+(`MainWindowTitle.Contains("CS2 - Competitive")`). CS2's window title is always "Counter-Strike 2" - it never says
+"Competitive"/"Matchmaking" - so that check is always false and would give false confidence. There is no reliable
+way to tell official matchmaking from a community server outside the game, which is why the guard is per-game, not
+per-mode. Keybinds are captured (not typed) so they cannot be invalid, and macro steps are range-checked on import,
+so the review's validation points were already covered.
+
 ## Build 28 (1.2.17): zero-spike pass (perf/stability review)
 
 A four-reviewer adversarial pass (input latency, frametime/stutter, stability/leaks, recent-build regressions), each

@@ -91,7 +91,7 @@ internal sealed class MacroPage : Panel
 
 		lblBinds.AutoSize = false;
 		lblBinds.Dock = (DockStyle)2; // Bottom
-		lblBinds.Height = 44;
+		lblBinds.Height = 62;
 		lblBinds.ForeColor = Theme.Dim;
 		lblBinds.BackColor = Color.Transparent;
 		lblBinds.Font = Theme.P(9.5f, (FontStyle)0);
@@ -202,7 +202,7 @@ internal sealed class MacroPage : Panel
 			{
 				lblName.Text = "No macro selected";
 				lblInfo.Text = app.Store.Macros.Count == 0 ? "Press NEW to make your first macro." : "Pick a macro on the left.";
-				lblBinds.Text = "";
+				lblBinds.Text = VacNote;
 				foreach (PillButton b in stepButtons)
 				{
 					((Control)b).Enabled = ((Control)b).Text == "RECORD" ? false : ((Control)b).Text == "SAVE" || ((Control)b).Text == "REVERT" ? false : false;
@@ -230,17 +230,23 @@ internal sealed class MacroPage : Panel
 		}
 	}
 
+	// Shown under every macro: macros are for allowed servers only, and Competitive safe keeps them off anti-cheat games.
+	private const string VacNote = "Macros are for offline, workshop and community servers that allow them. " +
+		"Competitive safe (Settings) keeps them off CS2 and other anti-cheat games - on official matchmaking and FACEIT " +
+		"they are blocked anyway and trying them risks a ban.";
+
 	private void RefreshBindings()
 	{
 		if (editing == null)
 		{
-			lblBinds.Text = "";
+			lblBinds.Text = VacNote;
 			return;
 		}
 		List<string> binds = MacroEdit.Bindings(app.Store, editingStored);
-		lblBinds.Text = binds.Count == 0
+		string where = binds.Count == 0
 			? "Not bound to a key yet. Bind it on the BlackWidow Lite page (Customize ▸ Macro keys), or in Settings."
 			: "Runs on: " + string.Join(", ", binds) + ".";
+		lblBinds.Text = where + "\n" + VacNote;
 	}
 
 	// ---- Macro-level actions --------------------------------------------------------------------------------
