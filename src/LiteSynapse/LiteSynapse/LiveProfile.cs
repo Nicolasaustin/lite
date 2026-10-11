@@ -330,7 +330,14 @@ internal class LiveProfile
 		{
 			if (!dev.SetActiveSlot(returnSlot))
 			{
-				return "could not switch back";
+				// The mouse will not switch to this slot - it is not actually set on the device (some models have
+				// fewer onboard slots than the five the protocol allows, and a stale record can name one that is not
+				// there). Stop treating it as the user's own slot, so the next exit does not try it again; the mouse
+				// stays on the live slot it is on, which holds a valid profile. Not an error.
+				int bad = returnSlot;
+				ForgetReturnSlot(bad);
+				Status = "left the mouse on the live slot (its own slot " + bad + " is not set on the mouse)";
+				return null;
 			}
 			Switched = true;
 			Touch(returnSlot);
@@ -341,5 +348,27 @@ internal class LiveProfile
 			Status = "";
 		}
 		return null;
+	}
+
+	// Drops the remembered "user's own slot" when the mouse will not switch to it, and forgets it in the slot table,
+	// so neither this session nor a later one tries that slot again.
+	private void ForgetReturnSlot(int slot)
+	{
+		returnSlot = -1;
+		try
+		{
+			if (File.Exists(SlotFile))
+			{
+				File.Delete(SlotFile);
+			}
+		}
+		catch
+		{
+		}
+		lock (tableLock)
+		{
+			Table().Forget(slot);
+			SaveTable();
+		}
 	}
 }

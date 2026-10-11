@@ -173,10 +173,14 @@ internal class InputEngine : IDisposable
 
 	private GCLatencyMode savedGcMode;
 
-	// The GC is held in low-latency mode while the hook is live. Garbage collection here is not concurrent, so
-	// a gen-2 collection triggered by any other thread (window, tray, device worker) stops every thread - and a
-	// keystroke arriving then waits in Windows for the hook. The hook is removed (and the mode restored)
-	// whenever the window comes to the front, so this does not hold memory for days.
+	// A real linked game is in front (not the desktop, not a hand-picked app, not just "run macros anywhere"):
+	// only then is the low-latency GC mode held. See GcMode.
+	private bool linkedGameActive;
+
+	// The GC is held in low-latency mode while a linked game is in front. Garbage collection here is not concurrent,
+	// so a gen-2 collection triggered by any other thread (window, tray, device worker) stops every thread - and a
+	// keystroke arriving then waits in Windows for the hook. It is held only during an actual game, so a tray session
+	// that keeps the hook armed on the desktop (for "run macros anywhere") does not suppress gen-2 collections for days.
 	private bool lowLatencySet;
 
 	private Action<int, bool> calibrating;
@@ -450,7 +454,7 @@ internal class InputEngine : IDisposable
 			heldAtInstall.Clear();
 			Cfg.Log("keyboard hook off");
 		}
-		GcMode(hook != IntPtr.Zero);
+		GcMode(hook != IntPtr.Zero && linkedGameActive);
 	}
 
 	// One line saying what the keyboard hook now does, when that changes: without it a log could not tell a macro
@@ -477,7 +481,7 @@ internal class InputEngine : IDisposable
 		}
 	}
 
-	// Keeps gen-2 collections off the hook's back while it is live; restored as soon as it is removed.
+	// Keeps gen-2 collections off the hook's back while a linked game is in front; restored as soon as it is not.
 	// SustainedLowLatency, not LowLatency: the hook stays on for a whole match, and LowLatency is meant for a short
 	// burst - it only holds gen-2 off until memory pressure forces one big blocking collection. SustainedLowLatency
 	// is the mode for a window held open indefinitely: gen-2 still runs when it must, but in the background
@@ -529,7 +533,12 @@ internal class InputEngine : IDisposable
 		});
 	}
 
-	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame)
+	// snapTapAllowed: whether Snap Tap may run in this context (a linked game, a hand-picked context, or "Run Snap
+	//   Tap everywhere too"). Arrow macros run wherever the keyboard profile is given; Snap Tap is gated by this so
+	//   it does not reorder A/D while the user is typing on the desktop.
+	// linkedGame: a real linked game is in front. The low-latency GC mode is held only then, so a tray-resident
+	//   "run macros anywhere" session (hook armed on the desktop for arrow macros) does not suppress gen-2 for days.
+	public void SetProfile(MouseProfile mp, KbProfile kp, IEnumerable<Macro> allMacros, bool inGame, bool snapTapAllowed = true, bool linkedGame = true)
 	{
 		// Build everything on the caller's thread; the input thread only swaps references, so it is never
 		// busy with LINQ or allocation while a game is in front.
@@ -559,9 +568,10 @@ internal class InputEngine : IDisposable
 			arrows[i] = ((kb?.MacroKeys != null && kb.MacroKeys.TryGetValue(arrowNames[i], out var mname) && mname != null && byName.TryGetValue(mname, out var macro) && macro.Steps.Count > 0) ? new PreparedMacro(macro) : null);
 			anyArrow |= arrows[i] != null;
 		}
-		bool snapOn = (kp?.SnapTap ?? false) && inGame;
+		bool snapOn = (kp?.SnapTap ?? false) && inGame && snapTapAllowed;
 		OnEngine(() =>
 		{
+			linkedGameActive = linkedGame;
 			// A keyboard layout switched between games is picked up here, not on a keystroke - and the two keys
 			// Snap Tap injects are looked up again right away, on this thread, so the first strafe of the match
 			// does not pay for it.

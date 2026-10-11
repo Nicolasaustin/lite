@@ -525,8 +525,9 @@ internal sealed class Service
 
 	public bool MacrosEverywhere => settings.MacrosEverywhere;
 
-	// "Run macros anywhere": arm the keyboard profile's macros and Snap Tap on the desktop and in other apps, not
-	// just in a linked game. Competitive safe still blocks them while an anti-cheat game is the foreground window.
+	// "Run macros anywhere": arm the keyboard profile's arrow-key macros on the desktop and in other apps, not
+	// just in a linked game. Snap Tap is NOT turned on off-game by this (see SetSnapEverywhere) - that would
+	// reorder A/D while typing. Competitive safe still blocks everything while an anti-cheat game is the foreground.
 	public void SetMacrosEverywhere(bool on)
 	{
 		lock (stateLock)
@@ -535,7 +536,23 @@ internal sealed class Service
 			SaveSettings();
 			UpdateEngineLocked(force: false);
 		}
-		Cfg.Log("run macros anywhere " + (on ? "on: macros and Snap Tap work outside games too" : "off"));
+		Cfg.Log("run macros anywhere " + (on ? "on: arrow-key macros work outside games too" : "off"));
+		Notify();
+	}
+
+	public bool SnapEverywhere => settings.SnapEverywhere;
+
+	// "Run Snap Tap everywhere too": in addition to macros, arm Snap Tap's A/D last-input-wins outside games.
+	// It changes how A and D behave while typing, so it is a separate opt-in, off unless the user turns it on.
+	public void SetSnapEverywhere(bool on)
+	{
+		lock (stateLock)
+		{
+			settings.SnapEverywhere = on;
+			SaveSettings();
+			UpdateEngineLocked(force: false);
+		}
+		Cfg.Log("run Snap Tap everywhere " + (on ? "on: Snap Tap (A/D) works outside games too" : "off"));
 		Notify();
 	}
 
@@ -1261,7 +1278,7 @@ internal sealed class Service
 		bool game = InGame && !selfInFront;
 		// While LiteSynapse's own window is in front, fgExe is still the program before it; the engine is off then.
 		string exe = selfInFront ? null : fgExe;
-		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront, foregroundExe: exe, macrosEverywhere: settings.MacrosEverywhere && !selfInFront);
+		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront, foregroundExe: exe, macrosEverywhere: settings.MacrosEverywhere && !selfInFront, snapEverywhere: settings.SnapEverywhere && !selfInFront);
 		if (!force && engineSet && e == engineInputs)
 		{
 			return;
@@ -1277,7 +1294,7 @@ internal sealed class Service
 		// profiles.json) is logged and tried again, instead of being skipped as "already applied" forever.
 		try
 		{
-			engine.SetProfile(e.Mouse, e.Keyboard, store.Macros, e.InGame);
+			engine.SetProfile(e.Mouse, e.Keyboard, store.Macros, e.InGame, e.SnapTapAllowed, e.LinkedGame);
 			engineInputs = e;
 			engineSet = true;
 		}

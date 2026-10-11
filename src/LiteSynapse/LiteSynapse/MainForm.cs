@@ -316,6 +316,8 @@ internal class MainForm : Form
 
 	private readonly Toggle tgMacrosEverywhere;
 
+	private readonly Toggle tgSnapEverywhere;
+
 	private readonly Toggle tgSafe;
 
 	// The same switch on the BlackWidow page's Macro keys card, where someone looking for why a macro does not
@@ -773,6 +775,9 @@ internal class MainForm : Form
 		Toggle toggle9 = new Toggle();
 		((Control)toggle9).BackColor = Theme.Card;
 		tgMacrosEverywhere = toggle9;
+		Toggle toggle10 = new Toggle();
+		((Control)toggle10).BackColor = Theme.Card;
+		tgSnapEverywhere = toggle10;
 		tgSafeKb = new Toggle();
 		((Control)tgSafeKb).BackColor = Theme.Card;
 		lblHome1 = new Label
@@ -1645,10 +1650,15 @@ internal class MainForm : Form
 		// the one a short window cut off.
 		Row("Competitive safe", (Control)(object)tgSafe, CompetitiveSafeNote);
 		Row("Run macros anywhere (desktop and other apps, not just games)", (Control)(object)tgMacrosEverywhere,
-			"Normally macros and Snap Tap only run while a linked game is in front. With this ON they run everywhere - the " +
-			"desktop, work apps, and with a game in the background - firing into whatever window you are using. Competitive " +
-			"safe still keeps them off while an anti-cheat game is the front window; turning Competitive safe OFF overrides " +
-			"even that. The macro keys are the arrow keys, so ON means an arrow key bound to a macro fires it while you type too.");
+			"Normally the keyboard profile's macros only run while a linked game is in front. With this ON they run everywhere - " +
+			"the desktop, work apps, and with a game in the background - firing into whatever window you are using. The macro " +
+			"keys are the arrow keys, so ON means an arrow key bound to a macro fires it while you type too. Competitive safe " +
+			"still keeps macros off while an anti-cheat game is the front window; turning Competitive safe OFF overrides even " +
+			"that. This does NOT turn on Snap Tap off-game - that is the separate switch below.");
+		Row("Run Snap Tap everywhere too (changes how A/D behave while typing)", (Control)(object)tgSnapEverywhere,
+			"Only matters when Run macros anywhere is ON. With this ON, Snap Tap's \"last key wins\" also applies to A and D " +
+			"outside games - so a quick \"ad\" while typing can drop or swap a letter. Leave it OFF unless you want Snap Tap " +
+			"active in work apps too; it does not affect Snap Tap inside a game, which is always on when the profile has it.");
 		Row("Switch profiles automatically when a game starts", (Control)(object)tgAuto);
 		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup, "LiteSynapse runs as administrator, so games that run as administrator take its macros and Snap Tap. At sign-in it starts from a Task Scheduler task with those rights, so there is no UAC prompt then.");
 		Row("Run selected profiles on the mouse itself", (Control)(object)tgLive, "Writes the profile into the mouse's memory (slots 1-2) and switches to it, so it keeps working if LiteSynapse is closed.");
@@ -1673,6 +1683,13 @@ internal class MainForm : Form
 			if (!loading)
 			{
 				app.SetMacrosEverywhere(tgMacrosEverywhere.Checked);
+			}
+		};
+		tgSnapEverywhere.CheckedChanged += () =>
+		{
+			if (!loading)
+			{
+				app.SetSnapEverywhere(tgSnapEverywhere.Checked);
 			}
 		};
 		tgAuto.CheckedChanged += () =>
@@ -3193,6 +3210,7 @@ internal class MainForm : Form
 				tgCloseOnGame.Checked = prefs.CloseOnGame;
 				tgSafe.Checked = app.CompetitiveSafe;
 				tgMacrosEverywhere.Checked = app.MacrosEverywhere;
+				tgSnapEverywhere.Checked = app.SnapEverywhere;
 				LoadLog();
 			}
 			if (top.Selected == 2)

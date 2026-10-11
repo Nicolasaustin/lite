@@ -1,5 +1,31 @@
 # Testing LiteSynapse
 
+## Build 32 (1.2.21): slot-3 self-heal + Snap Tap is its own off-game switch
+
+Three things, all from logs and the build-30 review:
+
+**Recurring "could not activate slot 3" log spam (fixed).** The seed `onboard.json` shipped `{"3": "CS2"}`,
+which told LiteSynapse the user's own profile lived on slot 3. Some mice (the Naga Left-Handed here) do not have a
+settable slot 3, so every exit tried to switch back to it, failed three times, and logged `could not switch back`.
+Two fixes: (1) the seed is now empty `{}`, so a fresh install discovers the return slot from the real hardware
+instead of guessing; (2) `LiveProfile.Restore` now self-heals - if the mouse rejects the remembered return slot it
+forgets that slot (file + table) and leaves the mouse on its valid live slot, instead of retrying it forever.
+
+**Snap Tap no longer rides on "Run macros anywhere" (build-30 review, MAJOR).** Before, turning on Run macros
+anywhere armed the *whole* keyboard profile off-game, so Snap Tap's A/D last-input-wins corrupted typing in work
+apps ("ad" dropping/swapping a letter). Now Run macros anywhere arms only the arrow-key macros off-game. Snap Tap
+off-game is a separate switch, **"Run Snap Tap everywhere too"**, off by default. Snap Tap inside a game is
+unchanged (always on when the profile has it).
+
+**Low-latency GC held only during a real game (build-30 review, MAJOR).** The hook stays armed on the desktop for
+Run macros anywhere, and the GC `SustainedLowLatency` mode used to be held the whole time the hook was live - so a
+tray session suppressed gen-2 collections for days. Now the mode is held only while a linked game is actually in
+front (the hot path is unchanged - during a match it behaves exactly as before); on the desktop the GC is normal.
+
+To test: with a mouse whose slot 3 is unset, start/exit a game - the log no longer repeats the slot-3 error. Bind a
+macro to an arrow key, Run macros anywhere ON, Snap Tap everywhere OFF: the macro fires in Notepad but typing "ad"
+is untouched. Turn Snap Tap everywhere ON: "ad" now behaves last-key-wins. 670 tests.
+
 ## Build 30 (1.2.19): Run macros anywhere
 
 The whole reason macros "weren't injecting" outside a game: they were only armed while a linked game was the

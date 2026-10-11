@@ -4,8 +4,12 @@ using System.Collections.Generic;
 namespace LiteSynapse;
 
 // What the keyboard hook (InputEngine.SetProfile) is given.
-// LinkedGame: a linked game is actually in front, rather than a profile picked by hand.
-internal readonly record struct EngineInputs(MouseProfile Mouse, KbProfile Keyboard, bool InGame, bool LinkedGame = false)
+// LinkedGame: a linked game is actually in front, rather than a profile picked by hand (keeps the low-latency GC
+//   mode to a real game, so a tray-resident "run macros anywhere" session does not hold it for days).
+// SnapTapAllowed: Snap Tap may run in this context. Arrow macros run wherever the keyboard profile is armed, but
+//   Snap Tap reorders A/D and would corrupt typing, so it runs only in a linked game, a hand-picked context, or
+//   when the user opts into "Run Snap Tap everywhere too".
+internal readonly record struct EngineInputs(MouseProfile Mouse, KbProfile Keyboard, bool InGame, bool LinkedGame = false, bool SnapTapAllowed = false)
 {
 	public static readonly EngineInputs Off = new EngineInputs(null, null, InGame: false);
 
@@ -88,7 +92,7 @@ internal static class ServicePlan
 	//  - mouseOnboard: the mouse runs the profile from its own memory, so no software remap is needed;
 	//  - suspended: sleeping or locked: nothing at all, the hook is removed;
 	//  - foregroundExe: the program in front (for Competitive-safe).
-	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false, string foregroundExe = null, bool macrosEverywhere = false)
+	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false, string foregroundExe = null, bool macrosEverywhere = false, bool snapEverywhere = false)
 	{
 		// Normally the hook is armed only in a linked game or with profiles picked by hand. "Run macros anywhere"
 		// keeps it armed on the desktop and in every other app too (the caller passes it as false while LiteSynapse's
@@ -109,7 +113,11 @@ internal static class ServicePlan
 		// keeps the keyboard profile on those apps too. The mouse's buttons keep the profile everywhere regardless.
 		bool suppressDesktopKb = !gameInFront && !macrosEverywhere && pickedByHand && IsDesktopApp(foregroundExe);
 		KbProfile keyboard = suppressDesktopKb ? null : kp;
-		return new EngineInputs(mouseOnboard ? null : mp, keyboard, InGame: true, LinkedGame: gameInFront);
+		// Arrow macros arm wherever the keyboard profile is armed. Snap Tap is separate: it reorders A/D and would
+		// mangle typing, so it runs only in a real linked game, a hand-picked context (where desktop apps have the
+		// keyboard suppressed above anyway), or when the user opts into "Run Snap Tap everywhere too".
+		bool snapTapAllowed = gameInFront || pickedByHand || snapEverywhere;
+		return new EngineInputs(mouseOnboard ? null : mp, keyboard, InGame: true, LinkedGame: gameInFront, SnapTapAllowed: snapTapAllowed);
 	}
 
 	// Programs people type in, which are never the game: the shell, browsers, chat, editors, terminals.

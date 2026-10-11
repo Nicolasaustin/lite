@@ -25,10 +25,16 @@ public class AppSettings
 	// Keyboard profile for game rules that have none ("" = none, as before).
 	public string GameKeyboardDefault { get; set; } = "";
 
-	// "Run macros anywhere": when on, the active keyboard profile's macros and Snap Tap work on the desktop and in
-	// other apps too, not only in a linked game - so a macro fires even with a game running in the background.
-	// Competitive safe still blocks them while an anti-cheat game is the FOREGROUND window. Off unless turned on.
+	// "Run macros anywhere": when on, the active keyboard profile's macros (the arrow-key triggers) work on the
+	// desktop and in other apps too, not only in a linked game - so a macro fires even with a game running in the
+	// background. Competitive safe still blocks them while an anti-cheat game is the FOREGROUND window. Off unless
+	// turned on. This does NOT turn on Snap Tap off-game (that would reorder A/D while typing); SnapEverywhere does.
 	public bool MacrosEverywhere { get; set; }
+
+	// "Run Snap Tap everywhere too": when on (and MacrosEverywhere is on), Snap Tap's A/D last-input-wins also runs
+	// on the desktop and in other apps, not only in a linked game. It changes how A and D behave while typing (a
+	// quick "ad" can drop or swap a letter), so it is a separate opt-in and is off unless the user turns it on.
+	public bool SnapEverywhere { get; set; }
 
 	// Fields written by other versions survive a load/save round trip.
 	[JsonExtensionData]

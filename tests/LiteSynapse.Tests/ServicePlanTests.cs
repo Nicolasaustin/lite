@@ -131,11 +131,34 @@ public class ServicePlanTests
 		// Off (default): on the desktop with nothing picked, the engine is off.
 		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
 			suspended: false, pickedByHand: false, foregroundExe: "EXCEL.EXE", macrosEverywhere: false));
-		// On: the keyboard profile (macros, Snap Tap) is armed in a work app, even in auto mode with no game.
+		// On: the keyboard profile (arrow macros) is armed in a work app, even in auto mode with no game.
 		EngineInputs work = ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
 			suspended: false, pickedByHand: false, foregroundExe: "EXCEL.EXE", macrosEverywhere: true);
 		Assert.Same(Gamer, work.Keyboard);
 		Assert.False(work.LinkedGame);
+		// But Snap Tap is NOT armed off-game by "run macros anywhere" alone - it would reorder A/D while typing.
+		Assert.False(work.SnapTapAllowed);
+	}
+
+	[Fact]
+	public void SnapTapOffGameNeedsItsOwnOptIn()
+	{
+		// Run macros anywhere on, Snap Tap everywhere off: the macro keys arm in a work app, Snap Tap stays off there.
+		EngineInputs macroOnly = ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+			suspended: false, pickedByHand: false, foregroundExe: "WINWORD.EXE", macrosEverywhere: true, snapEverywhere: false);
+		Assert.Same(Gamer, macroOnly.Keyboard);
+		Assert.False(macroOnly.SnapTapAllowed);
+		// Snap Tap everywhere on: now Snap Tap is allowed in the work app too.
+		EngineInputs both = ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+			suspended: false, pickedByHand: false, foregroundExe: "WINWORD.EXE", macrosEverywhere: true, snapEverywhere: true);
+		Assert.Same(Gamer, both.Keyboard);
+		Assert.True(both.SnapTapAllowed);
+		// A real linked game always allows Snap Tap, whatever the off-game switch is.
+		Assert.True(ServicePlan.Engine(Cs2, Gamer, gameInFront: true, mouseOnboard: false, competitiveSafe: false, "CS2",
+			suspended: false, foregroundExe: "cs2.exe", snapEverywhere: false).SnapTapAllowed);
+		// A profile picked by hand in a real app (not the desktop) keeps Snap Tap, as before this split.
+		Assert.True(ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+			suspended: false, pickedByHand: true, foregroundExe: "SomeIndieGame.exe").SnapTapAllowed);
 	}
 
 	[Fact]
