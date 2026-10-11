@@ -1,5 +1,33 @@
 # Testing LiteSynapse
 
+## Build 33 (1.2.22): post-game memory reclaim + tiny leak audit
+
+Done in response to "reset its memory after every Counter-Strike so it doesn't fill up / leak." A verified
+multi-agent leak audit (4 finders by dimension, each finding adversarially re-checked) came back almost clean:
+of six suspected leaks, five were refuted (the log queue is bounded by its writer, the hook-reinstall handle
+never actually orphans, the macro wait-handles live once for the app's life, device handles are balanced across
+reconnects, GDI fonts are bounded per window-session and GC-finalized). **One real but tiny item confirmed and
+fixed:** `InputEngine.nagaCache` (a per-device "is this the Naga?" cache keyed by the raw-input device handle)
+grew one small entry per keyboard replug and was never cleared - and only while software remaps were active. Now
+cleared alongside `recentRaw` when the raw-input sink is torn down (InputEngine.UpdateRegistration).
+
+**Post-game memory reclaim (new).** After a linked game leaves the foreground for good, LiteSynapse now forces a
+full compacting garbage collection and hands the freed pages back to Windows (so the drop shows in Task Manager).
+This is deliberately gated so a blocking GC can never hitch a match:
+
+- Scheduled on the SAME debounce as the mouse restore (`ServicePlan.RestoreDelayMs`, 3s), via a `"reclaim"` job on
+  the device-worker thread (`Native.ReclaimMemory`). A quick alt-tab out and back cancels it (`worker.Cancel`).
+- At run time it re-checks `gameInFront`/`InGame` and the live foreground window, and bails if any linked game is
+  up - the same guard `UiHost.ReleaseMemory` already uses on window close.
+- Runs on the desktop only, at most once per real game-leave; never touches the device, so it can't collide with
+  the mouse restore on the wire. Pairs with build 32's change (low-latency GC mode held only during a real game).
+
+No new P/Invoke: reuses the already-declared `SetProcessWorkingSetSize` + current-process pseudo-handle.
+
+To test: play CS2, close it (or alt-tab away and stay away > 3s), watch LiteSynapse.exe memory drop in Task
+Manager a few seconds later and `post-game memory reclaim` appear in the log. Alt-tab out and straight back in -
+no reclaim, no hitch. 670 tests.
+
 ## Build 32 (1.2.21): slot-3 self-heal + Snap Tap is its own off-game switch
 
 Three things, all from logs and the build-30 review:

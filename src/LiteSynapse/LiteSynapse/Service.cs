@@ -1257,11 +1257,47 @@ internal sealed class Service
 		}
 		UpdateEngineLocked(force: true);
 		int delay = ServicePlan.MouseDelay(mouseShownGame, game, debounce);
+		// A linked game just left the foreground (the same debounced restore the mouse uses). CS2 closed or was
+		// alt-tabbed away; if it comes back within the delay the "reclaim" job below is cancelled.
+		bool leftLinkedGame = debounce && mouseShownGame && !game;
 		mouseShownGame = game;
 		RequestMouse(delay);
 		// The keyboard's lighting waits as long as the mouse: a moment out of a game (an overlay, a quick
 		// alt-tab) must not rewrite it twice. The input engine above has already switched.
 		RequestKeyboard(forceLighting: false, delay);
+		// Post-game memory reclaim: scheduled on the same debounce as the mouse restore, cancelled if a linked
+		// game comes back, and re-checked at run time so a full compacting GC can only ever land on the desktop.
+		if (game)
+		{
+			worker.Cancel("reclaim");
+		}
+		else if (leftLinkedGame)
+		{
+			worker.Post("reclaim", ReclaimAfterGame, ServicePlan.RestoreDelayMs);
+		}
+	}
+
+	// Runs on the device-worker thread, RestoreDelayMs after a linked game left the foreground, only if none has
+	// come back. The compacting gen-2 GC in Native.ReclaimMemory briefly suspends every managed thread (the
+	// keyboard hook included), which is fine on the desktop but must never land mid-match - hence the debounce,
+	// the Cancel on re-entry above, and this live re-check. It never touches the device, so it does not fight the
+	// mouse restore on the wire.
+	private void ReclaimAfterGame()
+	{
+		if (gameInFront || InGame)
+		{
+			return;
+		}
+		// The service may not have processed the newest foreground change yet: look at what is in front right now
+		// (same guard as UiHost.ReleaseMemory).
+		string front = Native.ForegroundExePath(out uint pid);
+		if (front != null && pid != (uint)Environment.ProcessId
+			&& FindGame(System.IO.Path.GetFileName(front), front) != null)
+		{
+			return;
+		}
+		Native.ReclaimMemory();
+		Cfg.Log("post-game memory reclaim");
 	}
 
 	// Caller holds stateLock. Gives the keyboard hook what the current state needs; unchanged inputs are not

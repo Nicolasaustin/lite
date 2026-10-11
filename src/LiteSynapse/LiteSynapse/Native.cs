@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -129,6 +130,27 @@ internal static class Native
 	public static void TrimMemory()
 	{
 		GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
+	}
+
+	// Hard memory reclaim, called ONLY on the desktop after a linked game has left for good (Service schedules
+	// it on the device worker, debounced by RestoreDelayMs, and guards it so it never runs while a game is in
+	// front). A full compacting gen-2 collection briefly pauses every managed thread, so it must never land
+	// mid-match - that is the caller's job. The working-set trim then hands the freed pages back to Windows so
+	// the drop actually shows in Task Manager. Best-effort: any failure just leaves memory where it was.
+	public static void ReclaimMemory()
+	{
+		try
+		{
+			GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+			GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+			// min = max = -1 tells Windows to trim the working set to its minimum (same effect as
+			// EmptyWorkingSet, but reuses the kernel32 import already declared above and the current-process
+			// pseudo-handle, which needs no CloseHandle). kernel32 is a KnownDLL, so no DLL-planting exposure.
+			SetProcessWorkingSetSize(GetCurrentProcess(), new IntPtr(-1), new IntPtr(-1));
+		}
+		catch
+		{
+		}
 	}
 
 	[DllImport("user32")]

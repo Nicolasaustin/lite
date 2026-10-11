@@ -408,6 +408,10 @@ internal class InputEngine : IDisposable
 			if (!needRaw)
 			{
 				recentRaw.Clear();
+				// nagaCache is keyed by the raw-input device handle, which Windows re-issues on every replug, so a
+				// stale entry would otherwise linger for the whole session. OnRaw never runs while the sink is off,
+				// and a device that comes back gets a fresh handle and is re-probed, so dropping it here is safe.
+				nagaCache.Clear();
 			}
 		}
 		if (needHook && hook != IntPtr.Zero && reinstall)
