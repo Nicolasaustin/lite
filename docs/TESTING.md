@@ -1,5 +1,17 @@
 # Testing LiteSynapse
 
+## Build 27 (1.2.16): the sign-in task heals itself - no manual step
+
+Build 26 stopped the blank window but, if the task had been disabled or changed by hand (e.g. a troubleshooting
+script), a plain install did not always turn it back on - the task was treated as "the user turned it off".
+Build 27 fixes that: at every start, if LiteSynapse's own "Start with Windows" setting says on but the task is not
+on (disabled, deleted, or changed outside LiteSynapse), it registers the task again. Turning it off still works -
+do it from Settings, which is what records the setting. So installing the build is enough; no toggle, now or later.
+
+To test: disable or delete the LiteSynapse-<SID> task by hand, start LiteSynapse, and the task comes back enabled
+(log: "the sign-in task was off or changed outside LiteSynapse; registered it again"). Turn it off in Settings and
+it stays off.
+
 ## Build 26 (1.2.15): no blank window at sign-in
 
 The "Start LiteSynapse with Windows" task used to flash a blank PowerShell window at every sign-in. That window is

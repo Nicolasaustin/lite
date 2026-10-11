@@ -1770,6 +1770,18 @@ internal sealed class Service
 					}
 					return;
 				}
+				// Self-heal: LiteSynapse's own setting (the mirror) says "on", but the task is not on now - it was
+				// disabled, deleted or changed by something outside LiteSynapse (a script, Task Scheduler). Register
+				// it again, so turning it off always goes through LiteSynapse rather than a stray change silently
+				// stopping it. state == null means Task Scheduler could not be read; leave it then, not loop.
+				if (state == false && MirrorIsOn())
+				{
+					if (SetStartupLocked(true) == null)
+					{
+						Cfg.Log("start with Windows: the sign-in task was off or changed outside LiteSynapse; registered it again");
+					}
+					return;
+				}
 				if (state.HasValue)
 				{
 					Volatile.Write(ref startupState, state.Value ? 1 : 0);
@@ -1825,6 +1837,20 @@ internal sealed class Service
 			Cfg.Log("start with Windows: " + (on ? "on (sign-in task, as administrator)" : "off"));
 		}
 		return error;
+	}
+
+	// LiteSynapse's own record of the "Start with Windows" setting (written by Mirror). True when it says on.
+	private static bool MirrorIsOn()
+	{
+		try
+		{
+			using RegistryKey k = Registry.CurrentUser.OpenSubKey(StartupTask.RequestKey);
+			return (k?.GetValue(StartupTask.MirrorValue) as string) == "1";
+		}
+		catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is System.Security.SecurityException)
+		{
+			return false;
+		}
 	}
 
 	// For the installer's "Start with Windows" checkbox, which cannot read an administrator's task itself.
