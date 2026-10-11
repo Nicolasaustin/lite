@@ -88,20 +88,27 @@ internal static class ServicePlan
 	//  - mouseOnboard: the mouse runs the profile from its own memory, so no software remap is needed;
 	//  - suspended: sleeping or locked: nothing at all, the hook is removed;
 	//  - foregroundExe: the program in front (for Competitive-safe).
-	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false, string foregroundExe = null)
+	public static EngineInputs Engine(MouseProfile mp, KbProfile kp, bool gameInFront, bool mouseOnboard, bool competitiveSafe, string gameProfile, bool suspended, bool pickedByHand = false, string foregroundExe = null, bool macrosEverywhere = false)
 	{
-		if (suspended || !(gameInFront || pickedByHand))
+		// Normally the hook is armed only in a linked game or with profiles picked by hand. "Run macros anywhere"
+		// keeps it armed on the desktop and in every other app too (the caller passes it as false while LiteSynapse's
+		// own window is in front, so the macro editor's own arrow keys never fire a macro).
+		if (suspended || !(gameInFront || pickedByHand || macrosEverywhere))
 		{
 			return EngineInputs.Off;
 		}
+		// Competitive safe still blocks when an anti-cheat game is the FOREGROUND window - that is when the input
+		// would reach it. With the game only in the background, the foreground is another app, so this does not block.
 		if (BlockedByCompetitiveSafe(competitiveSafe, gameInFront, gameProfile, mp?.Name, foregroundExe))
 		{
 			return EngineInputs.Off;
 		}
 		// A profile picked by hand runs its keyboard features (Snap Tap, arrow macros) wherever the user plays
 		// - but not while typing in the desktop's own programs, where Snap Tap turns "ad" into stray letters and
-		// an arrow macro fires into a text field. The mouse's buttons keep the profile everywhere.
-		KbProfile keyboard = (!gameInFront && pickedByHand && IsDesktopApp(foregroundExe)) ? null : kp;
+		// an arrow macro fires into a text field. "Run macros anywhere" is the user opting into exactly that, so it
+		// keeps the keyboard profile on those apps too. The mouse's buttons keep the profile everywhere regardless.
+		bool suppressDesktopKb = !gameInFront && !macrosEverywhere && pickedByHand && IsDesktopApp(foregroundExe);
+		KbProfile keyboard = suppressDesktopKb ? null : kp;
 		return new EngineInputs(mouseOnboard ? null : mp, keyboard, InGame: true, LinkedGame: gameInFront);
 	}
 

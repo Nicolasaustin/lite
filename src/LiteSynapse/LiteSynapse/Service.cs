@@ -523,6 +523,22 @@ internal sealed class Service
 		Notify();
 	}
 
+	public bool MacrosEverywhere => settings.MacrosEverywhere;
+
+	// "Run macros anywhere": arm the keyboard profile's macros and Snap Tap on the desktop and in other apps, not
+	// just in a linked game. Competitive safe still blocks them while an anti-cheat game is the foreground window.
+	public void SetMacrosEverywhere(bool on)
+	{
+		lock (stateLock)
+		{
+			settings.MacrosEverywhere = on;
+			SaveSettings();
+			UpdateEngineLocked(force: false);
+		}
+		Cfg.Log("run macros anywhere " + (on ? "on: macros and Snap Tap work outside games too" : "off"));
+		Notify();
+	}
+
 	public void SetGameKeyboardDefault(string name)
 	{
 		lock (stateLock)
@@ -1245,7 +1261,7 @@ internal sealed class Service
 		bool game = InGame && !selfInFront;
 		// While LiteSynapse's own window is in front, fgExe is still the program before it; the engine is off then.
 		string exe = selfInFront ? null : fgExe;
-		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront, foregroundExe: exe);
+		EngineInputs e = ServicePlan.Engine(mp, kp, game, onboard, settings.CompetitiveSafe, fgRule?.Profile, sleeping || locked, pickedByHand: !Auto && !selfInFront, foregroundExe: exe, macrosEverywhere: settings.MacrosEverywhere && !selfInFront);
 		if (!force && engineSet && e == engineInputs)
 		{
 			return;

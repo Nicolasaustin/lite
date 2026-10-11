@@ -314,6 +314,8 @@ internal class MainForm : Form
 	// from the old HTML window and had no home in this one.
 	private readonly Toggle tgCloseOnGame;
 
+	private readonly Toggle tgMacrosEverywhere;
+
 	private readonly Toggle tgSafe;
 
 	// The same switch on the BlackWidow page's Macro keys card, where someone looking for why a macro does not
@@ -768,6 +770,9 @@ internal class MainForm : Form
 		Toggle toggle8 = new Toggle();
 		((Control)toggle8).BackColor = Theme.Card;
 		tgSafe = toggle8;
+		Toggle toggle9 = new Toggle();
+		((Control)toggle9).BackColor = Theme.Card;
+		tgMacrosEverywhere = toggle9;
 		tgSafeKb = new Toggle();
 		((Control)tgSafeKb).BackColor = Theme.Card;
 		lblHome1 = new Label
@@ -1639,6 +1644,11 @@ internal class MainForm : Form
 		// Competitive safe first: it decides whether macros and Snap Tap run at all, and as the last row it was
 		// the one a short window cut off.
 		Row("Competitive safe", (Control)(object)tgSafe, CompetitiveSafeNote);
+		Row("Run macros anywhere (desktop and other apps, not just games)", (Control)(object)tgMacrosEverywhere,
+			"Normally macros and Snap Tap only run while a linked game is in front. With this ON they run everywhere - the " +
+			"desktop, work apps, and with a game in the background - firing into whatever window you are using. Competitive " +
+			"safe still keeps them off while an anti-cheat game is the front window; turning Competitive safe OFF overrides " +
+			"even that. The macro keys are the arrow keys, so ON means an arrow key bound to a macro fires it while you type too.");
 		Row("Switch profiles automatically when a game starts", (Control)(object)tgAuto);
 		Row("Start LiteSynapse with Windows", (Control)(object)tgStartup, "LiteSynapse runs as administrator, so games that run as administrator take its macros and Snap Tap. At sign-in it starts from a Task Scheduler task with those rights, so there is no UAC prompt then.");
 		Row("Run selected profiles on the mouse itself", (Control)(object)tgLive, "Writes the profile into the mouse's memory (slots 1-2) and switches to it, so it keeps working if LiteSynapse is closed.");
@@ -1656,6 +1666,13 @@ internal class MainForm : Form
 			if (!loading)
 			{
 				SetCompetitiveSafe(tgSafe.Checked);
+			}
+		};
+		tgMacrosEverywhere.CheckedChanged += () =>
+		{
+			if (!loading)
+			{
+				app.SetMacrosEverywhere(tgMacrosEverywhere.Checked);
 			}
 		};
 		tgAuto.CheckedChanged += () =>
@@ -3175,6 +3192,7 @@ internal class MainForm : Form
 				tgLive.Checked = app.LiveWrite;
 				tgCloseOnGame.Checked = prefs.CloseOnGame;
 				tgSafe.Checked = app.CompetitiveSafe;
+				tgMacrosEverywhere.Checked = app.MacrosEverywhere;
 				LoadLog();
 			}
 			if (top.Selected == 2)

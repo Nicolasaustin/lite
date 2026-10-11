@@ -126,6 +126,37 @@ public class ServicePlanTests
 	}
 
 	[Fact]
+	public void RunMacrosAnywhereArmsOnTheDesktopAndInWorkApps()
+	{
+		// Off (default): on the desktop with nothing picked, the engine is off.
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+			suspended: false, pickedByHand: false, foregroundExe: "EXCEL.EXE", macrosEverywhere: false));
+		// On: the keyboard profile (macros, Snap Tap) is armed in a work app, even in auto mode with no game.
+		EngineInputs work = ServicePlan.Engine(Peak, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+			suspended: false, pickedByHand: false, foregroundExe: "EXCEL.EXE", macrosEverywhere: true);
+		Assert.Same(Gamer, work.Keyboard);
+		Assert.False(work.LinkedGame);
+	}
+
+	[Fact]
+	public void RunMacrosAnywhereStillLetsCompetitiveSafeBlockAForegroundGame()
+	{
+		// CS2 is the FRONT window and Competitive safe is on: blocked even with "run macros anywhere".
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Cs2, Gamer, gameInFront: true, mouseOnboard: false, competitiveSafe: true, "CS2",
+			suspended: false, foregroundExe: "cs2.exe", macrosEverywhere: true));
+		// CS2 only in the BACKGROUND (a work app is front): not blocked, so the macros arm.
+		EngineInputs bg = ServicePlan.Engine(Cs2, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: true, null,
+			suspended: false, foregroundExe: "WINWORD.EXE", macrosEverywhere: true);
+		Assert.Same(Gamer, bg.Keyboard);
+		// Competitive safe OFF is the full override: macros arm even with CS2 the front window.
+		Assert.Same(Gamer, ServicePlan.Engine(Cs2, Gamer, gameInFront: true, mouseOnboard: false, competitiveSafe: false, "CS2",
+			suspended: false, foregroundExe: "cs2.exe", macrosEverywhere: true).Keyboard);
+		// Sleeping/locked still wins over everything.
+		Assert.Equal(EngineInputs.Off, ServicePlan.Engine(Cs2, Gamer, gameInFront: false, mouseOnboard: false, competitiveSafe: false, null,
+			suspended: true, foregroundExe: "WINWORD.EXE", macrosEverywhere: true));
+	}
+
+	[Fact]
 	public void BlockedOnlyWhenOnAndAGameIsInFront()
 	{
 		Assert.True(ServicePlan.BlockedByCompetitiveSafe(competitiveSafe: true, gameInFront: true, "Valorant", null));

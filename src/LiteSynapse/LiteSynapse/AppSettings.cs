@@ -25,6 +25,11 @@ public class AppSettings
 	// Keyboard profile for game rules that have none ("" = none, as before).
 	public string GameKeyboardDefault { get; set; } = "";
 
+	// "Run macros anywhere": when on, the active keyboard profile's macros and Snap Tap work on the desktop and in
+	// other apps too, not only in a linked game - so a macro fires even with a game running in the background.
+	// Competitive safe still blocks them while an anti-cheat game is the FOREGROUND window. Off unless turned on.
+	public bool MacrosEverywhere { get; set; }
+
 	// Fields written by other versions survive a load/save round trip.
 	[JsonExtensionData]
 	public Dictionary<string, JsonElement> ExtraData { get; set; }

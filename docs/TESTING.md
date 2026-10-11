@@ -1,5 +1,29 @@
 # Testing LiteSynapse
 
+## Build 30 (1.2.19): Run macros anywhere
+
+The whole reason macros "weren't injecting" outside a game: they were only armed while a linked game was the
+foreground window (the engine used the keyboard profile only `inGame`), and they were deliberately suppressed on
+known desktop apps (browsers, Office, editors) so arrow keys weren't hijacked while typing. So on the desktop and
+in work apps, nothing fired. That is by design for the default, but it is not what a one-handed / work user wants.
+
+New **Settings > "Run macros anywhere (desktop and other apps, not just games)"** (off by default):
+
+- ON: the active keyboard profile's macros and Snap Tap arm everywhere - the desktop, work apps, and with a game
+  in the background - firing into whatever window is focused.
+- Competitive safe still blocks them while an **anti-cheat game is the foreground window** (that is when the input
+  would reach it). With CS2 only in the background, the foreground is another app, so nothing is blocked.
+- Turning **Competitive safe OFF is the full override** (already warns first): macros then fire even with CS2 the
+  front window - though CS2 still ignores injected input there, so it only matters for servers that allow it.
+- It never fires in LiteSynapse's own window (the setting is passed as off while LiteSynapse is in front), so the
+  macro editor's arrow keys do not trigger a macro.
+
+Note: macro keys are the arrow keys, so ON means an arrow key bound to a macro fires it while you type too - pick
+the profile/keys with that in mind. (Expanding the bindable keys is a possible follow-up.)
+
+To test: bind a macro to an arrow key, turn Run macros anywhere ON, press it in Notepad - it types. Open CS2, tab
+to Notepad (CS2 in background) - still fires into Notepad. Focus CS2 with Competitive safe ON - blocked. 669 tests.
+
 ## Build 29 (1.2.18): clearer macro / anti-cheat guardrails
 
 From an external review that pushed toward more safety (not evasion). Added the sound parts:
