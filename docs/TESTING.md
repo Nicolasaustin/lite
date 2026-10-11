@@ -1,5 +1,18 @@
 # Testing LiteSynapse
 
+## Build 25 (1.2.14): macro editor hardening (from the build-23 review)
+
+Confirmed findings from the adversarial review of the macro editor, all fixed:
+
+- **No silent loss of unsaved steps.** DUPLICATE and IMPORT now ask before discarding an in-progress edit, like
+  NEW already did.
+- **Macro-list edits take the state lock.** Every change to the macro list and to a profile's macro key binds
+  (new / duplicate / rename / delete / save / import) now runs through Service.Edit, under the same lock the tray
+  thread and device worker read those lists under, so an edit in the window can never overlap a game-start profile
+  apply. (The keyboard-hook hot path was already safe - it reads the engine's own compiled map.)
+- **EXPORT writes what is on screen**, including unsaved edits, not the last-saved version.
+- **Record dialog buttons** no longer overlap or clip (CLEAR left, DONE and CANCEL right-aligned).
+
 ## Build 24 (1.2.13): import Razer Synapse macros
 
 The macro page's IMPORT now reads Razer Synapse's own macro files, not only LiteSynapse's:

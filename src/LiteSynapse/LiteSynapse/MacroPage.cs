@@ -252,7 +252,7 @@ internal sealed class MacroPage : Panel
 			return;
 		}
 		string name = MacroEdit.UniqueName(app.Store.Macros.Select((Macro m) => m.Name), "New Macro");
-		app.Store.Macros.Add(new Macro { Name = name });
+		app.Edit(() => app.Store.Macros.Add(new Macro { Name = name }));
 		Persist();
 		Reload();
 		lstMacros.SelectedItem = (object)name;
@@ -264,13 +264,17 @@ internal sealed class MacroPage : Panel
 		{
 			return;
 		}
+		if (dirty && !ConfirmDiscard())
+		{
+			return;
+		}
 		Macro source = app.Store.Macros.FirstOrDefault((Macro m) => m.Name == editingStored);
 		if (source == null)
 		{
 			return;
 		}
 		string name = MacroEdit.UniqueName(app.Store.Macros.Select((Macro m) => m.Name), source.Name + " copy");
-		app.Store.Macros.Add(MacroEdit.Copy(source, name));
+		app.Edit(() => app.Store.Macros.Add(MacroEdit.Copy(source, name)));
 		Persist();
 		dirty = false;
 		Reload();
@@ -295,7 +299,8 @@ internal sealed class MacroPage : Panel
 			MessageBox.Show((IWin32Window)(object)owner, problem, "LiteSynapse");
 			return;
 		}
-		List<string> moved = MacroEdit.Rename(app.Store, editingStored, wanted);
+		List<string> moved = null;
+		app.Edit(() => moved = MacroEdit.Rename(app.Store, editingStored, wanted));
 		editingStored = wanted;
 		if (editing != null)
 		{
@@ -322,7 +327,7 @@ internal sealed class MacroPage : Panel
 		{
 			return;
 		}
-		MacroEdit.Delete(app.Store, editingStored);
+		app.Edit(() => MacroEdit.Delete(app.Store, editingStored));
 		editing = null;
 		editingStored = null;
 		dirty = false;
@@ -332,6 +337,10 @@ internal sealed class MacroPage : Panel
 
 	private void ImportMacro()
 	{
+		if (dirty && !ConfirmDiscard())
+		{
+			return;
+		}
 		OpenFileDialog dlg = new OpenFileDialog
 		{
 			Filter = "Macros (*.synapse4;*.xml;*.json)|*.synapse4;*.xml;*.json|Razer Synapse 4 (*.synapse4)|*.synapse4|Razer Synapse 3 macro (*.xml)|*.xml|LiteSynapse macro (*.json)|*.json|All files (*.*)|*.*",
@@ -352,9 +361,13 @@ internal sealed class MacroPage : Panel
 					// A Synapse 4 file can hold several macros; .xml / .json hold one.
 					foreach (Macro m in Importer.ImportMacrosFromFile(file))
 					{
-						m.Name = MacroEdit.UniqueName(app.Store.Macros.Select((Macro x) => x.Name), m.Name);
-						app.Store.Macros.Add(m);
-						added.Add(m.Name);
+						Macro macro = m;
+						app.Edit(() =>
+						{
+							macro.Name = MacroEdit.UniqueName(app.Store.Macros.Select((Macro x) => x.Name), macro.Name);
+							app.Store.Macros.Add(macro);
+						});
+						added.Add(macro.Name);
 					}
 				}
 				catch (Exception ex)
@@ -401,8 +414,8 @@ internal sealed class MacroPage : Panel
 			{
 				return;
 			}
-			Macro source = app.Store.Macros.FirstOrDefault((Macro m) => m.Name == editingStored) ?? editing;
-			System.IO.File.WriteAllText(((FileDialog)dlg).FileName, MacroEdit.ToJson(source));
+			// The on-screen copy is always the current state (clean copy of stored, or the unsaved edits).
+			System.IO.File.WriteAllText(((FileDialog)dlg).FileName, MacroEdit.ToJson(editing));
 			lblInfo.Text = "Exported to " + ((FileDialog)dlg).FileName;
 		}
 		catch (Exception ex)
@@ -582,15 +595,18 @@ internal sealed class MacroPage : Panel
 		{
 			return;
 		}
-		Macro stored = app.Store.Macros.FirstOrDefault((Macro m) => m.Name == editingStored);
-		if (stored == null)
+		app.Edit(() =>
 		{
-			app.Store.Macros.Add(MacroEdit.Copy(editing));
-		}
-		else
-		{
-			stored.Steps = MacroEdit.Copy(editing).Steps;
-		}
+			Macro stored = app.Store.Macros.FirstOrDefault((Macro m) => m.Name == editingStored);
+			if (stored == null)
+			{
+				app.Store.Macros.Add(MacroEdit.Copy(editing));
+			}
+			else
+			{
+				stored.Steps = MacroEdit.Copy(editing).Steps;
+			}
+		});
 		dirty = false;
 		Persist();
 		ShowEditing();

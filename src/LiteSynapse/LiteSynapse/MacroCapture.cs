@@ -172,9 +172,12 @@ internal static class MacroCapture
 		((Control)dlg).Controls.Add((Control)(object)rNone);
 		((Control)dlg).Controls.Add((Control)(object)rFix);
 
+		// Laid out without overlap inside the ~436px usable width: CLEAR left, then DONE and CANCEL right-aligned.
 		PillButton clear = Button("CLEAR", 24, 368);
-		PillButton done = Button("DONE", 300, 368, primary: true);
-		PillButton cancel = Button("CANCEL", 372, 368);
+		PillButton cancel = Button("CANCEL", 0, 368);
+		PillButton done = Button("DONE", 0, 368, primary: true);
+		((Control)cancel).Left = 436 - ((Control)cancel).Width;
+		((Control)done).Left = ((Control)cancel).Left - ((Control)done).Width - 8;
 		((Control)clear).Click += (object _, EventArgs _) => { events.Clear(); clock.Reset(); count.Text = "0 events"; ((Control)area).Focus(); };
 		((Control)done).Click += (object _, EventArgs _) => { dlg.DialogResult = (DialogResult)1; };
 		((Control)cancel).Click += (object _, EventArgs _) => { dlg.DialogResult = (DialogResult)2; };
