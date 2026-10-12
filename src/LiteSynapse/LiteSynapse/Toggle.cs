@@ -34,6 +34,19 @@ internal class Toggle : Control
 		base.Size = new Size(40, 22);
 		base.Cursor = Cursors.Hand;
 		base.BackColor = Theme.Bg;
+		// Reachable from the keyboard: a one-handed player may drive the whole window from the keyboard.
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	// Space/Enter must reach OnKeyDown rather than being swallowed as dialog navigation.
+	protected override bool IsInputKey(Keys keyData)
+	{
+		if (keyData == Keys.Space || keyData == Keys.Enter)
+		{
+			return true;
+		}
+		return base.IsInputKey(keyData);
 	}
 
 	protected override void OnPaint(PaintEventArgs e)
@@ -58,6 +71,13 @@ internal class Toggle : Control
 		float x = on ? ((float)base.Width - d - 6f) : 5f;
 		using SolidBrush knob = new SolidBrush(on ? Color.Black : (base.Enabled ? Color.FromArgb(200, 200, 205) : Color.FromArgb(110, 110, 116)));
 		g.FillEllipse(knob, x, 5f, d, d);
+		// Keyboard focus ring: a faint accent outline around the whole switch, only when it has focus.
+		if (base.Focused && base.Enabled)
+		{
+			using GraphicsPath ring = Theme.Round(new RectangleF(0.5f, 1f, base.Width - 2, base.Height - 3), (float)(base.Height - 3) / 2f);
+			using Pen rp = new Pen(Theme.Green, 1.4f);
+			g.DrawPath(rp, ring);
+		}
 	}
 
 	protected override void OnEnabledChanged(EventArgs e)
@@ -67,10 +87,36 @@ internal class Toggle : Control
 		base.Invalidate();
 	}
 
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			Checked = !Checked;
+			e.Handled = true;
+		}
+	}
+
 	protected override void OnMouseClick(MouseEventArgs e)
 	{
 		if (base.Enabled)
 		{
+			if (base.CanFocus)
+			{
+				Focus();
+			}
 			Checked = !Checked;
 		}
 	}

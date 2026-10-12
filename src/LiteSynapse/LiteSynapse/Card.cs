@@ -39,11 +39,6 @@ internal class Card : Panel
 			}
 		}
 		Tx.Left(g, Title.ToUpperInvariant(), Theme.P(11f, (FontStyle)0), Muted ? Theme.GreenDim : Theme.Green, new RectangleF(40f, 34f, base.Width - 90, 24f));
-		using (SolidBrush qb = new SolidBrush(Color.FromArgb(140, 140, 140)))
-		{
-			g.FillEllipse(qb, base.Width - 28, 10, 14, 14);
-		}
-		Tx.Center(g, "?", Theme.P(8f, (FontStyle)1), Color.Black, new RectangleF(base.Width - 28, 10f, 14f, 14f));
 	}
 
 	protected override void OnMouseEnter(EventArgs e)

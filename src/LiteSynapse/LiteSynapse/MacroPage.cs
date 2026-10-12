@@ -513,7 +513,7 @@ internal sealed class MacroPage : Panel
 		List<MacroStep> steps = MacroEdit.FromRecording(rec, delays, fixedMs);
 		// Yes = add to the end, No = replace what is there, Cancel = keep the recording out.
 		DialogResult answer = MessageBox.Show((IWin32Window)(object)owner,
-			"Recorded " + steps.Count + " step(s).\n\nYes = add them to the end of \"" + editing.Name + "\".\nNo = replace what is there.",
+			"Recorded " + steps.Count + " step(s).\n\nYes = add them to the end of \"" + editing.Name + "\".\nNo = replace what is there.\nCancel = discard this recording.",
 			"LiteSynapse", (MessageBoxButtons)3);
 		if (answer == DialogResult.Cancel)
 		{
@@ -709,9 +709,12 @@ internal sealed class MacroPage : Panel
 
 	private static FlowLayoutPanel ButtonRow()
 	{
+		// AutoSize so a docked-bottom row reports its TRUE height when the buttons wrap to two or three lines -
+		// a fixed 80px height clipped the third row (IMPORT/EXPORT) and the bottom of SAVE/REVERT entirely.
 		return new FlowLayoutPanel
 		{
-			Height = 80,
+			AutoSize = true,
+			AutoSizeMode = AutoSizeMode.GrowAndShrink,
 			BackColor = Color.Transparent,
 			FlowDirection = (FlowDirection)0,
 			WrapContents = true,

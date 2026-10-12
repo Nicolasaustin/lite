@@ -1649,13 +1649,13 @@ internal class MainForm : Form
 		// Competitive safe first: it decides whether macros and Snap Tap run at all, and as the last row it was
 		// the one a short window cut off.
 		Row("Competitive safe", (Control)(object)tgSafe, CompetitiveSafeNote);
-		Row("Run macros anywhere (desktop and other apps, not just games)", (Control)(object)tgMacrosEverywhere,
+		Row("Run macros anywhere", (Control)(object)tgMacrosEverywhere,
 			"Normally the keyboard profile's macros only run while a linked game is in front. With this ON they run everywhere - " +
 			"the desktop, work apps, and with a game in the background - firing into whatever window you are using. The macro " +
 			"keys are the arrow keys, so ON means an arrow key bound to a macro fires it while you type too. Competitive safe " +
 			"still keeps macros off while an anti-cheat game is the front window; turning Competitive safe OFF overrides even " +
 			"that. This does NOT turn on Snap Tap off-game - that is the separate switch below.");
-		Row("Run Snap Tap everywhere too (changes how A/D behave while typing)", (Control)(object)tgSnapEverywhere,
+		Row("Run Snap Tap everywhere too", (Control)(object)tgSnapEverywhere,
 			"Only matters when Run macros anywhere is ON. With this ON, Snap Tap's \"last key wins\" also applies to A and D " +
 			"outside games - so a quick \"ad\" while typing can drop or swap a letter. Leave it OFF unless you want Snap Tap " +
 			"active in work apps too; it does not affect Snap Tap inside a game, which is always on when the profile has it.");
@@ -1801,10 +1801,17 @@ internal class MainForm : Form
 		void Row(string label, Control c, string note = null)
 		{
 			Label l = Lbl(label, Theme.Text, 10.5f);
+			// Cap the label so its (transparent) background can never reach the toggle column at x=420 and repaint
+			// card colour over the switch's left edge - the bug that made the two long-labelled switches look thin.
+			// A longer label wraps instead, and the note drops below it.
+			((Control)l).MaximumSize = new Size(360, 0);
 			((Control)l).Location = new Point(40, y + 3);
 			c.Location = new Point(420, y);
 			((Control)card2).Controls.Add((Control)(object)l);
 			((Control)card2).Controls.Add(c);
+			// Keep the switch above the label in z-order so nothing is ever painted over it.
+			c.BringToFront();
+			int labelBottom = y + 3 + ((Control)l).PreferredSize.Height;
 			int step = 62;
 			if (note != null)
 			{
@@ -1812,9 +1819,10 @@ internal class MainForm : Form
 				// fixed height ran off the bottom of it, which hid the last two switches entirely.
 				Label n = Lbl(note, Theme.Dim, 9f);
 				((Control)n).MaximumSize = new Size(620, 0);
-				((Control)n).Location = new Point(40, y + 26);
+				int noteY = Math.Max(y + 26, labelBottom + 4);
+				((Control)n).Location = new Point(40, noteY);
 				((Control)card2).Controls.Add((Control)(object)n);
-				step = Math.Max(step, 26 + ((Control)n).PreferredSize.Height + 14);
+				step = Math.Max(step, noteY - y + ((Control)n).PreferredSize.Height + 14);
 			}
 			y += step;
 			((Control)card2).Height = y + 10;
@@ -1970,11 +1978,15 @@ internal class MainForm : Form
 		((Control)dpi).Location = new Point(150, 190);
 		((Control)dpi).Width = 300;
 		((Control)dpi).BackColor = Theme.Card;
-		((Control)sens).Controls.AddRange(new Control[9]
+		// The stages toggle is disabled; say why, so it does not read as broken (matches the Lighting page pattern).
+		Label stNote = Lbl("not supported yet - one DPI is used", Color.FromArgb(120, 120, 120), 9f);
+		((Control)stNote).Location = new Point(222, 120);
+		((Control)sens).Controls.AddRange(new Control[10]
 		{
 			(Control)d1,
 			(Control)st,
 			stT,
+			(Control)stNote,
 			(Control)hd,
 			(Control)hmin,
 			(Control)hmax,
@@ -3199,7 +3211,7 @@ internal class MainForm : Form
 			string br = (kpNow != null) ? kpNow.Brightness.ToString() : "?";
 			if (top.Selected == 0)
 			{
-				((Control)lblHome1).Text = $"Profile: {app.ActiveMouse}\nDPI {dpiNow}   -   {hz} Hz\n{app.Base.Count}/{InputEngine.ButtonIds.Length} buttons calibrated";
+				((Control)lblHome1).Text = $"Profile: {app.ActiveMouse}\nDPI {dpiNow}   -   {hz} Hz\n{app.Base.Count}/{InputEngine.ButtonIds.Length} buttons mapped";
 				((Control)lblHome2).Text = $"Profile: {((app.ActiveKeyboard.Length == 0) ? "(none)" : app.ActiveKeyboard)}\nBrightness {br}%";
 			}
 			if (top.Selected == 5)
@@ -3241,6 +3253,15 @@ internal class MainForm : Form
 		foreach (GameRule g in app.Games.Where((GameRule gameRule) => q.Length == 0 || (gameRule.Profile ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) || gameRule.Exes.Any((string e) => e.Contains(q, StringComparison.OrdinalIgnoreCase))))
 		{
 			((Control)gamesList).Controls.Add(GameRow(g));
+		}
+		// Blank space reads as broken on a fresh install or an empty search: say what to do instead.
+		if (((Control)gamesList).Controls.Count == 0)
+		{
+			Label empty = Lbl(q.Length == 0
+				? "No games linked yet - click + ADD GAME to map a profile to a game."
+				: "No games match your search.", Theme.Dim, 10.5f);
+			((Control)empty).Margin = new Padding(24, 24, 0, 0);
+			((Control)gamesList).Controls.Add((Control)(object)empty);
 		}
 		((Control)gamesList).ResumeLayout();
 	}

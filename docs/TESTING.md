@@ -1,5 +1,34 @@
 # Testing LiteSynapse
 
+## Build 34 (1.2.23): UI fixes (toggle render bug + honesty/usability)
+
+First batch from a multi-agent UI review. The headline is the user-reported Settings bug.
+
+- **Settings toggle render bug (fixed).** "Run macros anywhere" and "Run Snap Tap everywhere too" rendered thin /
+  jammed because those two labels were long enough to reach the toggle column (x=420), and a transparent WinForms
+  label repaints its parent's background across its whole rect - painting card colour over the switch's left edge.
+  Fix in `Row()` (MainForm.cs): cap the label width (`MaximumSize = 360`), keep the switch above the label in
+  z-order (`BringToFront`), and drop the note below a wrapped label. Also trimmed the two labels (the detail is
+  already in the note under each). The other five switches were never affected.
+- **Macro IMPORT / EXPORT were unreachable.** The macro editor's button row was a fixed-80px docked-bottom
+  FlowLayoutPanel, so when the six buttons wrapped to three rows the third (IMPORT/EXPORT) was clipped off, and the
+  step-button row clipped SAVE/REVERT. Now `AutoSize + GrowAndShrink` so the row reports its true height.
+- **Dead affordances made honest.** The grey "?" badge painted on every card did nothing (no handler anywhere) -
+  removed. The "Standard | Hypershift" switch on the Naga Customize view looked interactive but had no handlers and
+  Hypershift isn't supported - replaced with a plain "Standard layer · Hypershift not supported yet" note. The
+  disabled "Sensitivity Stages" toggle now says "not supported yet - one DPI is used".
+- **Keyboard-operable toggles.** Toggles are now TabStop + Space/Enter + a focus ring, so the window can be driven
+  one-handed from the keyboard.
+- **Linked Games empty state.** A fresh install / empty search showed blank space; now a "No games linked yet…"
+  (or "No games match your search.") line.
+- **Small wording:** home card says "buttons mapped" (calibration was removed long ago); the record dialog now
+  spells out that Cancel discards the recording.
+
+Deferred to the next build (bigger UI pieces / need care): the real Naga lighting editor + keyboard white-effect
+picker (the lighting backend already exists, the page is just a stub), device-info readout (firmware/edition/mode),
+page auto-scroll for small screens, the keyboard PERFORMANCE→SNAP TAP rename (shares a title path), and the
+DPI-clutch button (touches the input hot path). 670 tests.
+
 ## Build 33 (1.2.22): post-game memory reclaim + tiny leak audit
 
 Done in response to "reset its memory after every Counter-Strike so it doesn't fill up / leak." A verified
