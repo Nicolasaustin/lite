@@ -343,10 +343,10 @@ internal static class ServiceCatalog
 			"Text rendering gets slower, not faster. Turning this off is a common mistake - leave it on.", Tweaks.Risky, Auto) { KeepOn = true },
 		new Row("EventLog", "Windows Event Log",
 			"Writes the system, application and security logs.",
-			"Event Viewer stops recording, so there is no record when something goes wrong - including the ring-buffer warnings that say a mouse buffer is too small. Keep it on.", Tweaks.Risky, Auto),
+			"Event Viewer stops recording, so there is no record when something goes wrong - including the ring-buffer warnings that say a mouse buffer is too small. Keep it on.", Tweaks.Risky, Auto) { KeepOn = true },
 		new Row("Schedule", "Task Scheduler",
 			"Runs scheduled tasks, including Windows' own maintenance.",
-			"A great deal of Windows stops working, including parts of servicing and many apps' updaters. Keep it on.", Tweaks.Risky, Auto),
+			"A great deal of Windows stops working, including parts of servicing and many apps' updaters. Keep it on.", Tweaks.Risky, Auto) { KeepOn = true },
 
 		// ---- Risky: updates, security, networking ---------------------------------------------------
 		new Row("DoSvc", "Delivery Optimization",
@@ -405,7 +405,7 @@ internal static class ServiceCatalog
 			"Nothing can install from an .msi while it is off, including many games' prerequisites.", Tweaks.Risky, Manual),
 		new Row("EventSystem", "COM+ Event System",
 			"Delivers COM+ events; a lot of Windows depends on it.",
-			"Various parts of Windows break in ways that are hard to connect back to this. Keep it on.", Tweaks.Risky, Auto),
+			"Various parts of Windows break in ways that are hard to connect back to this. Keep it on.", Tweaks.Risky, Auto) { KeepOn = true },
 		new Row("HvHost", "HV Host Service",
 			"Hyper-V host support.",
 			"Hyper-V, WSL 2 and Windows Sandbox. Also part of the virtualisation-based security stack.", Tweaks.Risky, Manual),

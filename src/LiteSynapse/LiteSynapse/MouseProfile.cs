@@ -27,4 +27,17 @@ public class MouseProfile
 	// Fields this version does not know survive a load/save round trip.
 	[JsonExtensionData]
 	public Dictionary<string, JsonElement> ExtraData { get; set; }
+
+	// A private snapshot for the device worker: it enumerates Buttons/DpiStages/Lighting on its own (BelowNormal)
+	// thread while the UI can be editing the live profile on the UI thread. Copying the mutable collections (the
+	// entries themselves are replaced wholesale by the UI, never mutated in place, so sharing their references is
+	// safe) means a long USB write never enumerates a dictionary the UI is changing underneath it.
+	public MouseProfile Clone()
+	{
+		MouseProfile c = (MouseProfile)MemberwiseClone();
+		c.DpiStages = (DpiStages != null) ? new List<int>(DpiStages) : null;
+		c.Buttons = (Buttons != null) ? new Dictionary<string, KeyTarget>(Buttons) : null;
+		c.Lighting = Lighting?.Snapshot();
+		return c;
+	}
 }

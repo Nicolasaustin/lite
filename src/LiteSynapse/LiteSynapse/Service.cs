@@ -461,7 +461,7 @@ internal sealed class Service
 			MouseProfile mp;
 			lock (stateLock)
 			{
-				mp = FindMouse(ActiveMouse);
+				mp = FindMouse(ActiveMouse)?.Clone();
 			}
 			if (m == null || mp == null)
 			{
@@ -695,7 +695,7 @@ internal sealed class Service
 		MouseProfile p;
 		lock (stateLock)
 		{
-			p = FindMouse(profileName);
+			p = FindMouse(profileName)?.Clone();
 		}
 		if (p == null)
 		{
@@ -1284,7 +1284,11 @@ internal sealed class Service
 	// mouse restore on the wire.
 	private void ReclaimAfterGame()
 	{
-		if (gameInFront || InGame)
+		// EngineBusy: the keyboard hook is still armed (e.g. "Run macros anywhere" on the desktop). A blocking,
+		// compacting GC suspends every managed thread including the armed hook thread, which would hitch desktop
+		// keystrokes - the same reason UiHost.ReleaseMemory skips it while the hook is live. Memory is only
+		// deferred: the reclaim runs on the next game-leave once the hook has disarmed.
+		if (gameInFront || InGame || EngineBusy)
 		{
 			return;
 		}
@@ -1389,7 +1393,10 @@ internal sealed class Service
 		int gen;
 		lock (stateLock)
 		{
-			mp = FindMouse(ActiveMouse);
+			// A private snapshot taken under the lock: the worker writes this to the mouse (a long USB operation)
+			// off-lock, so it must not enumerate Buttons/lighting while the UI edits the live profile. The UI's
+			// own edits take the lock too (via app.Edit), so the clone is a consistent point-in-time copy.
+			mp = FindMouse(ActiveMouse)?.Clone();
 			useSlots = LiveWrite;
 			gen = generation;
 		}
@@ -1579,7 +1586,8 @@ internal sealed class Service
 		bool skip;
 		lock (stateLock)
 		{
-			mp = FindMouse(profile);
+			// Private snapshot under the lock (see SyncMouse): this pre-write enumerates the profile off-lock.
+			mp = FindMouse(profile)?.Clone();
 			skip = !LiveWrite || ActiveMouse == profile;
 		}
 		RazerDevice m = mouse;

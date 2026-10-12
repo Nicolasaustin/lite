@@ -1,5 +1,36 @@
 # Testing LiteSynapse
 
+## Build 36 (1.2.25): 8-round bug hunt - 9 confirmed fixes
+
+An 8-round adversarial bug hunt (each finding independently verified: 18 raw -> 9 confirmed, 9 refuted).
+
+- **Keyboard controls re-fired on auto-repeat (regression from builds 34-35).** The new OnKeyDown handlers ran on
+  every WM_KEYDOWN, so *holding* Space/Enter on a focused control re-fired it ~30x/s. On a Settings toggle that
+  machine-gunned heavy work (onboard HID writes for "Run selected profiles on the mouse", Task Scheduler churn for
+  "Start with Windows", engine reloads) and left the switch in a random state; on the delete-game button it would
+  repeat. Fixed by acting on key-UP (one activation per physical press) across Toggle, PillButton, ChoiceButton,
+  IconBtn, ThumbButton, Card - matching how WinForms' own buttons work.
+- **Post-game memory reclaim could hitch desktop typing (build 33).** With "Run macros/Snap Tap anywhere" on, the
+  keyboard hook stays armed on the desktop; the reclaim's blocking compacting GC would pause the armed hook thread.
+  Added the `EngineBusy` guard (mirrors UiHost.ReleaseMemory) so it never runs while the hook is live. Also dropped
+  the working-set trim (`SetProcessWorkingSetSize(-1,-1)`) - it paged out the warmed-up hook/output code, the exact
+  fault the old TrimMemory was defanged to avoid. Reclaim is now GC-only and hook-safe.
+- **Naga button mapped to middle-click rapid-fired while held.** The onboard key auto-repeats; a mouse button is
+  edge-triggered, so MIDDLEDOWN was re-sent each repeat. Now deduped on state change (one down, one up).
+- **Device-worker data race on the live profile.** Editing mouse buttons while a profile apply ran had the UI
+  thread mutating the same Buttons dictionary the device worker was enumerating for an onboard write - a swallowed
+  "collection modified" throw (slot left half-written) or, rarely, a corrupt/looping worker. Fixed by handing the
+  worker a private `MouseProfile.Clone()` taken under the lock, and routing the UI's button edits through
+  `app.Edit` (same lock) so the snapshot is consistent.
+- **Three "keep it on" services were mislabelled.** Windows Event Log, Task Scheduler and COM+ Event System now
+  carry KeepOn=true, so turning them off reads "SAFE DEFAULT" / "puts the safe default back", not "that helps
+  performance".
+- **CleanMacro dropped mouse-button steps** (turned them into empty waits) - now preserves `Mouse` and keys
+  Ext/Down off any event, not just a key.
+- **Tray flyout footer** showed a hardcoded "v1.0" - now the real version.
+
+672 tests.
+
 ## Build 35 (1.2.24): full keyboard operability (usable with no mouse)
 
 From a multi-agent map + design of every clickable custom control. The window is now operable from the keyboard

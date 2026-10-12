@@ -397,6 +397,48 @@ public class ProfileOpsTests
 	}
 
 	[Fact]
+	public void CleanMacroKeepsMouseButtonSteps()
+	{
+		// A mouse-button step (Vk 0, Mouse set) must survive: it was being turned into an empty wait.
+		Macro m = ProfileOps.CleanMacro("Click", new List<MacroStep>
+		{
+			new MacroStep { Mouse = 1, Down = true },
+			new MacroStep { Mouse = 1, Down = false }
+		});
+		Assert.Equal(2, m.Steps.Count);
+		Assert.Equal(1, m.Steps[0].Mouse);
+		Assert.True(m.Steps[0].Down);
+		Assert.True(m.Steps[0].IsEvent);
+		Assert.Equal(1, m.Steps[1].Mouse);
+		Assert.False(m.Steps[1].Down);
+		// Out-of-range mouse buttons are rejected.
+		Assert.Throws<OpError>(() => ProfileOps.CleanMacro("x", new List<MacroStep> { new MacroStep { Mouse = 9 } }));
+	}
+
+	[Fact]
+	public void MouseProfileCloneIsIndependent()
+	{
+		// The device worker gets a snapshot; editing the original's collections afterwards must not touch it.
+		MouseProfile p = new MouseProfile
+		{
+			Name = "CS2",
+			Dpi = 800,
+			DpiStages = new List<int> { 400, 800 },
+			Buttons = new Dictionary<string, KeyTarget> { ["Side1"] = new KeyTarget { Key = "KEY_W" } },
+			Lighting = new MouseLightingSettings { Effect = "static", Zones = new Dictionary<string, MouseLightingSettings> { ["logo"] = new MouseLightingSettings { Effect = "off" } } }
+		};
+		MouseProfile c = p.Clone();
+		p.Buttons.Clear();
+		p.DpiStages.Clear();
+		p.Lighting.Zones.Clear();
+		Assert.Single(c.Buttons);
+		Assert.Equal("KEY_W", c.Buttons["Side1"].Key);
+		Assert.Equal(2, c.DpiStages.Count);
+		Assert.Single(c.Lighting.Zones);
+		Assert.Equal("CS2", c.Name);
+	}
+
+	[Fact]
 	public void SavingAMacroUnderANewNameMovesItsKeys()
 	{
 		ProfileStore s = Store();

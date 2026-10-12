@@ -99,9 +99,21 @@ internal class Toggle : Control
 		base.Invalidate();
 	}
 
+	// Act on key-UP, not key-down: OnKeyDown repeats under Windows auto-repeat (~30/s on a held key), which would
+	// machine-gun CheckedChanged - and for some switches that means repeated onboard HID writes, Task Scheduler
+	// churn or engine reloads. Key-up fires once per physical press, matching a standard checkbox.
 	protected override void OnKeyDown(KeyEventArgs e)
 	{
 		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
 		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
 		{
 			Checked = !Checked;

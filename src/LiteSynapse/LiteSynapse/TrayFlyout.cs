@@ -421,7 +421,7 @@ internal sealed class TrayFlyout : Form
 		Font f10 = Theme.P(8f, (FontStyle)0);
 		try
 		{
-			Tx.Right(g, "v1.0", f10, Color.FromArgb(110, 110, 110), new RectangleF(300f, 406f, 52f, 16f));
+			Tx.Right(g, "v" + AppInfo.Version, f10, Color.FromArgb(110, 110, 110), new RectangleF(272f, 406f, 80f, 16f));
 		}
 		finally
 		{

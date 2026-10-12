@@ -33,10 +33,21 @@ internal class PillButton : Control
 		return base.IsInputKey(keyData);
 	}
 
-	// No internal state: re-raise the same Click the external handlers are wired to, with sender = this.
+	// Fire on key-UP, not key-down: a held Space/Enter auto-repeats key-down ~30/s, which would re-raise Click
+	// over and over (bad for a destructive or heavy action). Key-up is one click per press. sender = this so the
+	// external handlers that read the sender keep working.
 	protected override void OnKeyDown(KeyEventArgs e)
 	{
 		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
 		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
 		{
 			OnClick(EventArgs.Empty);

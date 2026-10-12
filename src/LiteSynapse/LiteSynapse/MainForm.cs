@@ -2715,17 +2715,22 @@ internal class MainForm : Form
 		MouseProfile p = MP;
 		if (p != null)
 		{
-			if (value == "")
+			// Under the lock: the device worker clones the profile under this same lock, so the button map can't be
+			// mutated while it is being enumerated for an onboard write.
+			app.Edit(delegate
 			{
-				p.Buttons.Remove(id);
-			}
-			else
-			{
-				p.Buttons[id] = new KeyTarget
+				if (value == "")
 				{
-					Key = value
-				};
-			}
+					p.Buttons.Remove(id);
+				}
+				else
+				{
+					p.Buttons[id] = new KeyTarget
+					{
+						Key = value
+					};
+				}
+			});
 			SaveProfiles();
 			app.ApplyNames(app.ActiveMouse, app.ActiveKeyboard, app.InGame);
 			LoadAll();
@@ -3038,14 +3043,19 @@ internal class MainForm : Form
 		{
 			return;
 		}
-		if (IsMouse)
+		// Under the lock, so the device worker (which clones the profile under the same lock) never enumerates the
+		// map while it is being cleared.
+		app.Edit(delegate
 		{
-			app.Store.Mouse.First((MouseProfile p) => p.Name == cur).Buttons.Clear();
-		}
-		else
-		{
-			app.Store.Keyboard.First((KbProfile p) => p.Name == cur).MacroKeys.Clear();
-		}
+			if (IsMouse)
+			{
+				app.Store.Mouse.First((MouseProfile p) => p.Name == cur).Buttons.Clear();
+			}
+			else
+			{
+				app.Store.Keyboard.First((KbProfile p) => p.Name == cur).MacroKeys.Clear();
+			}
+		});
 		SaveProfiles();
 		app.ApplyNames(app.ActiveMouse, app.ActiveKeyboard, app.InGame);
 		LoadAll();

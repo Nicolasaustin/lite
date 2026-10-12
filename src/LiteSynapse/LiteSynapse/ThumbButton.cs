@@ -35,6 +35,16 @@ internal class ThumbButton : Control
 		base.OnKeyDown(e);
 		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
 		{
+			e.Handled = true;
+		}
+	}
+
+	// Fire on key-up, one view-switch per press.
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
 			OnClick(EventArgs.Empty);
 			e.Handled = true;
 		}

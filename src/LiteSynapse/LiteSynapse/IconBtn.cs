@@ -57,9 +57,20 @@ internal class IconBtn : Control
 		return base.IsInputKey(keyData);
 	}
 
+	// Fire on key-UP, one per press: these include destructive buttons (delete game), which must not repeat on
+	// a held key.
 	protected override void OnKeyDown(KeyEventArgs e)
 	{
 		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
 		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
 		{
 			OnClick(EventArgs.Empty);

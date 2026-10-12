@@ -43,6 +43,16 @@ internal class Card : Panel
 		base.OnKeyDown(e);
 		if (base.Cursor == Cursors.Hand && base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
 		{
+			e.Handled = true;
+		}
+	}
+
+	// Open the page on key-up, once per press (not once per auto-repeat).
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
+		if (base.Cursor == Cursors.Hand && base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
 			OnClick(EventArgs.Empty);
 			e.Handled = true;
 		}

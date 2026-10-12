@@ -592,15 +592,22 @@ internal static class ProfileOps
 			{
 				throw new OpError($"Step key code {s.Vk} is not a key.");
 			}
+			if (s.Mouse < 0 || s.Mouse > 5)
+			{
+				throw new OpError($"Step mouse button {s.Mouse} is not valid.");
+			}
 			if (s.DelayMs < 0 || s.DelayMs > MaxMacroDelayMs)
 			{
 				throw new OpError($"A step delay must be between 0 and {MaxMacroDelayMs} ms.");
 			}
+			// Mouse was dropped here, turning a mouse-button step into an empty wait: carry it, and key Ext/Down off
+			// whether the step is any event (key OR mouse), not just a key.
 			list.Add(new MacroStep
 			{
 				Vk = s.Vk,
-				Ext = s.Vk != 0 && s.Ext,
-				Down = s.Vk != 0 && s.Down,
+				Mouse = s.Mouse,
+				Ext = s.IsEvent && s.Ext,
+				Down = s.IsEvent && s.Down,
 				DelayMs = s.DelayMs
 			});
 		}

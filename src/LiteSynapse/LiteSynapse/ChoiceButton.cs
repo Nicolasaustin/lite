@@ -31,10 +31,20 @@ internal class ChoiceButton : Control
 		return base.IsInputKey(keyData);
 	}
 
-	// Re-raise Click with sender = this: the handler reads ((ChoiceButton)s).Tag to know which choice was picked.
+	// Fire on key-UP (one per press, not once per auto-repeat). Click carries sender = this so the handler's
+	// ((ChoiceButton)s).Tag lookup still works.
 	protected override void OnKeyDown(KeyEventArgs e)
 	{
 		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
 		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
 		{
 			OnClick(EventArgs.Empty);

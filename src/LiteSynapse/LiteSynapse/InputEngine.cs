@@ -853,8 +853,13 @@ internal class InputEngine : IDisposable
 		}
 		if (t.Key == KeyTarget.MouseMiddle)
 		{
-			Native.SendMiddleButton(!up);
-			middleDown = !up;
+			// Only on a real state change: the Naga's onboard key auto-repeats while held, and a mouse button is
+			// edge-triggered, not auto-repeating - so dedup, or a held button machine-guns MIDDLEDOWN.
+			if ((!up) != middleDown)
+			{
+				Native.SendMiddleButton(!up);
+				middleDown = !up;
+			}
 			return;
 		}
 		int vk = Keys2.Vk(t.Key);
