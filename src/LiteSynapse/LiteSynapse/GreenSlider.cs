@@ -48,6 +48,90 @@ internal class GreenSlider : Control
 		base.Height = 36;
 		base.Cursor = Cursors.Hand;
 		base.BackColor = Theme.Card;
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		switch (keyData)
+		{
+		case Keys.Left:
+		case Keys.Right:
+		case Keys.Up:
+		case Keys.Down:
+		case Keys.Home:
+		case Keys.End:
+		case Keys.PageUp:
+		case Keys.PageDown:
+			return true;
+		default:
+			return base.IsInputKey(keyData);
+		}
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (!base.Enabled)
+		{
+			return;
+		}
+		int big = Math.Max(Step, (Max - Min) / 10);
+		bool handled = true;
+		switch (e.KeyCode)
+		{
+		case Keys.Left:
+		case Keys.Down:
+			Value -= Step;
+			break;
+		case Keys.Right:
+		case Keys.Up:
+			Value += Step;
+			break;
+		case Keys.PageDown:
+			Value -= big;
+			break;
+		case Keys.PageUp:
+			Value += big;
+			break;
+		case Keys.Home:
+			Value = Min;
+			break;
+		case Keys.End:
+			Value = Max;
+			break;
+		default:
+			handled = false;
+			break;
+		}
+		if (handled)
+		{
+			Changing?.Invoke();
+			e.Handled = true;
+		}
+	}
+
+	// Mirrors the drag-release commit, and covers auto-repeat (one commit when the keys are let go).
+	protected override void OnKeyUp(KeyEventArgs e)
+	{
+		base.OnKeyUp(e);
+		if (base.Enabled)
+		{
+			Committed?.Invoke();
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
 	}
 
 	private float X(int v)
@@ -72,6 +156,11 @@ internal class GreenSlider : Control
 		Graphics g = e.Graphics;
 		Theme.Quality(g);
 		g.Clear(base.BackColor);
+		// Drawn first: OnPaint returns early when !Bubble, so a ring added after that would never show.
+		if (base.Focused && base.Enabled)
+		{
+			Theme.FocusRing(g, new RectangleF(0.5f, 0.5f, base.Width - 1.5f, base.Height - 1.5f), 6f);
+		}
 		float y = ((Bubble || Labels) ? ((float)base.Height / 2f - 2f) : ((float)base.Height / 2f));
 		Color on = (base.Enabled ? Theme.Green : Theme.GreenDim);
 		Pen track = new Pen(base.Enabled ? Color.FromArgb(70, 70, 70) : Color.FromArgb(48, 48, 48), 4f)
@@ -161,6 +250,10 @@ internal class GreenSlider : Control
 	{
 		if (base.Enabled)
 		{
+			if (base.CanFocus)
+			{
+				Focus();
+			}
 			drag = true;
 			base.Capture = true;
 			Set(e.X);

@@ -864,6 +864,15 @@ internal class MainForm : Form
 		base.Controls.Add((Control)(object)bar);
 		base.Controls.Add((Control)(object)titleRow);
 		base.Controls.Add((Control)(object)top);
+		// Keyboard tab order: top tabs -> sub-tab bar -> page body. Inside the bar, the sub-tabs come before the
+		// profile picker and the memory/more buttons. Set explicitly - everything defaults to TabIndex 0 otherwise.
+		top.TabIndex = 0;
+		((Control)bar).TabIndex = 1;
+		((Control)host).TabIndex = 2;
+		pills.TabIndex = 0;
+		cbProfile.TabIndex = 1;
+		((Control)memBtn).TabIndex = 2;
+		((Control)btnMore).TabIndex = 3;
 		BuildHome();
 		BuildMacro();
 		BuildGames();
@@ -935,6 +944,12 @@ internal class MainForm : Form
 		base.OnShown(e);
 		shownState = base.WindowState;
 		HookForeground();
+		// Put focus on the top tab strip so there is a visible focus ring to Tab from - the window is usable
+		// with no mouse (the user's fallback if the mouse breaks).
+		if (top.CanFocus)
+		{
+			top.Focus();
+		}
 	}
 
 	// The last state that was not minimized, so closing from the taskbar while minimized still remembers

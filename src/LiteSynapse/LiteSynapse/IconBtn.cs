@@ -44,6 +44,48 @@ internal class IconBtn : Control
 		base.Cursor = Cursors.Hand;
 		base.Size = new Size(34, 34);
 		base.BackColor = Color.FromArgb(24, 24, 24);
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		if (keyData == Keys.Space || keyData == Keys.Enter)
+		{
+			return true;
+		}
+		return base.IsInputKey(keyData);
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			OnClick(EventArgs.Empty);
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnMouseClick(MouseEventArgs e)
+	{
+		base.OnMouseClick(e);
+		if (base.Enabled && base.CanFocus)
+		{
+			Focus();
+		}
 	}
 
 	protected override void OnPaint(PaintEventArgs e)
@@ -66,6 +108,13 @@ internal class IconBtn : Control
 			{
 				((IDisposable)b)?.Dispose();
 			}
+		}
+		// Drawn before the Sd early-return so both the SD-card and glyph buttons show the ring. Ellipse, not a
+		// rounded rect, to match the round button; IconBtn does not import Drawing2D, so draw it directly.
+		if (base.Focused && base.Enabled)
+		{
+			using Pen rp = new Pen(Theme.Green, 1.4f);
+			g.DrawEllipse(rp, 1, 1, base.Width - 3, base.Height - 3);
 		}
 		if (Sd)
 		{

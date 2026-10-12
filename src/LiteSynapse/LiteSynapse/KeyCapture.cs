@@ -39,6 +39,13 @@ internal class KeyCapture : Control
 		{
 			return base.ProcessCmdKey(ref m, keyData);
 		}
+		// Tab/Shift-Tab and Escape must still move focus away, or a keyboard user is trapped in the field forever.
+		// Everything else is captured as the key to bind.
+		Keys kc = keyData & Keys.KeyCode;
+		if (kc == Keys.Tab || kc == Keys.Escape)
+		{
+			return base.ProcessCmdKey(ref m, keyData);
+		}
 		int vk = (int)(keyData & Keys.KeyCode);
 		// WinForms hands over the generic Shift/Ctrl/Alt codes; the message says which side. Shift is told
 		// apart by its scan code (Right Shift is 36), Ctrl and Alt by the extended-key bit.

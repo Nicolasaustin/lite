@@ -1,5 +1,36 @@
 # Testing LiteSynapse
 
+## Build 35 (1.2.24): full keyboard operability (usable with no mouse)
+
+From a multi-agent map + design of every clickable custom control. The window is now operable from the keyboard
+alone (fallback if the mouse breaks). Shared `Theme.FocusRing` helper draws a green focus ring; each control mirrors
+the build-34 Toggle pattern (TabStop + Selectable, IsInputKey, Space/Enter activation, OnGotFocus/LostFocus
+Invalidate, Focus() on click).
+
+- **Tab strips** (TopTabs, PillTabs): Tab reaches the strip; Left/Right (and Home/End) move the ring through the
+  *visual* order; Enter/Space commits (fires the same Changed path as a click). Ring on the focused tab.
+- **Buttons** (PillButton, ChoiceButton, IconBtn, ThumbButton): focusable, Enter/Space re-raises Click with
+  sender=this (ChoiceButton's handler reads sender.Tag, so this is load-bearing). IconBtn/ThumbButton draw their
+  ring before their early-return paint branches.
+- **Sliders** (GreenSlider): Left/Right/Up/Down = +/-Step, PageUp/Down = ~10%, Home/End = Min/Max; Changing on
+  key-down, Committed on key-up. Ring drawn first (before the !Bubble early return).
+- **Dropdowns** (DarkCombo): Down/Up/Enter/Space opens; in-form combos now always use the inline list (a ListBox
+  in a ToolStripDropDown won't take keyboard focus), which already handles arrows/Enter/Esc. Field rings when focused.
+- **Home cards** (Card): only the clickable (Hand-cursor) tiles join the tab order; Enter opens the page.
+- **KeyCapture bug fixed:** it returned true for every key while focused, trapping Tab/Shift-Tab/Esc so a keyboard
+  user could never leave the bind field. Now Tab/Esc fall through to normal focus movement.
+- **Tab order + initial focus** (MainForm): top tabs -> sub-tab bar (sub-tabs before the profile picker) -> page
+  body; the window focuses the top tab strip on open so there's always a ring to Tab from. No AcceptButton (the
+  borderless window's painted controls aren't IButtonControl; Enter reaches the focused control's OnKeyDown).
+
+Deferred to the next build (riskiest / least needed with a dead mouse): per-row keyboard on the Performance tweak
+list (its APPLY / FIX ALL / CHECK AGAIN buttons already work by keyboard) and the mouse-image button editor
+(diagrams + assign popup).
+
+To test with no mouse: open the app (ring on the top tabs), Tab/arrows to move, Enter to pick a tab, Tab into the
+page, Space/Enter on buttons and toggles, arrows on the DPI slider, Enter on the profile dropdown then arrows+Enter.
+670 tests.
+
 ## Build 34 (1.2.23): UI fixes (toggle render bug + honesty/usability)
 
 First batch from a multi-agent UI review. The headline is the user-reported Settings bug.

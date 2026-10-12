@@ -20,6 +20,49 @@ internal class PillButton : Control
 		base.Height = 34;
 		base.Font = Theme.F(9.5f, (FontStyle)1);
 		base.BackColor = Theme.Bg;
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		if (keyData == Keys.Space || keyData == Keys.Enter)
+		{
+			return true;
+		}
+		return base.IsInputKey(keyData);
+	}
+
+	// No internal state: re-raise the same Click the external handlers are wired to, with sender = this.
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			OnClick(EventArgs.Empty);
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnMouseClick(MouseEventArgs e)
+	{
+		base.OnMouseClick(e);
+		if (base.Enabled && base.CanFocus)
+		{
+			Focus();
+		}
 	}
 
 	protected override void OnPaint(PaintEventArgs e)
@@ -43,6 +86,10 @@ internal class PillButton : Control
 		}
 		Color c = Selected ? Color.Black : (base.Enabled ? Theme.Text : Theme.Dim);
 		Tx.Center(g, base.Text, base.Font, c, new RectangleF(0f, 0f, base.Width, base.Height));
+		if (base.Focused && base.Enabled)
+		{
+			Theme.FocusRing(g, new RectangleF(0.5f, 0.5f, base.Width - 2, base.Height - 2), (float)(base.Height - 2) / 2f);
+		}
 	}
 
 	protected override void OnEnabledChanged(EventArgs e)

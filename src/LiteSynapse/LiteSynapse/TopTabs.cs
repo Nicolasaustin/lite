@@ -23,6 +23,9 @@ internal class TopTabs : Control
 
 	private bool dragging;
 
+	// The tab the keyboard ring is on (an Items index), which may differ from Selected until Space/Enter commits.
+	private int focusIdx = -1;
+
 	public event Action Changed;
 
 	public event Action OrderChanged;
@@ -32,6 +35,82 @@ internal class TopTabs : Control
 		base.DoubleBuffered = true;
 		base.Cursor = Cursors.Hand;
 		base.BackColor = Theme.Top;
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		switch (keyData)
+		{
+		case Keys.Left:
+		case Keys.Right:
+		case Keys.Home:
+		case Keys.End:
+		case Keys.Space:
+		case Keys.Enter:
+			return true;
+		default:
+			return base.IsInputKey(keyData);
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		// Several call sites set Selected directly (bypassing Changed); re-syncing here keeps the ring correct.
+		focusIdx = Selected;
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (!base.Enabled)
+		{
+			return;
+		}
+		Normalize();
+		if (Order.Count == 0)
+		{
+			return;
+		}
+		int fi = (focusIdx >= 0) ? focusIdx : Selected;
+		// Left/Right walk the VISUAL order (Order), not the raw Items index, so the ring moves the way it looks.
+		int pos = Math.Max(0, Order.IndexOf(fi));
+		switch (e.KeyCode)
+		{
+		case Keys.Left:
+			focusIdx = Order[Math.Max(0, pos - 1)];
+			break;
+		case Keys.Right:
+			focusIdx = Order[Math.Min(Order.Count - 1, pos + 1)];
+			break;
+		case Keys.Home:
+			focusIdx = Order[0];
+			break;
+		case Keys.End:
+			focusIdx = Order[Order.Count - 1];
+			break;
+		case Keys.Space:
+		case Keys.Enter:
+			if (focusIdx >= 0 && focusIdx != Selected)
+			{
+				Selected = focusIdx;
+				Changed?.Invoke();
+			}
+			break;
+		default:
+			return;
+		}
+		base.Invalidate();
+		e.Handled = true;
 	}
 
 	// The order list last checked, so a hit test or a paint does not rebuild it with LINQ every time.
@@ -190,6 +269,14 @@ internal class TopTabs : Control
 					Tx.Center(g, Items[i].glyph, gf, Color.Black, new RectangleF(cx - 11f, cy - 11f, 22f, 22f));
 					Tx.Left(g, Items[i].text.ToUpperInvariant(), f, (i == Selected || i == hover) ? Color.White : Color.FromArgb(205, 205, 205), new RectangleF(x + 42f, 0f, w[i] - 44f, base.Height));
 				}
+				if (base.Focused && base.Enabled)
+				{
+					int fi = (focusIdx >= 0) ? focusIdx : Selected;
+					if (fi >= 0 && fi < Items.Length)
+					{
+						Theme.FocusRing(g, new RectangleF(xs[fi], 3f, w[fi], base.Height - 4), 6f);
+					}
+				}
 			}
 			finally
 			{
@@ -226,6 +313,11 @@ internal class TopTabs : Control
 			dragging = false;
 			if (downIdx >= 0)
 			{
+				focusIdx = downIdx;
+				if (base.CanFocus)
+				{
+					Focus();
+				}
 				base.Capture = true;
 			}
 		}
@@ -308,6 +400,7 @@ internal class TopTabs : Control
 			else if (Hit(e.Location) == idx && idx != Selected)
 			{
 				Selected = idx;
+				focusIdx = idx;
 				base.Invalidate();
 				Changed?.Invoke();
 			}

@@ -102,6 +102,20 @@ internal static class Theme
 		return val;
 	}
 
+	// A keyboard-focus ring: a thin accent outline, drawn only when a control has focus. Allocation-light - the
+	// pen exists only during the call, i.e. only on a focused repaint.
+	public static void FocusRing(Graphics g, GraphicsPath path)
+	{
+		using Pen rp = new Pen(Green, 1.4f);
+		g.DrawPath(rp, path);
+	}
+
+	public static void FocusRing(Graphics g, RectangleF r, float radius)
+	{
+		using GraphicsPath path = Round(r, radius);
+		FocusRing(g, path);
+	}
+
 	public static void DotGrid(Graphics g, Rectangle r)
 	{
 		//IL_000b: Unknown result type (might be due to invalid IL or missing references)

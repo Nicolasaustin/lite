@@ -14,6 +14,9 @@ internal class PillTabs : Control
 
 	private int hover = -1;
 
+	// The tab the keyboard ring is on, which may differ from Selected until Space/Enter commits it.
+	private int focusIdx = -1;
+
 	public event Action Changed;
 
 	public PillTabs()
@@ -22,6 +25,75 @@ internal class PillTabs : Control
 		base.Cursor = Cursors.Hand;
 		base.Height = 34;
 		base.BackColor = Theme.Bg;
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		switch (keyData)
+		{
+		case Keys.Left:
+		case Keys.Right:
+		case Keys.Home:
+		case Keys.End:
+		case Keys.Space:
+		case Keys.Enter:
+			return true;
+		default:
+			return base.IsInputKey(keyData);
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		// SetPills resets Selected to 0 on every top-tab change, so re-sync the ring to it here.
+		focusIdx = Selected;
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (!base.Enabled || Items.Length == 0)
+		{
+			return;
+		}
+		int fi = (focusIdx < 0) ? Selected : focusIdx;
+		switch (e.KeyCode)
+		{
+		case Keys.Left:
+			focusIdx = Math.Max(0, fi - 1);
+			break;
+		case Keys.Right:
+			focusIdx = Math.Min(Items.Length - 1, fi + 1);
+			break;
+		case Keys.Home:
+			focusIdx = 0;
+			break;
+		case Keys.End:
+			focusIdx = Items.Length - 1;
+			break;
+		case Keys.Space:
+		case Keys.Enter:
+			if (focusIdx >= 0 && focusIdx != Selected)
+			{
+				Selected = focusIdx;
+				Changed?.Invoke();
+			}
+			break;
+		default:
+			return;
+		}
+		base.Invalidate();
+		e.Handled = true;
 	}
 
 	public int TotalWidth()
@@ -96,6 +168,7 @@ internal class PillTabs : Control
 				Tx.Center(g2, s, f2, c, r);
 				x += w[i];
 			}
+			PaintFocusRing(g);
 		}
 		finally
 		{
@@ -135,12 +208,32 @@ internal class PillTabs : Control
 
 	protected override void OnMouseClick(MouseEventArgs e)
 	{
+		if (base.CanFocus)
+		{
+			Focus();
+		}
 		int h = Hit(e.Location);
 		if (h >= 0 && h != Selected)
 		{
 			Selected = h;
+			focusIdx = h;
 			base.Invalidate();
 			Changed?.Invoke();
 		}
+	}
+
+	private void PaintFocusRing(Graphics g)
+	{
+		if (!base.Focused || !base.Enabled || focusIdx < 0 || focusIdx >= Items.Length)
+		{
+			return;
+		}
+		float[] w = Widths();
+		float xr = 0f;
+		for (int i = 0; i < focusIdx; i++)
+		{
+			xr += w[i];
+		}
+		Theme.FocusRing(g, new RectangleF(xr, 3f, w[focusIdx], base.Height - 6), (float)(base.Height - 6) / 2f);
 	}
 }

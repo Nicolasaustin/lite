@@ -131,6 +131,45 @@ internal class DarkCombo : Control
 		base.Height = 30;
 		base.Font = Theme.F(10f, (FontStyle)1);
 		base.BackColor = Theme.Bg;
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		switch (keyData)
+		{
+		case Keys.Down:
+		case Keys.Up:
+		case Keys.Enter:
+		case Keys.Space:
+			return true;
+		default:
+			return base.IsInputKey(keyData);
+		}
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		// Open the list from the keyboard; once open, the inline list takes focus and handles arrows/Enter/Esc.
+		if (!open && base.Enabled && (e.KeyCode == Keys.Down || e.KeyCode == Keys.Up || e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space))
+		{
+			ShowPopup();
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
 	}
 
 	protected override void OnPaint(PaintEventArgs e)
@@ -151,7 +190,7 @@ internal class DarkCombo : Control
 			{
 				g.FillPath(b, r);
 			}
-			using Pen p = new Pen(open ? Theme.Green : Color.FromArgb(78, 78, 84));
+			using Pen p = new Pen((open || (base.Focused && base.Enabled)) ? Theme.Green : Color.FromArgb(78, 78, 84));
 			g.DrawPath(p, r);
 		}
 		Tx.Left(g, SelectedItem?.ToString() ?? "", base.Font, base.Enabled ? Theme.Text : Theme.Dim, new RectangleF(10f, 0f, base.Width - 34, base.Height));
@@ -173,6 +212,10 @@ internal class DarkCombo : Control
 
 	protected override void OnMouseClick(MouseEventArgs e)
 	{
+		if (base.CanFocus)
+		{
+			Focus();
+		}
 		if (closedOnSelf && Environment.TickCount64 - closedAt < 600)
 		{
 			closedOnSelf = false;
@@ -295,7 +338,9 @@ internal class DarkCombo : Control
 		{
 			return;
 		}
-		if (Inline && base.FindForm() != null)
+		// Always use the inline list when hosted in a form: a ListBox in a ToolStripDropDown does not reliably
+		// take keyboard focus, so the inline path (proven by the tray) is what makes the list arrow-navigable.
+		if (base.FindForm() != null)
 		{
 			ShowInline();
 			return;

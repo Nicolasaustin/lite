@@ -17,6 +17,48 @@ internal class ThumbButton : Control
 		base.Cursor = Cursors.Hand;
 		base.Size = new Size(50, 50);
 		base.BackColor = Theme.Bg;
+		base.TabStop = true;
+		SetStyle(ControlStyles.Selectable, value: true);
+	}
+
+	protected override bool IsInputKey(Keys keyData)
+	{
+		if (keyData == Keys.Space || keyData == Keys.Enter)
+		{
+			return true;
+		}
+		return base.IsInputKey(keyData);
+	}
+
+	protected override void OnKeyDown(KeyEventArgs e)
+	{
+		base.OnKeyDown(e);
+		if (base.Enabled && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter))
+		{
+			OnClick(EventArgs.Empty);
+			e.Handled = true;
+		}
+	}
+
+	protected override void OnGotFocus(EventArgs e)
+	{
+		base.OnGotFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnLostFocus(EventArgs e)
+	{
+		base.OnLostFocus(e);
+		base.Invalidate();
+	}
+
+	protected override void OnMouseClick(MouseEventArgs e)
+	{
+		base.OnMouseClick(e);
+		if (base.Enabled && base.CanFocus)
+		{
+			Focus();
+		}
 	}
 
 	protected override void OnPaint(PaintEventArgs e)
@@ -36,6 +78,13 @@ internal class ThumbButton : Control
 		try
 		{
 			g.DrawRectangle(pen, 1, 1, base.Width - 3, base.Height - 3);
+			// Inset ring (the Selected state already paints the outer border), drawn before the non-Side branch's
+			// early return so it shows in both views.
+			if (base.Focused && base.Enabled)
+			{
+				using Pen rp = new Pen(Theme.Green, 1.4f);
+				g.DrawRectangle(rp, 4, 4, base.Width - 9, base.Height - 9);
+			}
 			SolidBrush body = new SolidBrush(Color.FromArgb(70, 70, 70));
 			try
 			{
